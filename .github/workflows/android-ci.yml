@@ -19,15 +19,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Locate Android SDK
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install SDK and native toolchain
         run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          sdkmanager --version || true
-          yes | sdkmanager --licenses || true
-      - name: Install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.2.12479018" "cmake;3.22.1"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.2.12479018" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
