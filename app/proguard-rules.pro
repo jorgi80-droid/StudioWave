@@ -1,0 +1,1 @@
+# Keep rules for JNI will be added when obfuscation is enabled.
