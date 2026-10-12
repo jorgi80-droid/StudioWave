@@ -19,19 +19,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install SDK and native toolchain
+      - name: Locate Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          sdkmanager --version || true
+          yes | sdkmanager --licenses || true
+      - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.2.12479018" "cmake;3.22.1"
+          sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.2.12479018" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
       - name: Build debug APK
-        run: gradle assembleDebug
+        run: gradle assembleDebug --stacktrace
       - name: Run unit tests
-        run: gradle testDebugUnitTest
+        run: gradle testDebugUnitTest --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
