@@ -129,12 +129,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val ppq = project.ppq.coerceIn(24, 3840)
         val sampleRate = OUTPUT_SAMPLE_RATE
         fun ticksToFrames(ticks: Long): Long =
-            (ticks.coerceAtLeast(0L).toDouble() * 60.0 * sampleRate / (bpm.toDouble() * ppq))
-                .let { if (it.isFinite()) it.toLong().coerceAtLeast(0L) else 0L }
+            ArrangementTiming.ticksToFrames(ticks, bpm, ppq, sampleRate)
 
         val tracks = project.tracks
         val soloActive = tracks.any { it.solo && !it.muted }
-        fun audible(track: StudioTrack) = !track.muted && (!soloActive || track.solo)
+        fun audible(track: StudioTrack) =
+            ArrangementTiming.trackIsAudible(track.muted, track.solo, soloActive)
         val maxTick = tracks.flatMap { it.clips }.maxOfOrNull {
             val start = it.startTick.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 2)
             val length = it.lengthTicks.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / 2)
