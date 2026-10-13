@@ -540,7 +540,7 @@ private fun ArrangementWorkspace(
                     // It appears once the user scrolls to the bottom-most track.
                     val totalTrackHeight = trackRowLayout.lastOrNull()?.let { it.topDp + it.heightDp } ?: 0f
                     val visibleBottom = scrollTracks * 67f + headerViewportHeightDp
-                    val showBottomAddTrack = totalTrackHeight > headerViewportHeightDp &&
+                    val showBottomAddTrack =
                         visibleBottom >= totalTrackHeight - (trackRowLayout.lastOrNull()?.heightDp ?: 67f) * 0.9f
                     if (showBottomAddTrack) {
                         Surface(
