@@ -459,8 +459,8 @@ private fun TransportBar(
 @Composable
 private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
     Column(
-        Modifier.width(57.dp).fillMaxHeight().background(Raised, RoundedCornerShape(7.dp)).padding(3.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        Modifier.width(48.dp).fillMaxHeight().background(Raised, RoundedCornerShape(7.dp)).padding(2.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
         RailButton("KEYS", selected == "PIANO ROLL", Icons.Default.Keyboard) { onSelect("PIANO ROLL") }
@@ -471,8 +471,8 @@ private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
 
 @Composable
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(45.dp), shape = RoundedCornerShape(6.dp),
-        contentPadding = PaddingValues(2.dp),
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(40.dp), shape = RoundedCornerShape(10.dp),
+        contentPadding = PaddingValues(1.dp),
         colors = ButtonDefaults.buttonColors(containerColor = if (selected) Color(0xFF18443F) else Color(0xFF202226),
             contentColor = if (selected) Mint else MutedText)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
