@@ -468,23 +468,31 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     private fun stopOutputOnly() {
         running.set(false)
+        val current = synchronized(this) { output }
+        // Pause/flush before joining so a blocking AudioTrack.write can unwind.
+        current?.let { track ->
+            runCatching { track.pause(); track.flush() }
+        }
         val thread = worker
         if (thread != null && thread !== Thread.currentThread()) {
             try {
-                thread.join(1000)
+                thread.join(1_000)
             } catch (_: InterruptedException) {
                 Thread.currentThread().interrupt()
             }
         }
-        val current = synchronized(this) {
-            val activeOutput = output
-            if (activeOutput === output) output = null
-            worker = null
-            activeOutput
-        }
-        current?.let {
-            runCatching { it.pause(); it.flush() }
-            runCatching { it.release() }
+        synchronized(this) {
+            if (output === current) {
+                output = null
+                current?.let { track ->
+                    runCatching { track.pause(); track.flush() }
+                    runCatching { track.release() }
+                }
+            }
+            if (worker === thread && (thread == null || !thread.isAlive)) worker = null
+            check(thread == null || thread === Thread.currentThread() || !thread.isAlive) {
+                "Audio render thread did not stop; playback restart was blocked for safety"
+            }
         }
     }
 
