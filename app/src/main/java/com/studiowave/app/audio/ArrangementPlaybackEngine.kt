@@ -85,6 +85,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private data class AudioEvent(
         val startFrame: Long,
         val endFrame: Long,
+        val sourceOffsetFrame: Long,
         val track: StudioTrack,
         val clip: WaveClip,
         val asset: AudioAsset
@@ -211,7 +212,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         tracks.filter { it.kind == "audio" }.forEach { track ->
             track.clips.forEach clipLoop@{ clip ->
                 val uri = clip.sourceUri?.takeIf { it.isNotBlank() } ?: return@clipLoop
-                requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, clip.lengthTicks.coerceAtLeast(1L))
+                val sourceEnd = (clip.sourceOffsetTicks.coerceAtLeast(0L) + clip.lengthTicks.coerceAtLeast(1L))
+                    .coerceAtMost(Long.MAX_VALUE / 2L)
+                requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, sourceEnd)
             }
         }
         val assets = HashMap<String, AudioAsset>()
@@ -249,7 +252,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     "audio" -> {
                         val source = clip.sourceUri ?: return@clipLoop
                         val asset = assets[source] ?: return@clipLoop
-                        audioEvents.add(AudioEvent(clipStart, clipEnd, track, clip, asset))
+                        audioEvents.add(AudioEvent(
+                            clipStart, clipEnd, ticksToFrames(clip.sourceOffsetTicks.coerceAtLeast(0L)),
+                            track, clip, asset
+                        ))
                     }
                     "midi" -> clip.midiNotes.forEach noteLoop@{ note ->
                         val noteOffset = ticksToFrames(note.startTick)
@@ -501,7 +507,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
                     for (absolute in from until to) {
                         val relative = absolute - event.startFrame
-                        val sourceFrame = (relative.toDouble() * event.asset.sampleRate / sampleRate).toLong()
+                        val sourceFrame = (relative + event.sourceOffsetFrame).toDouble()
+                            .times(event.asset.sampleRate.toDouble() / sampleRate.toDouble()).toLong()
                             .plus(scratchFrames).coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
                         if (sourceFrame !in 0 until event.asset.frames) continue
                         val outIndex = ((absolute - position) * 2).toInt()
