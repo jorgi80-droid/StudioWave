@@ -439,13 +439,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 Thread.currentThread().interrupt()
             }
         }
-        synchronized(this) {
+        val current = synchronized(this) {
+            val activeOutput = output
+            if (activeOutput === output) output = null
             worker = null
-            output?.let { current ->
-                runCatching { current.pause(); current.flush() }
-                runCatching { current.release() }
-            }
-            output = null
+            activeOutput
+        }
+        current?.let {
+            runCatching { it.pause(); it.flush() }
+            runCatching { it.release() }
         }
     }
 
