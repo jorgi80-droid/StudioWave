@@ -293,6 +293,9 @@ private fun ArrangementWorkspace(
                 },
                 onClipLongPress = { clipMenu = it },
                 onTimelineLongPress = { showTimelineMenu = true },
+                clipMenuClipId = clipMenu,
+                onClipAction = { action, clipId -> handleClipAction(action, clipId) },
+                onDismissClipMenu = { clipMenu = null },
                 onMoveClip = { clipId, targetTrackId, startTick ->
                     val source = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
                     val target = project.tracks.firstOrNull { it.id == targetTrackId }
@@ -323,21 +326,6 @@ private fun ArrangementWorkspace(
                     Text("ADD TRACK", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     listOf("Instrument / MIDI" to "midi", "Audio clip" to "audio", "Drum track" to "drum").forEach { pair ->
                         Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second) }.padding(9.dp))
-                    }
-                }
-            }
-            if (clipMenu != null) {
-                Row(Modifier.align(Alignment.CenterEnd).padding(end = 8.dp).background(Color(0xFF30343A), RoundedCornerShape(20.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                    listOf("EDIT", "CUT", "COPY", "SNAP", "DEL", "×").forEach { action ->
-                        Surface(color = if (action == "EDIT") Mint.copy(alpha = 0.18f) else Color(0xFF23262B), shape = RoundedCornerShape(16.dp), modifier = Modifier.height(29.dp).clickable {
-                            val selected = clipMenu
-                            if (action == "×") clipMenu = null
-                            else if (selected != null) handleClipAction(when (action) { "EDIT" -> "Open editor"; "CUT" -> "Cut"; "COPY" -> "Copy"; "SNAP" -> "Snap"; else -> "Delete" }, selected)
-                        }) {
-                            Box(Modifier.padding(horizontal = 9.dp), contentAlignment = Alignment.Center) {
-                                Text(when (action) { "EDIT" -> "Edit"; "DEL" -> "Del"; else -> action }, color = if (action == "EDIT") Mint else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
                     }
                 }
             }
@@ -431,6 +419,9 @@ private fun TimelineGrid(
     onOpenEditor: (String) -> Unit,
     onClipLongPress: (String) -> Unit,
     onTimelineLongPress: () -> Unit,
+    clipMenuClipId: String?,
+    onClipAction: (String, String) -> Unit,
+    onDismissClipMenu: () -> Unit,
     onMoveClip: (String, String, Long) -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -453,7 +444,7 @@ private fun TimelineGrid(
     var dragDx by remember { mutableFloatStateOf(0f) }
     var dragDy by remember { mutableFloatStateOf(0f) }
 
-    Box(
+    BoxWithConstraints(
         modifier
             .background(Color(0xFF17191C))
             .clipToBounds()
@@ -618,6 +609,39 @@ private fun TimelineGrid(
                                 }
                             }
                         }
+                        }
+                    }
+                }
+            }
+        }
+        val menuTrack = project.tracks.firstOrNull { t -> t.clips.any { it.id == clipMenuClipId } }
+        val menuClip = menuTrack?.clips?.firstOrNull { it.id == clipMenuClipId }
+        if (menuTrack != null && menuClip != null && clipMenuClipId != null) {
+            val trackIndex = project.tracks.indexOfFirst { it.id == menuTrack.id }
+            val barWidth = baseBarWidthPx * zoom
+            val clipLeft = with(density) { (menuClip.startTick.toFloat() / 3840f * barWidth - scrollBars * barWidth).toDp() }
+            val menuWidth = 220.dp
+            val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
+            val x = clipLeft.coerceIn(0.dp, maxX)
+            val y = (24.dp + ((trackIndex - scrollTracks) * 67f * verticalZoom).dp - 35.dp).coerceAtLeast(24.dp)
+            Row(
+                Modifier.offset(x = x, y = y)
+                    .background(Color(0xFF30343A), RoundedCornerShape(20.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                listOf("Open editor", "Cut", "Copy", "Snap", "Delete", "×").forEach { action ->
+                    val label = when (action) { "Open editor" -> "Edit"; "Delete" -> "Del"; else -> action }
+                    Surface(
+                        color = if (action == "Open editor") Mint.copy(alpha = 0.18f) else Color(0xFF23262B),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.height(29.dp).clickable {
+                            if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
+                        }
+                    ) {
+                        Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) {
+                            Text(label, color = if (action == "Open editor") Mint else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
