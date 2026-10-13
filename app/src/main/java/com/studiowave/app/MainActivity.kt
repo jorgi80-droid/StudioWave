@@ -774,9 +774,6 @@ private fun ArrangementWorkspace(
                                 Text(if (addTrackMenu) "×" else "✦", color = Room, fontSize = 18.sp, fontWeight = FontWeight.Black)
                             }
                         }
-                    }                   Text(if (addTrackMenu) "×" else "+", color = Room, fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                            }
-                        }
                     }
                     if (showBottomAddTrack && addTrackMenu) {
                         Surface(
