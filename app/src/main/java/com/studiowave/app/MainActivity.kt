@@ -29,8 +29,11 @@ import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
-import android.media.MediaMetadataRetriever
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.net.Uri
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
@@ -1004,54 +1007,134 @@ private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
  * Generates a stable visual envelope from available thumbnails. This is a UI preview,
  * not PCM decoding, and runs on Dispatchers.IO.
  */
+/**
+ * Decode actual PCM samples for display. Extractor and decoder run on Dispatchers.IO,
+ * output is reduced to a bounded peak array, and native resources are always released.
+ */
 private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peakCount: Int): List<Float> {
-    require(peakCount in 1..512) { "Invalid waveform resolution" }
-    val retriever = MediaMetadataRetriever()
+    require(peakCount in 1..2048) { "Invalid waveform resolution" }
+    val extractor = MediaExtractor()
+    var decoder: android.media.MediaCodec? = null
     try {
-        retriever.setDataSource(context, uri)
-        val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-            ?.toLongOrNull()?.coerceAtLeast(1L) ?: error("Durasi audio tidak dapat dibaca")
-        val peaks = ArrayList<Float>(peakCount)
-        var valid = 0
-        for (index in 0 until peakCount) {
-            val timeUs = ((index + 0.5) / peakCount * durationMs * 1000.0).toLong()
-            val frame = retriever.getFrameAtTime(timeUs, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-            if (frame == null) {
-                peaks.add(0f)
-            } else {
-                try {
-                    val width = frame.width.coerceAtLeast(1)
-                    val height = frame.height.coerceAtLeast(1)
-                    val stepX = (width / 16).coerceAtLeast(1)
-                    val stepY = (height / 16).coerceAtLeast(1)
-                    var energy = 0.0
-                    var count = 0
-                    var y = 0
-                    while (y < height) {
-                        var x = 0
-                        while (x < width) {
-                            val pixel = frame.getPixel(x, y)
-                            val red = (pixel shr 16) and 0xFF
-                            val green = (pixel shr 8) and 0xFF
-                            val blue = pixel and 0xFF
-                            val luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255.0
-                            energy += kotlin.math.abs(luminance - 0.5)
-                            count++
-                            x += stepX
-                        }
-                        y += stepY
-                    }
-                    peaks.add(if (count == 0) 0f else (energy / count * 2.0).toFloat().coerceIn(0.03f, 1f))
-                    valid++
-                } finally {
-                    frame.recycle()
-                }
+        extractor.setDataSource(context, uri, null)
+        var trackIndex = -1
+        var format: MediaFormat? = null
+        for (index in 0 until extractor.trackCount) {
+            val candidate = extractor.getTrackFormat(index)
+            if (candidate.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true) {
+                trackIndex = index
+                format = candidate
+                break
             }
         }
-        if (valid == 0) error("Sumber tidak menyediakan frame preview yang dapat dibaca")
-        return peaks
+        require(trackIndex >= 0 && format != null) { "File tidak memiliki stream audio yang dapat dibaca" }
+        extractor.selectTrack(trackIndex)
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: error("Format audio tidak dikenal")
+        decoder = android.media.MediaCodec.createDecoderByType(mime)
+        decoder.configure(format, null, null, 0)
+        decoder.start()
+
+        val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION))
+            format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(1L) else 1L
+        val peaks = FloatArray(peakCount)
+        val counts = IntArray(peakCount)
+        val info = android.media.MediaCodec.BufferInfo()
+        var inputDone = false
+        var outputDone = false
+        var sawPcm = false
+        var currentRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(1)
+        var currentChannels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 8)
+        var outputEncoding = android.media.AudioFormat.ENCODING_PCM_16BIT
+        var decodedFrames = 0L
+
+        while (!outputDone) {
+            if (!inputDone) {
+                val inputIndex = decoder.dequeueInputBuffer(10000)
+                if (inputIndex >= 0) {
+                    val input = decoder.getInputBuffer(inputIndex) ?: error("Input buffer audio tidak tersedia")
+                    input.clear()
+                    val size = extractor.readSampleData(input, 0)
+                    if (size < 0) {
+                        decoder.queueInputBuffer(inputIndex, 0, 0, 0L, android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        inputDone = true
+                    } else {
+                        val pts = extractor.sampleTime.coerceAtLeast(0L)
+                        decoder.queueInputBuffer(inputIndex, 0, size, pts, 0)
+                        extractor.advance()
+                    }
+                }
+            }
+
+            when (val outputIndex = decoder.dequeueOutputBuffer(info, 10000)) {
+                android.media.MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    val outputFormat = decoder.outputFormat
+                    if (outputFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) currentRate = outputFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceAtLeast(1)
+                    if (outputFormat.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) currentChannels = outputFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 8)
+                    if (outputFormat.containsKey(MediaFormat.KEY_PCM_ENCODING)) outputEncoding = outputFormat.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                }
+                android.media.MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
+                else -> if (outputIndex >= 0) {
+                    val output = decoder.getOutputBuffer(outputIndex)
+                    if (output != null && info.size > 0) {
+                        val buffer = output.duplicate().order(ByteOrder.nativeOrder())
+                        buffer.position(info.offset)
+                        buffer.limit(info.offset + info.size)
+                        val bytesPerSample = when (outputEncoding) {
+                            android.media.AudioFormat.ENCODING_PCM_FLOAT -> 4
+                            android.media.AudioFormat.ENCODING_PCM_16BIT -> 2
+                            android.media.AudioFormat.ENCODING_PCM_8BIT -> 1
+                            android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> 3
+                            android.media.AudioFormat.ENCODING_PCM_32BIT -> 4
+                            else -> 2
+                        }
+                        val totalSamples = info.size / bytesPerSample
+                        val frames = totalSamples / currentChannels
+                        val bytes = ByteArray(info.size)
+                        buffer.get(bytes)
+                        val pcm = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
+                        for (frame in 0 until frames) {
+                            val sampleOffset = frame * currentChannels
+                            var peak = 0f
+                            for (channel in 0 until currentChannels) {
+                                val sampleIndex = sampleOffset + channel
+                                val value = when (outputEncoding) {
+                                    android.media.AudioFormat.ENCODING_PCM_FLOAT -> pcm.getFloat(sampleIndex * 4)
+                                    android.media.AudioFormat.ENCODING_PCM_8BIT -> ((bytes[sampleIndex].toInt() and 0xFF) - 128) / 128f
+                                    android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> {
+                                        val offset = sampleIndex * 3
+                                        var v = (bytes[offset].toInt() and 0xFF) or
+                                            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
+                                            ((bytes[offset + 2].toInt()) shl 16)
+                                        if (v and 0x800000 != 0) v = v or -0x1000000
+                                        v / 8388608f
+                                    }
+                                    android.media.AudioFormat.ENCODING_PCM_32BIT -> pcm.getInt(sampleIndex * 4) / 2147483648f
+                                    else -> pcm.getShort(sampleIndex * 2) / 32768f
+                                }
+                                peak = maxOf(peak, kotlin.math.abs(value))
+                            }
+                            val timeUs = info.presentationTimeUs + (frame.toLong() * 1_000_000L / currentRate)
+                            val bin = ((timeUs.toDouble() / durationUs) * peakCount).toInt().coerceIn(0, peakCount - 1)
+                            peaks[bin] = maxOf(peaks[bin], peak)
+                            counts[bin]++
+                        }
+                        if (frames > 0) {
+                            decodedFrames += frames
+                            sawPcm = true
+                        }
+                    }
+                    if (info.flags and android.media.MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
+                    decoder.releaseOutputBuffer(outputIndex, false)
+                }
+            }
+            if (decodedFrames > currentRate.toLong() * 60L * 30L) error("Audio lebih dari 30 menit; pratinjau dibatasi demi stabilitas")
+        }
+        require(sawPcm) { "PCM audio tidak dapat didekode" }
+        return peaks.map { it.coerceIn(0f, 1f) }
     } finally {
-        retriever.release()
+        runCatching { decoder?.stop() }
+        runCatching { decoder?.release() }
+        runCatching { extractor.release() }
     }
 }
 
