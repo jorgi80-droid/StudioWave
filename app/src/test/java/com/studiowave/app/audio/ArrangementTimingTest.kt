@@ -31,12 +31,8 @@ class ArrangementTimingTest {
         assertEquals(0L, ArrangementTiming.framesToTicks(-1L, 120, 960))
         assertEquals(1_920L, ArrangementTiming.framesToTicks(44_100L, 120, 960))
         assertEquals(3_840L, ArrangementTiming.framesToTicks(88_200L, 120, 960))
-        assertEquals(
-            ArrangementTiming.ticksToFrames(5_760L, 96, 960),
-            ArrangementTiming.framesToTicks(
-                ArrangementTiming.ticksToFrames(5_760L, 96, 960), 96, 960
-            )
-        )
+        val sixQuarterFrames = ArrangementTiming.ticksToFrames(5_760L, 96, 960)
+        assertEquals(5_760L, ArrangementTiming.framesToTicks(sixQuarterFrames, 96, 960))
         assertTrue(ArrangementTiming.framesToTicks(Long.MAX_VALUE, 40, 3840) > 0L)
     }
 
