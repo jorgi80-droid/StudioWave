@@ -1452,29 +1452,45 @@ private fun TimelineGrid(
                 with(density) { 104.dp.toPx() }
             )
             val clipLeft = with(density) { menuViewport.timeToViewportX(menuClip.startTick).toDp() }
-            val menuWidth = 284.dp
+            val menuWidth = 258.dp
+            val menuHeight = 4 * 29.dp + 3 * 3.dp + 8.dp
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
             val menuRow = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
-            val y = (24.dp + ((menuRow.topDp - scrollTracks) * verticalZoom).dp - 35.dp).coerceAtLeast(24.dp)
-            Row(
+            val rawY = 24.dp + ((menuRow.topDp - scrollTracks) * verticalZoom).dp - 35.dp
+            val maxY = (maxHeight - menuHeight - 4.dp).coerceAtLeast(24.dp)
+            val y = rawY.coerceIn(24.dp, maxY)
+            val actions = listOf("Open editor", "Cut", "Copy", "Duplicate", "Color", "Rename", "Snap", "Delete", "×")
+            Column(
                 Modifier.offset(x = x, y = y)
-                    .background(Color(0xFF30343A), RoundedCornerShape(20.dp))
-                    .padding(3.dp),
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .width(menuWidth)
+                    .background(Color(0xFF30343A), RoundedCornerShape(12.dp))
+                    .padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                listOf("Open editor", "Cut", "Copy", "Duplicate", "Color", "Rename", "Snap", "Delete", "×").forEach { action ->
-                    val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
-                    Surface(
-                        color = if (action == "Open editor") Mint.copy(alpha = 0.18f) else Color(0xFF23262B),
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier.height(29.dp).clickable {
-                            if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
-                        }
+                actions.chunked(3).forEach { rowActions ->
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) {
-                            Text(label, color = if (action == "Open editor") Mint else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        rowActions.forEach { action ->
+                            val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
+                            Surface(
+                                color = if (action == "Open editor") Mint.copy(alpha = 0.18f) else Color(0xFF23262B),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).height(29.dp).clickable {
+                                    if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
+                                }
+                            ) {
+                                Box(Modifier.fillMaxSize().padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                                    Text(label, color = if (action == "Open editor") Mint else Color.White,
+                                        fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
+                            }
+                        }
+                        repeat(3 - rowActions.size) {
+                            Spacer(Modifier.weight(1f).height(29.dp))
                         }
                     }
                 }
