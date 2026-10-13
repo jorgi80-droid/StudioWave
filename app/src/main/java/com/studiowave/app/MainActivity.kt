@@ -893,8 +893,13 @@ private fun TimelineGrid(
             drawRect(Color(0xFF2B2E34), size = Size(size.width, with(density) { 2.dp.toPx() }))
         }
 
-        Box(Modifier.fillMaxSize().padding(top = 24.dp)) {
-            project.tracks.forEachIndexed { trackIndex, track ->
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 24.dp)) {
+            val firstVisibleTrack = (scrollTracks - 1f / verticalZoom).toInt().coerceAtLeast(0)
+            val lastVisibleTrack = (scrollTracks + maxHeight.value / (67f * verticalZoom) + 1f)
+                .toInt().coerceAtMost(project.tracks.lastIndex)
+            Box(Modifier.fillMaxSize()) {
+                project.tracks.forEachIndexed { trackIndex, track ->
+                    if (trackIndex in firstVisibleTrack..lastVisibleTrack) {
                 BoxWithConstraints(Modifier.fillMaxWidth().offset(y = ((trackIndex - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp)) {
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
                     val barWidth = baseBarWidthPx * zoom
@@ -1005,6 +1010,7 @@ private fun TimelineGrid(
                             }
                         }
                         }
+                    }
                     }
                 }
             }
