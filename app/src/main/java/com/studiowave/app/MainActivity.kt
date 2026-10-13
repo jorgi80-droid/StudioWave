@@ -433,7 +433,7 @@ private fun TransportBar(
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().height(40.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 5.dp, vertical = 3.dp),
+        Modifier.fillMaxWidth().height(38.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -450,6 +450,7 @@ private fun TransportBar(
         SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
         SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
         SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
+        Spacer(Modifier.weight(1f))
         Text("MST", color = MutedText, fontSize = 7.sp)
         Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(54.dp).height(22.dp), valueRange = 0f..1f)
     }
