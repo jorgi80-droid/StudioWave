@@ -44,9 +44,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
 
     data class MasterMeterSnapshot(val peakDbfs: Float, val rmsDbfs: Float) {
-        // Fast display value derived from the current master output peak.
-        val peakLinear: Float get() = dbfsToLinear(peakDbfs)
-        val rmsLinear: Float get() = dbfsToLinear(rmsDbfs)
+        // Convert meter values to linear amplitude for the scrolling level trace.
+        val peakLinear: Float get() = Math.pow(10.0, peakDbfs.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
+        val rmsLinear: Float get() = Math.pow(10.0, rmsDbfs.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
     }
 
     fun masterMeterSnapshot(): MasterMeterSnapshot {
