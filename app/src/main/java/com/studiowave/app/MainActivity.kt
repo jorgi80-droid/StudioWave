@@ -534,7 +534,7 @@ private fun TransportBar(
         SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
         Spacer(Modifier.weight(1f))
         Text("MST", color = MutedText, fontSize = 7.sp)
-        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(76.dp).height(30.dp), valueRange = 0f..1f)
+        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(92.dp).height(32.dp), valueRange = 0f..1f)
         Column(Modifier.width(166.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
