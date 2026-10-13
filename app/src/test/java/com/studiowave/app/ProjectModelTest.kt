@@ -25,7 +25,8 @@ class ProjectModelTest {
             if (track.id == drumTrack.id) track.copy(clips = track.clips.map { clip ->
                 if (clip.id == sourceClip.id) clip.copy(
                     drumSteps = listOf(true, false, true, false) + List(12) { false },
-                    colorArgb = 0xFF12AB34L
+                    colorArgb = 0xFF12AB34L,
+                    sourceOffsetTicks = 1920L
                 ) else clip
             }) else track
         })
@@ -33,6 +34,7 @@ class ProjectModelTest {
         val restoredClip = restored.tracks.first { it.id == drumTrack.id }.clips.first()
         assertEquals(listOf(true, false, true, false) + List(12) { false }, restoredClip.drumSteps)
         assertEquals(0xFF12AB34L, restoredClip.colorArgb)
+        assertEquals(1920L, restoredClip.sourceOffsetTicks)
     }
 
     @Test fun legacyProjectWithoutDrumStepsAndClipColorStillLoads() {
@@ -44,11 +46,14 @@ class ProjectModelTest {
             for (j in 0 until clips.length()) {
                 clips.getJSONObject(j).remove("drumSteps")
                 clips.getJSONObject(j).remove("colorArgb")
+                clips.getJSONObject(j).remove("sourceOffsetTicks")
             }
         }
         val restored = StudioProject.fromJson(json)
         assertEquals(project.tracks.size, restored.tracks.size)
-        assertTrue(restored.tracks.flatMap { it.clips }.all { it.drumSteps.isEmpty() && it.colorArgb == null })
+        assertTrue(restored.tracks.flatMap { it.clips }.all {
+            it.drumSteps.isEmpty() && it.colorArgb == null && it.sourceOffsetTicks == 0L
+        })
     }
 
     @Test fun MIDIStarterNotesAreWithinValidRange() {
