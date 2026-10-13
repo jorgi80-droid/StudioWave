@@ -142,24 +142,26 @@ private fun TransportBar(
 
 @Composable
 private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
-    Column(Modifier.width(64.dp).fillMaxHeight().background(Raised, RoundedCornerShape(7.dp)).padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        RailButton("ARRANGE", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
-        RailButton("PIANO", selected == "PIANO ROLL", Icons.Default.Keyboard) { onSelect("PIANO ROLL") }
-        RailButton("MIXER", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
-        RailButton("BROWSER", selected == "BROWSER", Icons.Default.LibraryMusic) { onSelect("BROWSER") }
+    Column(
+        Modifier.width(57.dp).fillMaxHeight().background(Raised, RoundedCornerShape(7.dp)).padding(3.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
+        RailButton("KEYS", selected == "PIANO ROLL", Icons.Default.Keyboard) { onSelect("PIANO ROLL") }
+        RailButton("MIX", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
+        RailButton("FILES", selected == "BROWSER", Icons.Default.LibraryMusic) { onSelect("BROWSER") }
     }
 }
 
 @Composable
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(49.dp), shape = RoundedCornerShape(6.dp),
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(45.dp), shape = RoundedCornerShape(6.dp),
         contentPadding = PaddingValues(2.dp),
         colors = ButtonDefaults.buttonColors(containerColor = if (selected) Color(0xFF18443F) else Color(0xFF202226),
             contentColor = if (selected) Mint else MutedText)) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Icon(icon, contentDescription = label, modifier = Modifier.size(17.dp))
-            Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
