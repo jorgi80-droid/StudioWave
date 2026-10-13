@@ -31,10 +31,8 @@ jobs:
           set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-          # Install only packages required by the current build. The project has
-          # no externalNativeBuild configuration, so downloading an NDK/CMake
-          # archive here adds failure modes without being used by Gradle.
-          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+          # Install native tools because app/build.gradle.kts compiles the C++ audio engine.
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.0.12077973" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
