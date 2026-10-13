@@ -846,7 +846,7 @@ private fun TimelineGrid(
                                 .fillMaxHeight()
                                 .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
-                                .pointerInput(clip.id, trackIndex, zoom) {
+                                .pointerInput(clip.id, trackIndex, zoom, scrollBars, scrollTracks, verticalZoom) {
                                     detectDragGestures(
                                         onDragStart = {
                                             draggingClip = clip.id
@@ -856,22 +856,35 @@ private fun TimelineGrid(
                                             dragDy = 0f
                                             onSelectClip(clip.id)
                                         },
-                                        onDrag = { change, amount -> change.consume(); dragDx += amount.x; dragDy += amount.y },
+                                        onDrag = { change, amount ->
+                                            change.consume()
+                                            dragDx += amount.x
+                                            dragDy += amount.y
+                                        },
                                         onDragEnd = {
-                                            val source = project.tracks.getOrNull(dragFromTrack)
-                                            val rowOffset = (dragDy / trackHeightPx).toInt()
-                                            val targetIndex = (dragFromTrack + rowOffset).coerceIn(0, project.tracks.lastIndex.coerceAtLeast(0))
+                                            val sourceIndex = dragFromTrack
+                                            val rowHeightPx = trackHeightPx.coerceAtLeast(1f)
+                                            val rowsMoved = kotlin.math.round(dragDy / rowHeightPx).toInt()
+                                            val targetIndex = (sourceIndex + rowsMoved).coerceIn(0, project.tracks.lastIndex.coerceAtLeast(0))
+                                            val source = project.tracks.getOrNull(sourceIndex)
                                             val target = project.tracks.getOrNull(targetIndex)
-                                            val sixteenthWidthPx = (baseBarWidthPx * zoom) / 16f
-                                            val movedSixteenths = (dragDx / sixteenthWidthPx.coerceAtLeast(1f)).toLong()
+                                            val sixteenthWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f) / 16f
+                                            val movedSixteenths = kotlin.math.round(dragDx / sixteenthWidthPx).toLong()
                                             val newTick = (dragOriginalTick + movedSixteenths * 240L).coerceAtLeast(0L)
-                                            if (source != null && target != null && source.kind == target.kind) onMoveClip(clip.id, target.id, newTick)
+                                            if (source != null && target != null && source.kind == target.kind) {
+                                                onMoveClip(clip.id, target.id, newTick)
+                                            }
                                             draggingClip = null
                                             dragFromTrack = -1
                                             dragDx = 0f
                                             dragDy = 0f
                                         },
-                                        onDragCancel = { draggingClip = null; dragFromTrack = -1; dragDx = 0f; dragDy = 0f }
+                                        onDragCancel = {
+                                            draggingClip = null
+                                            dragFromTrack = -1
+                                            dragDx = 0f
+                                            dragDy = 0f
+                                        }
                                     )
                                 }
                                 .combinedClickable(
