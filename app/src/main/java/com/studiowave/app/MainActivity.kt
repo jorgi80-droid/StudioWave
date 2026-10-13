@@ -463,6 +463,7 @@ private fun StudioWaveApp() {
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                            onPlaybackRestart = { if (playing || playbackLoading) startPlaybackAt(playheadTick) },
                             trackHeights = trackHeightsDp,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) },
                             playheadTick = playheadTick,
@@ -578,6 +579,7 @@ private fun ArrangementWorkspace(
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
+    onPlaybackRestart: () -> Unit = {},
     onScratchTrack: (String, Float) -> Unit = { _, _ -> },
     playheadTick: Long = 0L,
     isPlaying: Boolean = false,
@@ -912,7 +914,7 @@ private fun ArrangementWorkspace(
                     onProjectChange(resizedProject)
                     // Playback uses a prepared arrangement snapshot. Rebuild it at the current
                     // playhead after an edge-resize commit so the new clip end is honored.
-                    if (isPlaying) startPlaybackAt(playheadTick)
+                    if (isPlaying) onPlaybackRestart()
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
                     val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
