@@ -968,12 +968,12 @@ private fun TimelineGrid(
                     )
                 }
             }
-            val firstVisibleTrack = (scrollTracks - 1f / verticalZoom).toInt().coerceAtLeast(0)
-            val lastVisibleTrack = (scrollTracks + (size.height - rulerHeightPx) / trackHeightPx + 2f).toInt().coerceAtMost(project.tracks.size)
-            for (i in firstVisibleTrack..lastVisibleTrack) {
-                val y = rulerHeightPx + (i - scrollTracks) * trackHeightPx
-                if (y >= rulerHeightPx && y <= size.height) {
-                    drawLine(Color(0xFF3A3D44), Offset(0f, y), Offset(size.width, y), 1f)
+            trackRowLayout.forEach { row ->
+                val rowTopPx = rulerHeightPx + with(density) {
+                    ((row.topDp - scrollTracks * 67f) * verticalZoom).dp.toPx()
+                }
+                if (rowTopPx >= rulerHeightPx && rowTopPx <= size.height) {
+                    drawLine(Color(0xFF3A3D44), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
                 }
             }
         }
