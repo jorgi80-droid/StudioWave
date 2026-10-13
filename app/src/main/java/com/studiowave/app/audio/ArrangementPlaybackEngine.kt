@@ -178,8 +178,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         audioEvents.add(AudioEvent(clipStart, clipEnd, track, clip, asset))
                     }
                     "midi" -> clip.midiNotes.forEach noteLoop@{ note ->
-                        val noteStart = clipStart + ticksToFrames(note.startTick)
-                        val noteEnd = min(clipEnd, noteStart + ticksToFrames(note.durationTicks.coerceAtLeast(1L)))
+                        val noteOffset = ticksToFrames(note.startTick)
+                        val noteStart = if (clipStart > Long.MAX_VALUE - noteOffset) Long.MAX_VALUE else clipStart + noteOffset
+                        val noteDuration = ticksToFrames(note.durationTicks.coerceAtLeast(1L))
+                        val noteEnd = min(clipEnd, if (noteStart > Long.MAX_VALUE - noteDuration) Long.MAX_VALUE else noteStart + noteDuration)
                         if (noteEnd > noteStart) {
                             notes.add(NoteEvent(noteStart, noteEnd, note.pitch.coerceIn(0, 127), note.velocity.coerceIn(1, 127), track))
                         }
