@@ -38,7 +38,32 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
     private val scratchOffsetsMs = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
     @Volatile private var liveMasterGain = 0.72f
+    // Peak/RMS snapshot from the final master PCM block, before 16-bit quantization.
+    private val masterPeakBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
+    private val masterRmsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
+
+    data class MasterMeterSnapshot(val peakDbfs: Float, val rmsDbfs: Float) {
+        val peakLinear: Float get() = dbfsToLinear(peakDbfs)
+        val rmsLinear: Float get() = dbfsToLinear(rmsDbfs)
+    }
+
+    fun masterMeterSnapshot(): MasterMeterSnapshot {
+        val peak = java.lang.Float.intBitsToFloat(masterPeakBits.get()).coerceIn(0f, 1f)
+        val rms = java.lang.Float.intBitsToFloat(masterRmsBits.get()).coerceIn(0f, 1f)
+        return MasterMeterSnapshot(linearToDbfs(peak), linearToDbfs(rms))
+    }
+
+    private fun publishMasterMeter(peak: Float, rms: Float) {
+        masterPeakBits.set(java.lang.Float.floatToRawIntBits(peak.coerceIn(0f, 1f)))
+        masterRmsBits.set(java.lang.Float.floatToRawIntBits(rms.coerceIn(0f, 1f)))
+    }
+
+    private fun linearToDbfs(value: Float): Float =
+        if (value <= 0.000001f) -120f else (20f * kotlin.math.log10(value)).coerceIn(-120f, 0f)
+
+    private fun dbfsToLinear(value: Float): Float =
+        kotlin.math.pow(10.0, value.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
     private val audioAssetCache = object : android.util.LruCache<String, AudioAsset>(MAX_ASSET_CACHE_KIB) {
         override fun sizeOf(key: String, value: AudioAsset): Int =
             (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
@@ -108,6 +133,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         scratchOffsetsMs.clear()
         stopOutputOnly()
         liveMasterGain = masterGain.coerceIn(0f, 1f)
+        publishMasterMeter(0f, 0f)
         updateMix(project)
         val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
         check(!closed.get()) { "Playback engine is closed" }
@@ -522,9 +548,16 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
+                var blockPeak = 0f
+                var blockSquares = 0.0
                 for (i in 0 until sampleCount) {
-                    pcm[i] = (mix[i].coerceIn(-0.98f, 0.98f) * 32767f).toInt().toShort()
+                    val sample = mix[i].coerceIn(-0.98f, 0.98f)
+                    val absolute = kotlin.math.abs(sample)
+                    if (absolute > blockPeak) blockPeak = absolute
+                    blockSquares += sample.toDouble() * sample.toDouble()
+                    pcm[i] = (sample * 32767f).toInt().toShort()
                 }
+                publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat())
                 var offset = 0
                 while (offset < sampleCount && running.get()) {
                     val written = track.write(pcm, offset, sampleCount - offset, AudioTrack.WRITE_BLOCKING)
