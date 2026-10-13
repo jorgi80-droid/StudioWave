@@ -73,10 +73,29 @@ data class TimelineViewport(
     val viewportWidthPx: Float,
     val trackHeaderWidthPx: Float = 0f
 ) {
+    /** The effective scale used by every timeline element; never derive drawing widths independently. */
+    val effectivePixelsPerBar: Float =
+        (if (pixelsPerBar.isFinite()) pixelsPerBar else MIN_PIXELS_PER_BAR)
+            .coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
+
     val pixelsPerTick: Double =
-        ((if (pixelsPerBar.isFinite()) pixelsPerBar else MIN_PIXELS_PER_BAR)
-            .coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR).toDouble() /
-            timebase.ticksPerBar.toDouble()).coerceAtLeast(0.000001)
+        (effectivePixelsPerBar.toDouble() / timebase.ticksPerBar.toDouble()).coerceAtLeast(0.000001)
+
+    /** Convert a musical duration to pixels using the same scale as the ruler and grid. */
+    fun tickDeltaToPixels(ticks: Long): Float =
+        (ticks.toDouble() * pixelsPerTick)
+            .coerceIn(0.0, Float.MAX_VALUE.toDouble()).toFloat()
+
+    /** Convert a horizontal drag delta to musical ticks without applying snap. */
+    fun pixelsToTickDelta(pixels: Float): Long {
+        if (!pixels.isFinite()) return 0L
+        val ticks = pixels.toDouble() / pixelsPerTick
+        return when {
+            ticks >= Long.MAX_VALUE.toDouble() -> Long.MAX_VALUE
+            ticks <= Long.MIN_VALUE.toDouble() -> Long.MIN_VALUE
+            else -> ticks.roundToLong()
+        }
+    }
 
     fun timeToScreenX(tick: Long): Float {
         val x = trackHeaderWidthPx.toDouble() + (tick.toDouble() - scrollTimeTicks) * pixelsPerTick
