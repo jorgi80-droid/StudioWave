@@ -426,27 +426,25 @@ private fun TransportBar(
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().height(40.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
+        Modifier.fillMaxWidth().height(40.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 5.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Text("StudioWave", fontSize = 15.sp, fontWeight = FontWeight.Black, color = Mint, maxLines = 1)
-        Text("NEON", fontSize = 9.sp, color = MutedText, fontWeight = FontWeight.Bold, maxLines = 1)
-        Text("BPM", color = MutedText, fontSize = 9.sp)
+        Text("StudioWave", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Mint, maxLines = 1)
+        Text("BPM", color = MutedText, fontSize = 8.sp)
         SmallAction("−") { onBpm(bpm - 1) }
-        Text(bpm.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         SmallAction("+") { onBpm(bpm + 1) }
-        Text(timeSignatureLabel, fontSize = 10.sp, color = MutedText)
-        Text(positionLabel, fontSize = 9.sp, color = Color(0xFFDADEE5), maxLines = 1)
+        Text(timeSignatureLabel, fontSize = 9.sp, color = MutedText, maxLines = 1)
+        Text(positionLabel, fontSize = 8.sp, color = Color(0xFFDADEE5), maxLines = 1)
         SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
         SmallIconButton(Icons.Default.Stop, MutedText, onStop)
         SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
         SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
         SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
         SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
-        Spacer(Modifier.weight(1f))
-        Text("MASTER", color = MutedText, fontSize = 9.sp)
-        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(75.dp).height(24.dp), valueRange = 0f..1f)
+        Text("M", color = MutedText, fontSize = 8.sp)
+        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(54.dp).height(22.dp), valueRange = 0f..1f)
     }
 }
 
@@ -946,7 +944,7 @@ private fun TrackHeader(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
-        Column(Modifier.weight(1f).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = {})) {
+        Column(Modifier.weight(1f).combinedClickable(onClick = onDoubleTap, onDoubleClick = onDoubleTap, onLongClick = {})) {
             Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
