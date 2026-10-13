@@ -501,50 +501,81 @@ private fun ArrangementWorkspace(
                         val viewTop = (row.topDp - scrollTracks * 67f) * verticalZoom
                         val viewHeight = row.heightDp * verticalZoom
                         if (viewTop + viewHeight >= -viewHeight && viewTop <= headerViewportHeightDp) {
-                        TrackHeader(track, index, verticalZoom, scrollTracks,
-                        rowTopDp = row.topDp, rowHeightDp = row.heightDp,
-                        onDoubleTap = { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) },
-                        onColorTap = {
-                            val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEE)
-                            val current = palette.indexOf(track.colorArgb)
-                            val next = palette[((current + 1).coerceAtLeast(0)) % palette.size]
-                            onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(colorArgb = next) else it }))
-                        },
-                        onMuteToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) },
-                        onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) },
-                        onResizeTrack = { delta ->
-                            trackHeights[track.id] = ((trackHeights[track.id] ?: 67f) + delta / (densityScale * verticalZoom).coerceAtLeast(0.1f)).coerceIn(44f, 160f)
-                        },
-                        onScratch = { delta -> if (track.kind == "audio") onScratchTrack(track.id, delta / densityScale * 8f) },
-                        onReorderTrack = { deltaPx ->
-                            val from = project.tracks.indexOfFirst { it.id == track.id }
-                            val fromRow = trackRowLayout.getOrNull(from)
-                            if (from >= 0 && fromRow != null && project.tracks.size > 1) {
-                                val desiredCenter = fromRow.topDp + fromRow.heightDp / 2f + deltaPx / (densityScale * verticalZoom).coerceAtLeast(0.1f)
-                                val target = trackRowLayout.indices.minByOrNull { targetIndex ->
-                                    kotlin.math.abs(trackRowLayout[targetIndex].topDp + trackRowLayout[targetIndex].heightDp / 2f - desiredCenter)
-                                } ?: from
-                                if (target != from) {
-                                    val reordered = project.tracks.toMutableList()
-                                    reordered.add(target, reordered.removeAt(from))
-                                    onProjectChange(project.copy(tracks = reordered))
+                            TrackHeader(
+                                track, index, verticalZoom, scrollTracks,
+                                rowTopDp = row.topDp, rowHeightDp = row.heightDp,
+                                onDoubleTap = { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) },
+                                onColorTap = {
+                                    val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEE)
+                                    val current = palette.indexOf(track.colorArgb)
+                                    val next = palette[((current + 1).coerceAtLeast(0)) % palette.size]
+                                    onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(colorArgb = next) else it }))
+                                },
+                                onMuteToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) },
+                                onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) },
+                                onResizeTrack = { delta ->
+                                    trackHeights[track.id] = ((trackHeights[track.id] ?: 67f) + delta / (densityScale * verticalZoom).coerceAtLeast(0.1f)).coerceIn(44f, 160f)
+                                },
+                                onScratch = { delta -> if (track.kind == "audio") onScratchTrack(track.id, delta / densityScale * 8f) },
+                                onReorderTrack = { deltaPx ->
+                                    val from = project.tracks.indexOfFirst { it.id == track.id }
+                                    val fromRow = trackRowLayout.getOrNull(from)
+                                    if (from >= 0 && fromRow != null && project.tracks.size > 1) {
+                                        val desiredCenter = fromRow.topDp + fromRow.heightDp / 2f + deltaPx / (densityScale * verticalZoom).coerceAtLeast(0.1f)
+                                        val target = trackRowLayout.indices.minByOrNull { targetIndex ->
+                                            kotlin.math.abs(trackRowLayout[targetIndex].topDp + trackRowLayout[targetIndex].heightDp / 2f - desiredCenter)
+                                        } ?: from
+                                        if (target != from) {
+                                            val reordered = project.tracks.toMutableList()
+                                            reordered.add(target, reordered.removeAt(from))
+                                            onProjectChange(project.copy(tracks = reordered))
+                                        }
+                                    }
                                 }
-                            }
-                        })
+                            )
                         }
                     }
-                    val showBottomAddTrack = project.tracks.size > 4 && scrollTracks + (4f / verticalZoom) >= project.tracks.size - 0.75f
+
+                    // Keep one compact add control at the end of the track list.
+                    // It appears once the user scrolls to the bottom-most track.
+                    val totalTrackHeight = trackRowLayout.lastOrNull()?.let { it.topDp + it.heightDp } ?: 0f
+                    val visibleBottom = scrollTracks * 67f + headerViewportHeightDp
+                    val showBottomAddTrack = totalTrackHeight > headerViewportHeightDp &&
+                        visibleBottom >= totalTrackHeight - (trackRowLayout.lastOrNull()?.heightDp ?: 67f) * 0.9f
                     if (showBottomAddTrack) {
-                        Surface(color = Mint, shape = RoundedCornerShape(9.dp), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp).size(30.dp).clickable { addTrackMenu = !addTrackMenu }) {
-                            Box(contentAlignment = Alignment.Center) { Text("+", color = Room, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                        Surface(
+                            color = Mint,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).size(28.dp)
+                                .clickable { addTrackMenu = !addTrackMenu }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(if (addTrackMenu) "×" else "+", color = Room, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
                     if (showBottomAddTrack && addTrackMenu) {
-                        Surface(color = Raised, shape = RoundedCornerShape(10.dp), shadowElevation = 8.dp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)) {
-                            Column(Modifier.width(150.dp).padding(5.dp)) {
+                        Surface(
+                            color = Raised,
+                            shape = RoundedCornerShape(10.dp),
+                            shadowElevation = 8.dp,
+                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp)
+                        ) {
+                            Column(Modifier.width(174.dp).padding(5.dp)) {
                                 Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                                listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
-                                    Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second, openEditor = pair.second != "audio"); addTrackMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
+                                listOf(
+                                    "MIDI track" to "midi",
+                                    "Audio track" to "audio",
+                                    "Drum track" to "drum",
+                                    "Virtual instrument" to "midi"
+                                ).forEach { pair ->
+                                    Text(
+                                        pair.first, color = Color.White, fontSize = 11.sp,
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                            addTrack(pair.second, openEditor = pair.second != "audio")
+                                            addTrackMenu = false
+                                        }.padding(horizontal = 9.dp, vertical = 8.dp)
+                                    )
                                 }
                             }
                         }
