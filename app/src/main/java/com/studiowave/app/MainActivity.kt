@@ -1370,9 +1370,9 @@ private fun TimelineGrid(
                             if (pointer != null) {
                                 val delta = pointer.position - previousSinglePosition
                                 if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
-                                    val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                                       val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
+                                       val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
+                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
@@ -1730,7 +1730,7 @@ private fun TimelineGrid(
         val menuClip = menuTrack?.clips?.firstOrNull { it.id == clipMenuClipId }
         if (menuTrack != null && menuClip != null && clipMenuClipId != null) {
             val trackIndex = project.tracks.indexOfFirst { it.id == menuTrack.id }
-            val barWidth = baseBarWidthPx * zoom
+            val barWidth = viewport.effectivePixelsPerBar
             val menuViewport = TimelineViewport(
                 timebase, barWidth, scrollTicks.toDouble(), with(density) { maxWidth.toPx() },
                 with(density) { 104.dp.toPx() }
