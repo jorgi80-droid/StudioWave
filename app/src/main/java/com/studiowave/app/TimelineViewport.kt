@@ -34,11 +34,11 @@ data class TimelineTimebase(
 
 enum class SnapDivision(val label: String) {
     BAR("BAR"),
-    BEAT("BEAT"),
-    HALF_BEAT("1/2"),
-    QUARTER_BEAT("1/4"),
-    EIGHTH_BEAT("1/8"),
-    SIXTEENTH_BEAT("1/16"),
+    BEAT("1/4"),
+    HALF_BEAT("1/8"),
+    QUARTER_BEAT("1/16"),
+    EIGHTH_BEAT("1/32"),
+    SIXTEENTH_BEAT("1/64"),
     EIGHTH_TRIPLET("1/8T"),
     QUARTER_TRIPLET("1/4T"),
     OFF("OFF");
