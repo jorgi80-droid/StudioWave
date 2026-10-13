@@ -917,10 +917,11 @@ private fun TimelineGrid(
                                 val newZoom = (oldZoom * zoomFactor).coerceIn(0.55f, 2.8f)
                                 val oldBarWidth = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
                                 val newBarWidth = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
-                                val panX = centroid.x - previousCentroid.x
                                 val panY = centroid.y - previousCentroid.y
                                 val anchorBars = currentScroll + previousCentroid.x / oldBarWidth
-                                val newScroll = (anchorBars - centroid.x / newBarWidth - panX / newBarWidth).coerceAtLeast(0f)
+                                // The new centroid already accounts for horizontal pan;
+                                // subtracting panX again would move the viewport twice.
+                                val newScroll = (anchorBars - centroid.x / newBarWidth).coerceAtLeast(0f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
                                 val rowHeight = with(density) { 67.dp.toPx() } * newVerticalZoom
