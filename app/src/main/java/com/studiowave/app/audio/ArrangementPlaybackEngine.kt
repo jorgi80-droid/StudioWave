@@ -44,6 +44,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
 
     data class MasterMeterSnapshot(val peakDbfs: Float, val rmsDbfs: Float) {
+        // Fast display value derived from the current master output peak.
         val peakLinear: Float get() = dbfsToLinear(peakDbfs)
         val rmsLinear: Float get() = dbfsToLinear(rmsDbfs)
     }
