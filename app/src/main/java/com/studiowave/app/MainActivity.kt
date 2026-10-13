@@ -1548,6 +1548,44 @@ private fun TimelineGrid(
                                 AudioClipWaveform(clip.sourceUri, accent)
                             }
                                 }
+                                var leftResizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
+                                Box(
+                                    Modifier.align(Alignment.CenterStart)
+                                        .width(with(density) { (clipWidthPx.toDp().value * 0.42f).coerceIn(12f, 24f).dp })
+                                        .height(34.dp)
+                                        .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
+                                        .pointerInput(clip.id, zoom, clip.startTick, clip.lengthTicks, clip.sourceOffsetTicks) {
+                                            detectDragGestures(
+                                                onDragStart = { leftResizeDeltaPx = 0f; onSelectClip(clip.id) },
+                                                onDrag = { change, amount -> change.consume(); leftResizeDeltaPx += amount.x },
+                                                onDragEnd = {
+                                                    val resizeViewport = TimelineViewport(
+                                                        timebase, (baseBarWidthPx * zoom).coerceAtLeast(1f),
+                                                        scrollTicks.toDouble(), viewportWidthPx, trackHeaderWidthPx
+                                                    )
+                                                    val originalEnd = clip.startTick + clip.lengthTicks.coerceAtLeast(1L)
+                                                    val snapStep = snapDivision.ticks(timebase)
+                                                    val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
+                                                    val earliestStart = (clip.startTick - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
+                                                    val latestStart = (originalEnd - minimumLength).coerceAtLeast(earliestStart)
+                                                    val rawStart = resizeViewport.viewportXToTime(
+                                                        resizeViewport.timeToViewportX(clip.startTick) + leftResizeDeltaPx
+                                                    )
+                                                    val snappedStart = if (snapToGrid && snapStep > 0L) timebase.snap(rawStart, snapDivision) else rawStart
+                                                    val newStart = snappedStart.coerceIn(earliestStart, latestStart)
+                                                    val newLength = (originalEnd - newStart).coerceAtLeast(minimumLength)
+                                                    if (newStart != clip.startTick && newLength > 0L) {
+                                                        onResizeClip(clip.id, newStart, newLength)
+                                                    }
+                                                    leftResizeDeltaPx = 0f
+                                                },
+                                                onDragCancel = { leftResizeDeltaPx = 0f }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("↔", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
                                 var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
                                 Box(
                                     Modifier.align(Alignment.CenterEnd)
