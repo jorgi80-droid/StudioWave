@@ -37,6 +37,15 @@ class TimelineViewportTest {
         assertTrue(kotlin.math.abs(anchorTick - zoomed.screenXToTime(anchorScreenX)) <= 1L)
     }
 
+    @Test fun labeledSixteenthNoteSnapUsesQuarterBeatTicks() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        assertEquals("1/16", SnapDivision.QUARTER_BEAT.label)
+        assertEquals(240L, SnapDivision.QUARTER_BEAT.ticks(timebase))
+        assertEquals(480L, SnapDivision.HALF_BEAT.ticks(timebase))
+        assertEquals(120L, SnapDivision.EIGHTH_BEAT.ticks(timebase))
+        assertEquals(3840L, SnapDivision.BAR.ticks(timebase))
+    }
+
     @Test fun snapIsAppliedInMusicalTicksAndOffPreservesTicks() {
         val timebase = TimelineTimebase(120, 4, 4, 960)
         assertEquals(3840L, timebase.snap(3700L, SnapDivision.BAR))
