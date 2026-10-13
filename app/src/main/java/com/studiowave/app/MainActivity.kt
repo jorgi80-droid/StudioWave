@@ -1008,7 +1008,6 @@ private fun TimelineGrid(
                         }
                         val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
                         val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
-                        val row = rowIndex?.let { currentTrackRows.getOrNull(it) }
                         hitTrack?.clips?.any { clip ->
                             val left = clip.startTick.toFloat() / 3840f * barWidthPx - currentScroll * barWidthPx
                             val width = (clip.lengthTicks.toFloat() / 3840f * barWidthPx)
