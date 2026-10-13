@@ -83,12 +83,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, window.decorView).apply {
-            hide(WindowInsetsCompat.Type.statusBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        hideDawSystemBars()
         window.navigationBarColor = android.graphics.Color.rgb(20, 21, 23)
         setContent { StudioWaveApp() }
+    }
+
+    private fun hideDawSystemBars() {
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideDawSystemBars()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        hideDawSystemBars()
     }
 }
 
@@ -462,7 +476,7 @@ private fun StudioWaveApp() {
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.25f, 4f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
                             onPlaybackRestart = { if (playing || playbackLoading) startPlaybackAt(playheadTick) },
                             trackHeights = trackHeightsDp,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) },
@@ -739,7 +753,7 @@ private fun ArrangementWorkspace(
             val baseBarWidthPx = with(density) { 74.dp.toPx() }.coerceAtLeast(1f)
             (timelineWidthPx.toDouble() * fitTimebase.ticksPerBar.toDouble() /
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
-                .toFloat().coerceIn(0.55f, 2.8f)
+                .toFloat().coerceIn(0.25f, 4f)
         }
         Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -1244,7 +1258,9 @@ private fun TimelineGrid(
     val timebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
         TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
     }
-    val pixelsPerBar = baseBarWidthPx * zoom
+    val requestedPixelsPerBar = baseBarWidthPx * zoom
+    val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks.toDouble(), 0f)
+        .effectivePixelsPerBar
     val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
         TimelineViewport(timebase, pixelsPerBar, scrollTicks.toDouble(), 0f, trackHeaderWidthPx)
     }
@@ -1289,7 +1305,7 @@ private fun TimelineGrid(
                             rowY >= topPx && rowY <= topPx + heightPx
                         }
                         val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
-                        val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
+                        val barWidthPx = TimelineViewport(timebase, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
                         hitTrack?.clips?.any { clip ->
                             val hitViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
                              val left = hitViewport.timeToViewportX(clip.startTick)
@@ -1317,10 +1333,10 @@ private fun TimelineGrid(
                             val span = pointers.map { (it.position - centroid).getDistance() }.average().toFloat() * 2f
                             if (initialized) {
                                 val zoomFactor = if (previousSpan > 1f && span > 1f) (span / previousSpan).coerceIn(0.85f, 1.18f) else 1f
-                                val oldZoom = currentZoom.coerceIn(0.55f, 2.8f)
-                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.55f, 2.8f)
-                                val oldBarWidth = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
-                                val newBarWidth = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
+                                val oldZoom = currentZoom.coerceIn(0.25f, 4f)
+                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.25f, 4f)
+                                val oldBarWidth = TimelineViewport(timebase, baseBarWidthPx * oldZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
+                                val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
                                 val pinchViewport = TimelineViewport(
                                     timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat()
                                 )
@@ -1370,7 +1386,7 @@ private fun TimelineGrid(
         val timelineWidthPx = with(density) { maxWidth.toPx() }
         LaunchedEffect(isPlaying, playheadTick, zoom, scrollTicks, timelineWidthPx, timebase) {
             if (isPlaying && timelineWidthPx > 0f) {
-                val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
+                val barWidthPx = viewport.effectivePixelsPerBar
                 val currentViewport = TimelineViewport(
                     timebase, barWidthPx, scrollTicks.toDouble(), timelineWidthPx, trackHeaderWidthPx
                 )
@@ -1398,7 +1414,7 @@ private fun TimelineGrid(
             val canvasViewport = viewport.copy(viewportWidthPx = size.width)
              val firstVisibleBar = canvasViewport.firstVisibleBar().coerceAtMost(4096L).toInt()
              val lastVisibleBar = canvasViewport.lastVisibleBar().coerceAtMost(4096L).toInt()
-             val barWidth = baseBarWidthPx * zoom
+             val barWidth = canvasViewport.effectivePixelsPerBar
              for (bar in firstVisibleBar..lastVisibleBar) {
                  val x = canvasViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
                  if (x >= -barWidth && x <= size.width + barWidth) {
@@ -1459,7 +1475,7 @@ private fun TimelineGrid(
                 }
         ) {
             val rulerViewport = viewport.copy(viewportWidthPx = size.width)
-             val barWidth = baseBarWidthPx * zoom
+             val barWidth = rulerViewport.effectivePixelsPerBar
              val firstVisibleBar = rulerViewport.firstVisibleBar().coerceAtMost(4096L).toInt()
              val lastVisibleBar = rulerViewport.lastVisibleBar().coerceAtMost(4096L).toInt()
              val labelEveryBar = barWidth >= with(density) { 94.dp.toPx() }
@@ -1496,7 +1512,7 @@ private fun TimelineGrid(
                     if (rowTop + rowHeight >= -rowHeight && rowTop <= timelineViewportHeightDp) {
                 BoxWithConstraints(Modifier.fillMaxWidth().offset(y = rowTop.dp).height(rowHeight.dp)) {
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
-                    val barWidth = baseBarWidthPx * zoom
+                    val barWidth = viewport.effectivePixelsPerBar
                     track.clips.forEach { clip ->
                         val clipWidthPx = (clip.lengthTicks.toDouble() * viewport.pixelsPerTick).coerceIn(1.0, 1_000_000.0).toFloat()
                          val displayLeftPx = viewport.timeToViewportX(clip.startTick)
@@ -1521,7 +1537,7 @@ private fun TimelineGrid(
                                     var startedOnResizeGrip = false
                                     detectDragGestures(
                                         onDragStart = { down ->
-                                            startedOnResizeGrip = down.x >= size.width - 25.dp.toPx()
+                                            startedOnResizeGrip = down.x <= 25.dp.toPx() || down.x >= size.width - 25.dp.toPx()
                                             if (!startedOnResizeGrip) {
                                                 draggingClip = clip.id
                                                 dragFromTrack = trackIndex
@@ -1636,7 +1652,7 @@ private fun TimelineGrid(
                                                 onDrag = { change, amount -> change.consume(); leftResizeDeltaPx += amount.x },
                                                 onDragEnd = {
                                                     val resizeViewport = TimelineViewport(
-                                                        timebase, (baseBarWidthPx * zoom).coerceAtLeast(1f),
+                                                        timebase, viewport.effectivePixelsPerBar,
                                                         scrollTicks.toDouble(), viewportWidthPx, trackHeaderWidthPx
                                                     )
                                                     val originalEnd = clip.startTick + clip.lengthTicks.coerceAtLeast(1L)
@@ -1701,7 +1717,7 @@ private fun TimelineGrid(
         // Overlay the cursor after clips so it stays visible over audio, MIDI and drum patterns.
         Canvas(Modifier.fillMaxSize().padding(top = 24.dp).clipToBounds()) {
             val playheadViewport = TimelineViewport(
-                timebase, baseBarWidthPx * zoom, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
+                timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
             )
             val x = playheadViewport.timeToViewportX(playheadTick)
             if (x >= 0f && x <= size.width) {
