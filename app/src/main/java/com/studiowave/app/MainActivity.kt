@@ -26,6 +26,9 @@ import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
+import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -68,8 +71,17 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun StudioWaveApp() {
     val engine = remember { NativeAudioEngine() }
+    val context = LocalContext.current
+    val preferences = remember(context) { context.getSharedPreferences("studiowave_project", android.content.Context.MODE_PRIVATE) }
+    var project by remember {
+        mutableStateOf(
+            runCatching {
+                preferences.getString("project_json", null)?.let { StudioProject.fromJson(JSONObject(it)) }
+            }.getOrNull() ?: StudioProject()
+        )
+    }
     var playing by remember { mutableStateOf(false) }
-    var bpm by remember { mutableIntStateOf(120) }
+    var bpm by remember { mutableIntStateOf(project.bpm) }
     var master by remember { mutableFloatStateOf(0.72f) }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showDock by remember { mutableStateOf(true) }
@@ -77,8 +89,11 @@ private fun StudioWaveApp() {
     var scrollBars by remember { mutableFloatStateOf(0f) }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
-    var project by remember { mutableStateOf(StudioProject()) }
     var editorTrackId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(project) {
+        delay(350)
+        runCatching { preferences.edit().putString("project_json", project.toJson().toString()).apply() }
+    }
     DisposableEffect(engine) { onDispose { engine.close() } }
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -88,7 +103,10 @@ private fun StudioWaveApp() {
     )) {
         Surface(Modifier.fillMaxSize(), color = Room) {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
-                TransportBar(playing, bpm, master, { bpm = it.coerceIn(40, 240) }, { master = it },
+                TransportBar(playing, bpm, master, { value ->
+                    bpm = value.coerceIn(40, 240)
+                    project = project.copy(bpm = bpm)
+                }, { master = it },
                     onPlay = {
                         if (!playing) {
                             try { engine.setTone(55f, 0.025f, 1); engine.start(); playing = true }
