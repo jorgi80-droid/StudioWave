@@ -632,7 +632,6 @@ private fun TimelineGrid(
     var dragOriginalTick by remember { mutableLongStateOf(0L) }
     var dragDx by remember { mutableFloatStateOf(0f) }
     var dragDy by remember { mutableFloatStateOf(0f) }
-    val visibleTrackCount = remember(size = Unit) { 0 }
 
     BoxWithConstraints(
         modifier
