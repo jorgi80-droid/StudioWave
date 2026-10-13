@@ -866,7 +866,7 @@ private fun ArrangementWorkspace(
                 onDismissClipMenu = { clipMenu = null },
                 onResizeClip = { clipId, newStartTick, lengthTicks ->
                     val safeLength = lengthTicks.coerceIn(1L, Long.MAX_VALUE / 2L)
-                    onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                    val resizedProject = project.copy(tracks = project.tracks.map { track ->
                         track.copy(clips = track.clips.map { clip ->
                             if (clip.id != clipId) clip else {
                                 val delta = newStartTick - clip.startTick
@@ -906,7 +906,11 @@ private fun ArrangementWorkspace(
                                 )
                             }
                         })
-                    }))
+                    })
+                    onProjectChange(resizedProject)
+                    // Playback uses a prepared arrangement snapshot. Rebuild it at the current
+                    // playhead after an edge-resize commit so the new clip end is honored.
+                    if (isPlaying) startPlaybackAt(playheadTick)
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
                     val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
