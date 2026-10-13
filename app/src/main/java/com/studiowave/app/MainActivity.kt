@@ -195,8 +195,30 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
                 Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
                 }
+                var addTrackMenu by remember { mutableStateOf(false) }
                 Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                     project.tracks.forEachIndexed { index, track -> TrackHeader(track, index, verticalZoom, scrollTracks) { onOpenEditor(if (track.kind == "drum") "DRUM SEQUENCER" else if (track.kind == "audio") "AUDIO EDITOR" else "PIANO ROLL", track.id) } }
+                    Surface(color = Mint, shape = RoundedCornerShape(9.dp), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp).size(30.dp).clickable { addTrackMenu = !addTrackMenu }) {
+                        Box(contentAlignment = Alignment.Center) { Text("+", color = Room, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                    }
+                    if (addTrackMenu) {
+                        Surface(color = Raised, shape = RoundedCornerShape(10.dp), shadowElevation = 8.dp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)) {
+                            Column(Modifier.width(150.dp).padding(5.dp)) {
+                                Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                                listOf("Instrument / MIDI", "Audio clip", "Drum track").forEach { choice ->
+                                    Text(choice, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
+                                        val newTrack = when (choice) {
+                                            "Audio clip" -> StudioTrack(name = "AUDIO", colorArgb = 0xFF3B82F6, kind = "audio")
+                                            "Drum track" -> StudioTrack(name = "DRUM RACK", colorArgb = 0xFFFF7644, kind = "drum")
+                                            else -> StudioTrack(name = "INSTRUMENT", colorArgb = 0xFF00D2B4, kind = "midi")
+                                        }
+                                        onProjectChange(project.copy(tracks = project.tracks + newTrack))
+                                        addTrackMenu = false
+                                    }.padding(horizontal = 9.dp, vertical = 8.dp))
+                                }
+                            }
+                        }
+                    }
                 }
             }
             TimelineGrid(
