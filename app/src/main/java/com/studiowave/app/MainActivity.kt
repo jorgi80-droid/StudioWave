@@ -933,6 +933,7 @@ private fun ArrangementWorkspace(
                     val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
                     if (movedProject != null) {
                         onProjectChange(movedProject)
+                        onPlaybackRestart(movedProject)
                         statusMessage = "Clip moved"
                     } else {
                         val source = project.tracks.firstOrNull { track -> track.clips.any { it.id == clipId } }
@@ -968,7 +969,7 @@ private fun ArrangementWorkspace(
                 FloatingTimelineControl(snapDivision.label, "Change snap division") {
                     snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it }
                 }
-                FloatingTimelineControl(if (showDevices) "FX×" else "FX", if (showDevices) "Hide devices" else "Show devices") {
+                FloatingTimelineControl(if (showDevices) "DEV×" else "DEV", if (showDevices) "Hide devices" else "Show devices") {
                     onToggleDevices()
                 }
             }
@@ -1583,8 +1584,11 @@ private fun TimelineGrid(
                                                 timebase, barWidthPx, currentScroll.toDouble(),
                                                 timelineWidthPx, trackHeaderWidthPx
                                             )
-                                            val dragStartX = dragViewport.timeToViewportX(dragOriginalTick)
-                                            val rawStartTick = dragViewport.viewportXToTime(dragStartX + dragDx)
+                                            // Convert the total gesture delta to ticks from its original anchor.
+                                            // This avoids drift if playback autoscroll changes the viewport mid-drag.
+                                            val deltaTicks = dragViewport.pixelsToTickDelta(dragDx)
+                                            val rawStartTick = (dragOriginalTick.toDouble() + deltaTicks.toDouble())
+                                                .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong()
                                             val newTick = dragViewport.snapTick(rawStartTick, snapDivision, snapToGrid)
                                             if (startIndex >= 0 && source != null && target != null && source.kind == target.kind) {
                                                 moveCommit(clip.id, target.id, newTick)
