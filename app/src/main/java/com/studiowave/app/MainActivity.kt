@@ -71,6 +71,8 @@ private fun StudioWaveApp() {
     var showDock by remember { mutableStateOf(true) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var scrollBars by remember { mutableFloatStateOf(0f) }
+    var scrollTracks by remember { mutableFloatStateOf(0f) }
+    var verticalZoom by remember { mutableFloatStateOf(1f) }
     val project = remember { StudioProject() }
     DisposableEffect(engine) { onDispose { engine.close() } }
 
@@ -97,7 +99,7 @@ private fun StudioWaveApp() {
                         "MIXER" -> MixerWorkspace(project.tracks)
                         "PIANO ROLL" -> PianoRollWorkspace()
                         "BROWSER" -> BrowserWorkspace()
-                        else -> ArrangementWorkspace(project, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) })
+                        else -> ArrangementWorkspace(project, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) })
                     }
                 }
                 if (showDock) {
@@ -167,7 +169,7 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 }
 
 @Composable
-private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit) {
+private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit, verticalZoom: Float, onVerticalZoom: (Float) -> Unit, scrollTracks: Float, onScrollTracks: (Float) -> Unit) {
     var selectedClip by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
         Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -175,14 +177,16 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
             Spacer(Modifier.weight(1f))
             Text("PINCH TO ZOOM • DRAG TO SCROLL", color = MutedText, fontSize = 8.sp, maxLines = 1)
             Text("${(zoom * 100).toInt()}%", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            SmallAction("FIT") { onZoom(1f); onScroll(0f) }
+            SmallAction("FIT") { onZoom(1f); onVerticalZoom(1f); onScroll(0f); onScrollTracks(0f) }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.width(104.dp)) {
                 Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
                 }
-                project.tracks.forEachIndexed { index, track -> TrackHeader(track, index) }
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    project.tracks.forEachIndexed { index, track -> TrackHeader(track, index, verticalZoom, scrollTracks) }
+                }
             }
             TimelineGrid(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -191,6 +195,10 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
                 onZoom = onZoom,
                 scrollBars = scrollBars,
                 onScroll = onScroll,
+                verticalZoom = verticalZoom,
+                onVerticalZoom = onVerticalZoom,
+                scrollTracks = scrollTracks,
+                onScrollTracks = onScrollTracks,
                 selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it }
             )
@@ -199,9 +207,9 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
 }
 
 @Composable
-private fun TrackHeader(track: StudioTrack, index: Int) {
+private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float) {
     val accent = Color(track.colorArgb.toInt())
-    Row(Modifier.fillMaxWidth().height(67.dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp),
+    Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(Modifier.width(4.dp).height(47.dp).background(accent, RoundedCornerShape(2.dp)))
         Column(Modifier.weight(1f)) {
@@ -229,17 +237,25 @@ private fun TimelineGrid(
     onZoom: (Float) -> Unit,
     scrollBars: Float,
     onScroll: (Float) -> Unit,
+    verticalZoom: Float,
+    onVerticalZoom: (Float) -> Unit,
+    scrollTracks: Float,
+    onScrollTracks: (Float) -> Unit,
     selectedClip: String?,
     onSelectClip: (String) -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
-    val trackHeightPx = with(density) { 67.dp.toPx() }
+    val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val accentColors = remember(project.tracks) { project.tracks.map { Color(it.colorArgb.toInt()) } }
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
     val currentScroll by rememberUpdatedState(scrollBars)
+    val currentScrollTracks by rememberUpdatedState(scrollTracks)
+    val currentVerticalZoom by rememberUpdatedState(verticalZoom)
+    val currentOnVerticalZoom by rememberUpdatedState(onVerticalZoom)
+    val currentOnScrollTracks by rememberUpdatedState(onScrollTracks)
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
 
@@ -258,9 +274,15 @@ private fun TimelineGrid(
                     val zoomAdjustedScroll = (contentUnderCentroid - centroid.x) / newBarWidthPx
                     val panAdjustedScroll = -pan.x / newBarWidthPx
                     val newScroll = (zoomAdjustedScroll + panAdjustedScroll).coerceAtLeast(0f)
+                    val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                    val newVerticalZoom = (oldVerticalZoom * gestureZoom).coerceIn(0.65f, 1.8f)
+                    val trackHeight = with(density) { 67.dp.toPx() }
+                    val verticalScroll = (currentScrollTracks - pan.y / (trackHeight * newVerticalZoom)).coerceAtLeast(0f)
 
                     if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
+                    if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
+                    if (kotlin.math.abs(verticalScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(verticalScroll)
                 }
             }
     ) {
@@ -278,8 +300,10 @@ private fun TimelineGrid(
                     )
                 }
             }
-            for (i in 0..project.tracks.size) {
-                val y = rulerHeightPx + i * trackHeightPx
+            val firstVisibleTrack = (scrollTracks - 1f / verticalZoom).toInt().coerceAtLeast(0)
+            val lastVisibleTrack = (scrollTracks + (size.height - rulerHeightPx) / trackHeightPx + 2f).toInt().coerceAtMost(project.tracks.size)
+            for (i in firstVisibleTrack..lastVisibleTrack) {
+                val y = rulerHeightPx + (i - scrollTracks) * trackHeightPx
                 if (y >= rulerHeightPx && y <= size.height) {
                     drawLine(Color(0xFF3A3D44), Offset(0f, y), Offset(size.width, y), 1f)
                 }
@@ -315,9 +339,9 @@ private fun TimelineGrid(
             drawRect(Color(0xFF2B2E34), size = Size(size.width, with(density) { 2.dp.toPx() }))
         }
 
-        Column(Modifier.padding(top = 24.dp)) {
+        Box(Modifier.fillMaxSize().padding(top = 24.dp)) {
             project.tracks.forEachIndexed { trackIndex, track ->
-                BoxWithConstraints(Modifier.fillMaxWidth().height(67.dp)) {
+                BoxWithConstraints(Modifier.fillMaxWidth().offset(y = ((trackIndex - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp)) {
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
                     val barWidth = baseBarWidthPx * zoom
                     track.clips.forEach { clip ->
