@@ -628,7 +628,12 @@ private fun ArrangementWorkspace(
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
         Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF), maxLines = 1)
-            SmallAction("FIT") { onZoom(1f); onVerticalZoom(1f); onScroll(0f); onScrollTracks(0f) }
+            SmallAction("FIT") {
+                onZoom(1f)
+                onVerticalZoom(1f)
+                onScroll(0f)
+                onScrollTracks(0f)
+            }
             SmallAction(if (snapEnabled) "SNAP" else "SNAP OFF") { snapEnabled = !snapEnabled }
             SmallAction(snapDivision.label) { snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it } }
             Spacer(Modifier.weight(1f))
@@ -662,12 +667,14 @@ private fun ArrangementWorkspace(
                                     trackHeights[track.id] = ((trackHeights[track.id] ?: 67f) + delta / (densityScale * verticalZoom).coerceAtLeast(0.1f)).coerceIn(44f, 160f)
                                 },
                                 onScratch = { delta -> if (track.kind == "audio") onScratchTrack(track.id, delta / densityScale * 8f) },
-                                onReorderTrack = { deltaPx ->
+                                                onReorderTrack = { deltaPx ->
                                     val from = project.tracks.indexOfFirst { it.id == track.id }
                                     val fromRow = trackRowLayout.getOrNull(from)
                                     if (from >= 0 && fromRow != null && project.tracks.size > 1 && deltaPx.isFinite()) {
-                                        val rowStep = (fromRow.heightDp * verticalZoom).coerceAtLeast(1f)
-                                        val steps = kotlin.math.round(deltaPx / (densityScale * rowStep)).toInt()
+                                        val rowStepPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                            (fromRow.heightDp * verticalZoom).dp.toPx()
+                                        }.coerceAtLeast(1f)
+                                        val steps = kotlin.math.round(deltaPx / rowStepPx).toInt()
                                         val target = (from + steps).coerceIn(0, project.tracks.lastIndex)
                                         if (target != from) {
                                             val reordered = project.tracks.toMutableList()
