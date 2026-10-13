@@ -90,6 +90,29 @@ private fun StudioWaveApp() {
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     var editorTrackId by remember { mutableStateOf<String?>(null) }
+    var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
+    var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
+    fun changeProject(next: StudioProject) {
+        if (next != project) {
+            undoHistory = (undoHistory + project).takeLast(100)
+            redoHistory = emptyList()
+            project = next
+        }
+    }
+    fun undoProject() {
+        val previous = undoHistory.lastOrNull() ?: return
+        redoHistory = redoHistory + project
+        undoHistory = undoHistory.dropLast(1)
+        project = previous
+        bpm = previous.bpm
+    }
+    fun redoProject() {
+        val next = redoHistory.lastOrNull() ?: return
+        undoHistory = undoHistory + project
+        redoHistory = redoHistory.dropLast(1)
+        project = next
+        bpm = next.bpm
+    }
     LaunchedEffect(project) {
         delay(350)
         runCatching { preferences.edit().putString("project_json", project.toJson().toString()).apply() }
@@ -105,8 +128,8 @@ private fun StudioWaveApp() {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
                 TransportBar(playing, bpm, master, { value ->
                     bpm = value.coerceIn(40, 240)
-                    project = project.copy(bpm = bpm)
-                }, { master = it },
+                    changeProject(project.copy(bpm = bpm))
+                }, { master = it }, onUndo = { undoProject() }, onRedo = { redoProject() },
                     onPlay = {
                         if (!playing) {
                             try { engine.setTone(55f, 0.025f, 1); engine.start(); playing = true }
@@ -120,11 +143,11 @@ private fun StudioWaveApp() {
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
                         "MIXER" -> MixerWorkspace(project.tracks)
-                        "PIANO ROLL" -> PianoRollWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, project, { project = it }, onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        "PIANO ROLL" -> PianoRollWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "BROWSER" -> BrowserWorkspace()
-                        "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { project = it }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        else -> ArrangementWorkspace(project, { project = it }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace })
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace })
                     }
                 }
                 if (showDock) {
@@ -141,7 +164,8 @@ private fun StudioWaveApp() {
 @Composable
 private fun TransportBar(
     playing: Boolean, bpm: Int, master: Float,
-    onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit
+    onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
+    onUndo: () -> Unit, onRedo: () -> Unit
 ) {
     Row(
         Modifier.fillMaxWidth().height(40.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
@@ -159,8 +183,8 @@ private fun TransportBar(
         SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
         SmallIconButton(Icons.Default.Stop, MutedText, onStop)
         SmallIconButton(Icons.Default.Mic, Red) { }
-        SmallIconButton(Icons.Default.Undo, MutedText) { }
-        SmallIconButton(Icons.Default.Redo, MutedText) { }
+        SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
+        SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
         Spacer(Modifier.weight(1f))
         Text("MASTER", color = MutedText, fontSize = 9.sp)
         Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(75.dp).height(24.dp), valueRange = 0f..1f)
