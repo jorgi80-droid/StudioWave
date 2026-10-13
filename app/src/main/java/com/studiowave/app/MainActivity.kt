@@ -84,6 +84,7 @@ private fun StudioWaveApp() {
     }
     var playing by remember { mutableStateOf(false) }
     var bpm by remember { mutableIntStateOf(project.bpm) }
+    var audioError by remember { mutableStateOf<String?>(null) }
     var master by remember { mutableFloatStateOf(0.72f) }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showDock by remember { mutableStateOf(true) }
@@ -144,17 +145,26 @@ private fun StudioWaveApp() {
     )) {
         Surface(Modifier.fillMaxSize(), color = Room) {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
+                if (audioError != null) {
+                    Surface(color = Color(0xFF4B2424), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
+                        Text(audioError!!, color = Color(0xFFFFD4D4), fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), maxLines = 2)
+                    }
+                }
                 TransportBar(playing, bpm, master, { value ->
                     bpm = value.coerceIn(40, 240)
                     changeProject(project.copy(bpm = bpm))
                 }, { master = it }, onUndo = { undoProject() }, onRedo = { redoProject() },
                     onPlay = {
                         if (!playing) {
-                            try { engine.setTone(55f, 0.025f, 1); engine.start(); playing = true }
-                            catch (_: Exception) { playing = false }
-                        } else { engine.stop(); playing = false }
+                            runCatching { engine.setTone(55f, 0.025f, 1); engine.start() }
+                                .onSuccess { playing = true; audioError = null }
+                                .onFailure { playing = false; audioError = it.message ?: "Audio output unavailable" }
+                        } else {
+                            engine.stop()
+                            playing = false
+                        }
                     },
-                    onStop = { engine.stop(); playing = false })
+                    onStop = { engine.stop(); playing = false; audioError = null })
                 Spacer(Modifier.height(3.dp))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
