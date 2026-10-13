@@ -39,9 +39,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     @Volatile private var worker: Thread? = null
     @Volatile private var output: AudioTrack? = null
 
-    private data class AudioAsset(val sampleRate: Int, val pcmStereo: ShortArray) {
-        val frames: Int get() = pcmStereo.size / 2
-    }
+    private data class AudioAsset(
+        val sampleRate: Int,
+        val pcmStereo: ShortArray,
+        val frames: Int
+    )
 
     private data class AudioEvent(
         val startFrame: Long,
@@ -170,7 +172,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val notes = ArrayList<NoteEvent>()
         val drums = ArrayList<DrumEvent>()
         tracks.filter(::audible).forEach { track ->
+            ensureCurrent()
             track.clips.forEach clipLoop@{ clip ->
+                ensureCurrent()
                 val clipStart = ticksToFrames(clip.startTick)
                 val clipLength = ticksToFrames(clip.lengthTicks.coerceAtLeast(1L))
                 val clipEnd = min(totalFrames, if (clipStart > Long.MAX_VALUE - clipLength) Long.MAX_VALUE else clipStart + clipLength)
@@ -320,7 +324,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 if (stagnant > 500) error("Audio decoder stopped making progress")
             }
             check(framesWritten > 0) { "No PCM audio samples could be decoded from $uri" }
-            return AudioAsset(OUTPUT_SAMPLE_RATE, pcmOut.copyOf(framesWritten * 2))
+            return AudioAsset(OUTPUT_SAMPLE_RATE, pcmOut, framesWritten)
         } finally {
             runCatching { decoder?.stop() }
             runCatching { decoder?.release() }
