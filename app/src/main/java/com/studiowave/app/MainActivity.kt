@@ -1088,8 +1088,8 @@ private fun TimelineGrid(
             detectTapGestures(onLongPress = { onTimelineLongPress() })
         }) {
             val barWidth = baseBarWidthPx * zoom
-            val firstVisibleBar = (scrollTicks / timebase.ticksPerBar).toInt().coerceAtLeast(0)
-            val visibleBarCount = (size.width / barWidth).toInt() + 4
+            val firstVisibleBar = (scrollTicks / timebase.ticksPerBar).toLong().coerceIn(0L, 4096L).toInt()
+            val visibleBarCount = (size.width / barWidth).toInt().coerceAtLeast(0) + 4
             val lastVisibleBar = (firstVisibleBar.toLong() + visibleBarCount.toLong()).coerceAtMost(4096L).toInt()
             for (bar in firstVisibleBar..lastVisibleBar) {
                 val x = bar * barWidth - scrollTicks / timebase.ticksPerBar.toFloat() * barWidth
