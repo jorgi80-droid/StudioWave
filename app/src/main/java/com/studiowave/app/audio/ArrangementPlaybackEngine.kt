@@ -507,10 +507,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
                     for (absolute in from until to) {
                         val relative = absolute - event.startFrame
-                        val sourceFrame = (relative + event.sourceOffsetFrame).toDouble()
+                        val rawSourceFrame = (relative + event.sourceOffsetFrame).toDouble()
                             .times(event.asset.sampleRate.toDouble() / sampleRate.toDouble()).toLong()
-                            .plus(scratchFrames).coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
-                        if (sourceFrame !in 0 until event.asset.frames) continue
+                            .plus(scratchFrames)
+                        if (event.asset.frames <= 0) continue
+                        // FL Studio Mobile loops the source when an audio clip is extended
+                        // past the end of its sample. Keep the trim offset but wrap the read
+                        // cursor instead of inserting silence after the decoded source ends.
+                        val sourceFrame = Math.floorMod(rawSourceFrame, event.asset.frames.toLong()).toInt()
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
                         mix[outIndex] += event.asset.pcmStereo[sourceIndex] / 32768f * trackGain * leftPan
@@ -711,7 +715,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         const val MAX_SCRATCH_OFFSET_MS = 10_000L
         const val BLOCK_FRAMES = 256
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
-        const val MAX_SOURCE_SECONDS = 60
+        const val MAX_SOURCE_SECONDS = 300
         const val MAX_ARRANGEMENT_SECONDS = 60 * 15
         const val MAX_TOTAL_PCM_BYTES = 64L * 1024L * 1024L
         const val MAX_ASSET_CACHE_KIB = 16 * 1024
