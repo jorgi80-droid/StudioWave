@@ -45,6 +45,27 @@ data class StudioProject(
     val ppq: Int = 960,
     val tracks: List<StudioTrack> = defaultTracks()
 ) {
+    /**
+     * Moves an existing clip to a compatible track, removing any stale duplicate IDs first.
+     * Returns null when either entity is missing, the track kinds differ, or the target is full.
+     */
+    fun moveClipToTrack(clipId: String, targetTrackId: String, startTick: Long): StudioProject? {
+        val sourceTrack = tracks.firstOrNull { track -> track.clips.any { it.id == clipId } } ?: return null
+        val targetTrack = tracks.firstOrNull { it.id == targetTrackId } ?: return null
+        if (sourceTrack.kind != targetTrack.kind) return null
+        val sourceClip = sourceTrack.clips.first { it.id == clipId }
+        val cleanedTracks = tracks.map { track ->
+            track.copy(clips = track.clips.filterNot { it.id == clipId })
+        }
+        val targetIndex = cleanedTracks.indexOfFirst { it.id == targetTrackId }
+        if (targetIndex < 0 || cleanedTracks[targetIndex].clips.size >= MAX_CLIPS_PER_TRACK) return null
+        val moved = sourceClip.copy(startTick = startTick.coerceAtLeast(0L))
+        return copy(tracks = cleanedTracks.mapIndexed { index, track ->
+            if (index == targetIndex) track.copy(clips = (track.clips + moved).sortedBy { it.startTick })
+            else track
+        })
+    }
+
     fun toJson(): JSONObject = JSONObject().apply {
         put("schemaVersion", schemaVersion)
         put("id", id)
