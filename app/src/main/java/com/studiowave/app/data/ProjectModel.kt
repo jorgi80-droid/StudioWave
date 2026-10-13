@@ -18,7 +18,9 @@ data class WaveClip(
     val startTick: Long,
     val lengthTicks: Long,
     val sourceUri: String? = null,
-    val midiNotes: List<MidiNote> = emptyList()
+    val midiNotes: List<MidiNote> = emptyList(),
+    val drumSteps: List<Boolean> = emptyList(),
+    val colorArgb: Long? = null
 )
 
 data class StudioTrack(
@@ -63,6 +65,8 @@ data class StudioProject(
                                 put("id", clip.id); put("name", clip.name)
                                 put("startTick", clip.startTick); put("lengthTicks", clip.lengthTicks)
                                 put("sourceUri", clip.sourceUri)
+                                clip.colorArgb?.let { put("colorArgb", it) }
+                                put("drumSteps", JSONArray().apply { clip.drumSteps.forEach { put(it) } })
                                 put("midiNotes", JSONArray().apply {
                                     clip.midiNotes.forEach { note -> put(JSONObject()
                                         .put("id", note.id).put("pitch", note.pitch.coerceIn(0, 127))
@@ -93,6 +97,8 @@ data class StudioProject(
                     val clips = buildList {
                         for (j in 0 until clipsJson.length()) {
                             val c = clipsJson.getJSONObject(j)
+                            val stepsJson = c.optJSONArray("drumSteps") ?: JSONArray()
+                            val drumSteps = buildList { for (stepIndex in 0 until stepsJson.length()) add(stepsJson.optBoolean(stepIndex)) }
                             val notesJson = c.optJSONArray("midiNotes") ?: JSONArray()
                             val notes = buildList {
                                 for (k in 0 until notesJson.length()) {
@@ -112,7 +118,9 @@ data class StudioProject(
                                 startTick = c.optLong("startTick", 0).coerceAtLeast(0),
                                 lengthTicks = c.optLong("lengthTicks", 3840).coerceAtLeast(1),
                                 sourceUri = c.optString("sourceUri").takeUnless { it == "null" || it.isBlank() },
-                                midiNotes = notes
+                                midiNotes = notes,
+                                drumSteps = drumSteps,
+                                colorArgb = if (c.has("colorArgb")) c.optLong("colorArgb") else null
                             ))
                         }
                     }
@@ -143,7 +151,8 @@ data class StudioProject(
 
         fun defaultTracks(): List<StudioTrack> = listOf(
             StudioTrack(name = "DRUM RACK", colorArgb = 0xFFFF7644, kind = "drum",
-                clips = listOf(WaveClip(name = "808 GROOVE", startTick = 0, lengthTicks = 3840))),
+                clips = listOf(WaveClip(name = "808 GROOVE", startTick = 0, lengthTicks = 3840,
+                    drumSteps = (0 until 16).map { it in listOf(0, 4, 8, 12) }))),
             StudioTrack(name = "SYNTH BASS", colorArgb = 0xFF00D2B4, kind = "midi",
                 clips = listOf(WaveClip(name = "BASSLINE", startTick = 0, lengthTicks = 7680,
                     midiNotes = listOf(MidiNote(pitch = 36, startTick = 0, durationTicks = 480),
