@@ -233,7 +233,7 @@ private fun StudioWaveApp() {
                     WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
-                        "MIXER" -> MixerWorkspace(project.tracks)
+                        "MIXER" -> MixerWorkspace(project, master, onMasterChange = { master = it }, onProjectChange = { changeProject(it) })
                         "PIANO ROLL" -> PianoRollWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
@@ -967,23 +967,102 @@ private fun PianoRollWorkspace(
 }
 
 @Composable
-private fun MixerWorkspace(tracks: List<StudioTrack>) {
-    Row(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        (tracks + StudioTrack(name = "MASTER", colorArgb = 0xFFEEEEEE, kind = "master")).forEach { ch ->
-            Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(7.dp),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(ch.name, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Spacer(Modifier.height(8.dp))
-                Canvas(Modifier.fillMaxWidth().weight(1f)) {
-                    drawRoundRect(Color(0xFF131518), Offset(size.width * 0.2f, 0f), Size(size.width * 0.6f, size.height),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                    val h = size.height * 0.22f
-                    drawRoundRect(Mint, Offset(size.width * 0.2f, size.height - h), Size(size.width * 0.6f, h),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+private fun MixerWorkspace(
+    project: StudioProject,
+    master: Float,
+    onMasterChange: (Float) -> Unit,
+    onProjectChange: (StudioProject) -> Unit
+) {
+    Row(
+        Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        project.tracks.forEach { track ->
+            Column(
+                Modifier.weight(1f).fillMaxHeight()
+                    .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Spacer(Modifier.height(3.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    SmallAction(if (track.muted) "M✓" else "M") {
+                        onProjectChange(project.copy(tracks = project.tracks.map {
+                            if (it.id == track.id) it.copy(muted = !it.muted) else it
+                        }))
+                    }
+                    SmallAction(if (track.solo) "S✓" else "S") {
+                        onProjectChange(project.copy(tracks = project.tracks.map {
+                            if (it.id == track.id) it.copy(solo = !it.solo) else it
+                        }))
+                    }
                 }
-                Text("${(ch.volume * 100).toInt()}%", color = MutedText, fontSize = 9.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) { SmallAction("M") {}; SmallAction("S") {} }
+                Spacer(Modifier.height(4.dp))
+                Text("VOL " + (track.volume * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
+                Slider(
+                    value = track.volume.coerceIn(0f, 1.5f),
+                    onValueChange = { value ->
+                        onProjectChange(project.copy(tracks = project.tracks.map {
+                            if (it.id == track.id) it.copy(volume = value) else it
+                        }))
+                    },
+                    valueRange = 0f..1.5f,
+                    modifier = Modifier.fillMaxWidth().height(24.dp)
+                )
+                Spacer(Modifier.height(3.dp))
+                val panLabel = when {
+                    track.pan <= -0.95f -> "L"
+                    track.pan >= 0.95f -> "R"
+                    else -> (track.pan * 100).toInt().toString()
+                }
+                Text("PAN " + panLabel, color = MutedText, fontSize = 8.sp)
+                Slider(
+                    value = track.pan.coerceIn(-1f, 1f),
+                    onValueChange = { value ->
+                        onProjectChange(project.copy(tracks = project.tracks.map {
+                            if (it.id == track.id) it.copy(pan = value) else it
+                        }))
+                    },
+                    valueRange = -1f..1f,
+                    modifier = Modifier.fillMaxWidth().height(24.dp)
+                )
+                Spacer(Modifier.height(4.dp))
+                Canvas(Modifier.fillMaxWidth().weight(1f)) {
+                    drawRoundRect(Color(0xFF131518), Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+                    val h = size.height * track.volume.coerceIn(0f, 1.5f) / 1.5f
+                    drawRoundRect(
+                        if (track.muted) Red else Mint,
+                        Offset(size.width * 0.34f, size.height - h),
+                        Size(size.width * 0.32f, h),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f)
+                    )
+                }
+                Text(
+                    if (track.muted) "MUTED" else if (track.solo) "SOLO" else track.kind.uppercase(),
+                    color = if (track.muted) Red else MutedText,
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
             }
+        }
+        Column(
+            Modifier.weight(1f).fillMaxHeight()
+                .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Canvas(Modifier.fillMaxWidth().weight(1f)) {
+                drawRoundRect(Color(0xFF131518), Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+                val h = size.height * master.coerceIn(0f, 1f)
+                drawRoundRect(Mint, Offset(size.width * 0.34f, size.height - h), Size(size.width * 0.32f, h),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+            }
+            Text("GAIN " + (master * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
+            Slider(value = master, onValueChange = onMasterChange, valueRange = 0f..1f,
+                modifier = Modifier.fillMaxWidth().height(24.dp))
         }
     }
 }
