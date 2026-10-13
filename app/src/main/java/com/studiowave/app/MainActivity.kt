@@ -873,7 +873,6 @@ private fun TimelineGrid(
         modifier
             .background(Color(0xFF17191C))
             .clipToBounds()
-            .pointerInput(Unit) { detectTapGestures(onLongPress = { onTimelineLongPress() }) }
             .pointerInput(baseBarWidthPx) {
                 awaitEachGesture {
                     val firstDown = awaitFirstDown(requireUnconsumed = false)
@@ -955,7 +954,11 @@ private fun TimelineGrid(
                 }
             }
     ) {
-        Canvas(Modifier.fillMaxSize()) {
+        // Keep long-press handling on the background layer so it cannot steal a
+        // drag that starts on a clip or its resize handle.
+        Canvas(Modifier.fillMaxSize().pointerInput(Unit) {
+            detectTapGestures(onLongPress = { onTimelineLongPress() })
+        }) {
             val barWidth = baseBarWidthPx * zoom
             val firstVisibleBar = (scrollBars - 1f / zoom).toInt().coerceAtLeast(0)
             val lastVisibleBar = (scrollBars + size.width / barWidth + 2f).toInt().coerceAtMost(4096)
