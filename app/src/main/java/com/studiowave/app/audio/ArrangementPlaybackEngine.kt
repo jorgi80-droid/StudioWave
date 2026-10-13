@@ -411,7 +411,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
 
                 for (event in playingAudio) {
-                    val channelMix = mixState.tracks[event.track.id] ?: TrackMix(event.track.volume, event.track.pan, event.track.muted, event.track.solo)
+                    val channelMix = mixState.tracks[event.track.id] ?: continue
                     if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, event.startFrame)
                     val to = min(blockEnd, event.endFrame)
@@ -431,7 +431,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
 
                 for (note in playingNotes) {
-                    val channelMix = mixState.tracks[note.track.id] ?: TrackMix(note.track.volume, note.track.pan, note.track.muted, note.track.solo)
+                    val channelMix = mixState.tracks[note.track.id] ?: continue
                     if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
@@ -454,7 +454,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
 
                 for (drum in playingDrums) {
-                    val channelMix = mixState.tracks[drum.track.id] ?: TrackMix(drum.track.volume, drum.track.pan, drum.track.muted, drum.track.solo)
+                    val channelMix = mixState.tracks[drum.track.id] ?: continue
                     if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val hitEnd = drum.startFrame + DRUM_DURATION_FRAMES
                     val from = max(position, drum.startFrame)
