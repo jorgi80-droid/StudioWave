@@ -80,7 +80,7 @@ private fun StudioWaveApp() {
         onSurface = Color(0xFFF8FAFC)
     )) {
         Surface(Modifier.fillMaxSize(), color = Room) {
-            Column(Modifier.fillMaxSize().padding(6.dp)) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
                 TransportBar(playing, bpm, master, { bpm = it.coerceIn(40, 240) }, { master = it },
                     onPlay = {
                         if (!playing) {
@@ -89,10 +89,10 @@ private fun StudioWaveApp() {
                         } else { engine.stop(); playing = false }
                     },
                     onStop = { engine.stop(); playing = false })
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(3.dp))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
-                    Spacer(Modifier.width(6.dp))
+                    Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
                         "MIXER" -> MixerWorkspace(project.tracks)
                         "PIANO ROLL" -> PianoRollWorkspace()
@@ -101,7 +101,7 @@ private fun StudioWaveApp() {
                     }
                 }
                 if (showDock) {
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(3.dp))
                     DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
                 } else {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { SmallAction("SHOW DEVICES") { showDock = true } }
@@ -116,32 +116,33 @@ private fun TransportBar(
     playing: Boolean, bpm: Int, master: Float,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit
 ) {
-    Row(Modifier.fillMaxWidth().height(48.dp).background(Raised, RoundedCornerShape(8.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("StudioWave", fontSize = 17.sp, fontWeight = FontWeight.Black, color = Mint)
-        Text("NEON HORIZON", fontSize = 10.sp, color = MutedText, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(4.dp))
-        Text("BPM", color = MutedText, fontSize = 10.sp)
+    Row(
+        Modifier.fillMaxWidth().height(40.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Text("StudioWave", fontSize = 15.sp, fontWeight = FontWeight.Black, color = Mint, maxLines = 1)
+        Text("NEON", fontSize = 9.sp, color = MutedText, fontWeight = FontWeight.Bold, maxLines = 1)
+        Text("BPM", color = MutedText, fontSize = 9.sp)
         SmallAction("−") { onBpm(bpm - 1) }
-        Text(bpm.toString(), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(bpm.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         SmallAction("+") { onBpm(bpm + 1) }
-        Text("4/4", fontSize = 12.sp, color = MutedText)
-        Text("BAR 001 : 01 : 000", fontSize = 11.sp, color = Color(0xFFDADEE5))
+        Text("4/4", fontSize = 10.sp, color = MutedText)
+        Text("BAR 001:01", fontSize = 9.sp, color = Color(0xFFDADEE5), maxLines = 1)
         SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
         SmallIconButton(Icons.Default.Stop, MutedText, onStop)
         SmallIconButton(Icons.Default.Mic, Red) { }
         SmallIconButton(Icons.Default.Undo, MutedText) { }
         SmallIconButton(Icons.Default.Redo, MutedText) { }
         Spacer(Modifier.weight(1f))
-        Text("MASTER", color = MutedText, fontSize = 10.sp)
-        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(94.dp), valueRange = 0f..1f)
-        Text("${(master * 100).toInt()}%", fontSize = 10.sp, color = Color(0xFFF8FAFC))
+        Text("MASTER", color = MutedText, fontSize = 9.sp)
+        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(75.dp).height(24.dp), valueRange = 0f..1f)
     }
 }
 
 @Composable
 private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
-    Column(Modifier.width(76.dp).fillMaxHeight().background(Raised, RoundedCornerShape(8.dp)).padding(5.dp),
+    Column(Modifier.width(64.dp).fillMaxHeight().background(Raised, RoundedCornerShape(7.dp)).padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)) {
         RailButton("ARRANGE", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
         RailButton("PIANO", selected == "PIANO ROLL", Icons.Default.Keyboard) { onSelect("PIANO ROLL") }
@@ -152,7 +153,7 @@ private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
 
 @Composable
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(6.dp),
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(49.dp), shape = RoundedCornerShape(6.dp),
         contentPadding = PaddingValues(2.dp),
         colors = ButtonDefaults.buttonColors(containerColor = if (selected) Color(0xFF18443F) else Color(0xFF202226),
             contentColor = if (selected) Mint else MutedText)) {
@@ -166,19 +167,19 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 @Composable
 private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit) {
     var selectedClip by remember { mutableStateOf<String?>(null) }
-    Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(7.dp)) {
-        Row(Modifier.fillMaxWidth().height(25.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("ARRANGEMENT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+    Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
+        Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
             Spacer(Modifier.weight(1f))
-            Text("${(zoom * 100).toInt()}%", color = MutedText, fontSize = 10.sp)
+            Text("${(zoom * 100).toInt()}%", color = MutedText, fontSize = 9.sp)
             SmallAction("−") { onZoom(zoom / 1.15f) }
             SmallAction("+") { onZoom(zoom * 1.15f) }
             SmallAction("FIT") { onZoom(1f) }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
-            Column(Modifier.width(128.dp)) {
-                Row(Modifier.fillMaxWidth().height(24.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
-                    Text("TRACK / LANE", fontSize = 9.sp, color = MutedText, modifier = Modifier.padding(start = 6.dp))
+            Column(Modifier.width(104.dp)) {
+                Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
+                    Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
                 }
                 project.tracks.forEachIndexed { index, track -> TrackHeader(track, index) }
             }
