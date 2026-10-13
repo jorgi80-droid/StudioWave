@@ -55,7 +55,7 @@ class TimelineViewportTest {
         val before = viewport.timeToScreenX(7680L)
         val panned = viewport.panByScreenPixels(-48f)
         assertEquals(before + 48f, panned.timeToScreenX(7680L), 0.01f)
-        assertTrue(panned.scrollTimeTicks > viewport.scrollTimeTicks)
+        assertTrue(panned.scrollTimeTicks < viewport.scrollTimeTicks)
     }
 
     @Test fun visibleBarRangeIncludesViewportAndMargins() {
