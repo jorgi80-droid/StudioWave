@@ -516,17 +516,27 @@ private fun ArrangementWorkspace(
                     }))
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
+                    // Resolve by ID against the latest model, and remove the moving ID from every track
+                    // before inserting exactly one updated copy. This prevents stale-index duplicates.
                     val source = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
                     val target = project.tracks.firstOrNull { it.id == targetTrackId }
-                    if (source != null && target != null && source.kind == target.kind) {
-                        val moving = source.clips.first { it.id == clipId }.copy(startTick = startTick)
-                        onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                            if (source.id == target.id) item.copy(clips = item.clips.filterNot { it.id == clipId } + moving)
-                            else if (item.id == source.id) item.copy(clips = item.clips.filterNot { it.id == clipId })
-                            else if (item.id == target.id) item.copy(clips = item.clips + moving)
-                            else item
-                        }))
-                    } else statusMessage = "Clip must stay on a matching track type"
+                    val moving = source?.clips?.firstOrNull { it.id == clipId }
+                    if (source != null && target != null && moving != null && source.kind == target.kind) {
+                        val cleanedTracks = project.tracks.map { track ->
+                            track.copy(clips = track.clips.filterNot { it.id == clipId })
+                        }
+                        val targetIndex = cleanedTracks.indexOfFirst { it.id == targetTrackId }
+                        if (targetIndex >= 0) {
+                            val targetTrack = cleanedTracks[targetIndex]
+                            val updatedClip = moving.copy(startTick = startTick.coerceAtLeast(0L))
+                            onProjectChange(project.copy(tracks = cleanedTracks.mapIndexed { index, track ->
+                                if (index == targetIndex) track.copy(clips = track.clips + updatedClip) else track
+                            }))
+                            statusMessage = if (source.id == target.id) "Clip moved" else "Clip moved to ${target.name}"
+                        }
+                    } else {
+                        statusMessage = if (source == null) "Clip no longer exists" else "Clip must stay on a matching track type"
+                    }
                 }
             )
         }
