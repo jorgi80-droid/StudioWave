@@ -173,10 +173,9 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
         Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
             Spacer(Modifier.weight(1f))
-            Text("${(zoom * 100).toInt()}%", color = MutedText, fontSize = 9.sp)
-            SmallAction("−") { onZoom(zoom / 1.15f) }
-            SmallAction("+") { onZoom(zoom * 1.15f) }
-            SmallAction("FIT") { onZoom(1f) }
+            Text("PINCH TO ZOOM • DRAG TO SCROLL", color = MutedText, fontSize = 8.sp, maxLines = 1)
+            Text("${(zoom * 100).toInt()}%", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            SmallAction("FIT") { onZoom(1f); onScroll(0f) }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.width(104.dp)) {
