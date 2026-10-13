@@ -533,26 +533,19 @@ private fun ArrangementWorkspace(
                     }))
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
-                    // Resolve by ID against the latest model, and remove the moving ID from every track
-                    // before inserting exactly one updated copy. This prevents stale-index duplicates.
-                    val source = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
-                    val target = project.tracks.firstOrNull { it.id == targetTrackId }
-                    val moving = source?.clips?.firstOrNull { it.id == clipId }
-                    if (source != null && target != null && moving != null && source.kind == target.kind) {
-                        val cleanedTracks = project.tracks.map { track ->
-                            track.copy(clips = track.clips.filterNot { it.id == clipId })
-                        }
-                        val targetIndex = cleanedTracks.indexOfFirst { it.id == targetTrackId }
-                        if (targetIndex >= 0) {
-                            val targetTrack = cleanedTracks[targetIndex]
-                            val updatedClip = moving.copy(startTick = startTick.coerceAtLeast(0L))
-                            onProjectChange(project.copy(tracks = cleanedTracks.mapIndexed { index, track ->
-                                if (index == targetIndex) track.copy(clips = track.clips + updatedClip) else track
-                            }))
-                            statusMessage = if (source.id == target.id) "Clip moved" else "Clip moved to ${target.name}"
-                        }
+                    val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
+                    if (movedProject != null) {
+                        onProjectChange(movedProject)
+                        statusMessage = "Clip moved"
                     } else {
-                        statusMessage = if (source == null) "Clip no longer exists" else "Clip must stay on a matching track type"
+                        val source = project.tracks.firstOrNull { track -> track.clips.any { it.id == clipId } }
+                        val target = project.tracks.firstOrNull { it.id == targetTrackId }
+                        statusMessage = when {
+                            source == null -> "Clip no longer exists"
+                            target == null -> "Target track no longer exists"
+                            source.kind != target.kind -> "Clip must stay on a matching track type"
+                            else -> "Target track is full"
+                        }
                     }
                 }
             )
