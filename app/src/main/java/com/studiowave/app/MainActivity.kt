@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -111,6 +112,7 @@ private fun StudioWaveApp() {
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     var editorTrackId by remember { mutableStateOf<String?>(null) }
+    var scratchOffset by remember { mutableFloatStateOf(0f) }
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     fun changeProject(next: StudioProject) {
@@ -349,8 +351,11 @@ private fun ArrangementWorkspace(
     scrollBars: Float, onScroll: (Float) -> Unit,
     verticalZoom: Float, onVerticalZoom: (Float) -> Unit,
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
-    onOpenEditor: (String, String?) -> Unit
+    onOpenEditor: (String, String?) -> Unit,
+    onScratchTrack: (String, Float) -> Unit = { _, _ -> }
 ) {
+    val densityScale = androidx.compose.ui.platform.LocalDensity.current.density
+    val trackHeights = remember { mutableStateMapOf<String, Float>() }
     var selectedClip by remember { mutableStateOf<String?>(null) }
     var clipMenu by remember { mutableStateOf<String?>(null) }
     var showTimelineMenu by remember { mutableStateOf(false) }
@@ -493,7 +498,9 @@ private fun ArrangementWorkspace(
                             onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(colorArgb = next) else it }))
                         },
                         onMuteToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) },
-                        onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) })
+                        onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) },
+                        onResizeTrack = { delta -> trackHeights[track.id] = ((trackHeights[track.id] ?: 67f) + delta / densityScale).coerceIn(44f, 160f) },
+                        onScratch = { delta -> if (track.kind == "audio") onScratchTrack(track.id, delta) })
                         }
                     }
                     val showBottomAddTrack = project.tracks.size > 4 && scrollTracks + (4f / verticalZoom) >= project.tracks.size - 0.75f
@@ -710,24 +717,66 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
 }
 
 @Composable
-private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit, onColorTap: () -> Unit, onMuteToggle: () -> Unit, onSoloToggle: () -> Unit) {
+@Composable
+private fun TrackHeader(
+    track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float,
+    onDoubleTap: () -> Unit, onColorTap: () -> Unit, onMuteToggle: () -> Unit, onSoloToggle: () -> Unit,
+    onResizeTrack: (Float) -> Unit = {}, onScratch: (Float) -> Unit = {}
+) {
     val accent = Color(track.colorArgb.toInt())
-    Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = {}),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Box(Modifier.width(7.dp).height(47.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
-        Column(Modifier.weight(1f)) {
+    var resizeDelta by remember(track.id) { mutableFloatStateOf(0f) }
+    var scratchDelta by remember(track.id) { mutableFloatStateOf(0f) }
+    Row(
+        Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp)
+            .height((67f * verticalZoom).dp).padding(bottom = 2.dp)
+            .background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
+        Column(Modifier.weight(1f).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = {})) {
             Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("M", fontSize = 8.sp, color = if (track.muted) Red else MutedText, modifier = Modifier.clickable { onMuteToggle() })
                 Text("S", fontSize = 8.sp, color = if (track.solo) Mint else MutedText, modifier = Modifier.clickable { onSoloToggle() })
-                Text("ARM", fontSize = 7.sp, color = if (index == 0) Red else MutedText)
+                if (track.kind == "audio") {
+                    Box(
+                        Modifier.size(width = 24.dp, height = 19.dp)
+                            .background(Color(0xFF17443D), RoundedCornerShape(5.dp))
+                            .pointerInput(track.id) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { scratchDelta = 0f },
+                                    onHorizontalDrag = { change, amount ->
+                                        change.consume()
+                                        scratchDelta += amount
+                                        onScratch(amount / 3f)
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) { Text("DJ", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Black) }
+                }
             }
         }
-        Canvas(Modifier.size(21.dp)) {
-            drawCircle(color = accent.copy(alpha = 0.22f))
-            drawArc(color = accent, startAngle = -90f, sweepAngle = 220f, useCenter = false,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Canvas(Modifier.size(17.dp)) {
+                drawCircle(color = accent.copy(alpha = 0.22f))
+                drawArc(color = accent, startAngle = -90f, sweepAngle = 220f, useCenter = false,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+            }
+            Box(
+                Modifier.size(width = 23.dp, height = 17.dp)
+                    .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+                    .pointerInput(track.id, verticalZoom) {
+                        detectDragGestures(
+                            onDragStart = { resizeDelta = 0f },
+                            onDrag = { change, amount -> change.consume(); resizeDelta += amount.y },
+                            onDragEnd = { onResizeTrack(resizeDelta); resizeDelta = 0f },
+                            onDragCancel = { resizeDelta = 0f }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) { Text("↕", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
