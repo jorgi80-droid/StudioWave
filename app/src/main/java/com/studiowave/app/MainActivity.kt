@@ -1650,13 +1650,18 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
             Text("IMPORT AUDIO", fontSize = 10.sp, color = Color.White)
         }
         Spacer(Modifier.height(8.dp))
-        listOf("Samples", "Drum Kits", "Instruments", "Presets", "Effects", "Recordings", "Projects").forEach { item ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(Color(0xFF272A30), RoundedCornerShape(4.dp)).padding(9.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Mint, modifier = Modifier.size(15.dp))
-                Text(item, modifier = Modifier.padding(start = 8.dp), fontSize = 10.sp)
-            }
-        }
+        Text(
+            "Library lokal, preset, rekaman, dan proyek akan tersedia setelah browser file dan penyimpanan masing-masing selesai diimplementasikan.",
+            color = MutedText,
+            fontSize = 10.sp,
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Text(
+            "Saat ini: impor audio dari penyimpanan Android ke Arrangement.",
+            color = Color(0xFFD5D9E0),
+            fontSize = 10.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 
