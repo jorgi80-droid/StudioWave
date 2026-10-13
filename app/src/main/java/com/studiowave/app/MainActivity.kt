@@ -3,6 +3,8 @@ package com.studiowave.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -113,6 +115,22 @@ private fun StudioWaveApp() {
         project = next
         bpm = next.bpm
     }
+    val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            val audioTrack = project.tracks.firstOrNull { it.kind == "audio" }
+            val target = audioTrack ?: StudioTrack(name = "AUDIO 1", colorArgb = 0xFF3B82F6L, kind = "audio")
+            val clip = com.studiowave.app.data.WaveClip(
+                name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
+                startTick = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L,
+                lengthTicks = 15360L,
+                sourceUri = uri.toString()
+            )
+            val updatedTrack = target.copy(clips = target.clips + clip)
+            changeProject(project.copy(tracks = if (audioTrack == null) project.tracks + updatedTrack else project.tracks.map { if (it.id == target.id) updatedTrack else it }))
+            selectedWorkspace = "ARRANGEMENT"
+        }
+    }
     LaunchedEffect(project) {
         delay(350)
         runCatching { preferences.edit().putString("project_json", project.toJson().toString()).apply() }
@@ -144,7 +162,7 @@ private fun StudioWaveApp() {
                     when (selectedWorkspace) {
                         "MIXER" -> MixerWorkspace(project.tracks)
                         "PIANO ROLL" -> PianoRollWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        "BROWSER" -> BrowserWorkspace()
+                        "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace })
@@ -865,9 +883,15 @@ private fun MixerWorkspace(tracks: List<StudioTrack>) {
 }
 
 @Composable
-private fun BrowserWorkspace() {
+private fun BrowserWorkspace(onImportAudio: () -> Unit) {
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(10.dp)) {
         Text("BROWSER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+        Spacer(Modifier.height(8.dp))
+        Button(onClick = onImportAudio, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18443F))) {
+            Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Mint, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("IMPORT AUDIO", fontSize = 10.sp, color = Color.White)
+        }
         Spacer(Modifier.height(8.dp))
         listOf("Samples", "Drum Kits", "Instruments", "Presets", "Effects", "Recordings", "Projects").forEach { item ->
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).background(Color(0xFF272A30), RoundedCornerShape(4.dp)).padding(9.dp),
