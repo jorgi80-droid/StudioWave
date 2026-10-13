@@ -226,63 +226,200 @@ private fun TimelineGrid(
     selectedClip: String?,
     onSelectClip: (String) -> Unit
 ) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
     val accentColors = project.tracks.map { Color(it.colorArgb.toInt()) }
-    Box(Modifier.fillMaxSize().background(Color(0xFF17191C)).pointerInput(zoom, scrollBars) {
-        detectTransformGestures { centroid, pan, gestureZoom, _ ->
-            onZoom((zoom * gestureZoom).coerceIn(0.55f, 2.8f))
-            onScroll((scrollBars - pan.x / (74f * zoom)).coerceAtLeast(0f))
-        }
-    }) {
+    val barWidthPx = with(density) { 74.dp.toPx() } * zoom
+    val trackHeightPx = with(density) { 67.dp.toPx() }
+    val rulerHeightPx = with(density) { 24.dp.toPx() }
+
+    // One gesture owner for the timeline avoids clip taps competing with the
+    // parent transform detector. Tap, one-finger pan, and two-finger zoom are
+    // classified independently, with the system touch slop filtering jitter.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF17191C))
+            .pointerInput(project, zoom, scrollBars, barWidthPx, trackHeightPx, rulerHeightPx) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val startPosition = down.position
+                    var lastPosition = startPosition
+                    var activePointerId = down.id
+                    var moved = false
+                    var wasMultiTouch = false
+                    var zoomAtGestureStart = zoom
+                    var scrollAtGestureStart = scrollBars
+                    var previousCentroid = startPosition
+                    var previousSpan = 0f
+                    var totalPanX = 0f
+                    var totalPanY = 0f
+                    val touchSlop = viewConfiguration.touchSlop
+
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressed = event.changes.filter { it.pressed }
+                        if (pressed.size >= 2) {
+                            if (!wasMultiTouch) {
+                                wasMultiTouch = true
+                                moved = true
+                                zoomAtGestureStart = zoom
+                                scrollAtGestureStart = scrollBars
+                                previousCentroid = Offset(
+                                    (pressed[0].position.x + pressed[1].position.x) / 2f,
+                                    (pressed[0].position.y + pressed[1].position.y) / 2f
+                                )
+                                previousSpan = (pressed[0].position - pressed[1].position).getDistance().coerceAtLeast(1f)
+                            } else {
+                                val centroid = Offset(
+                                    pressed.map { it.position.x }.average().toFloat(),
+                                    pressed.map { it.position.y }.average().toFloat()
+                                )
+                                val span = if (pressed.size >= 2) {
+                                    (pressed[0].position - pressed[1].position).getDistance().coerceAtLeast(1f)
+                                } else previousSpan
+                                val factor = if (previousSpan > 0f) span / previousSpan else 1f
+                                val nextZoom = (zoomAtGestureStart * factor).coerceIn(0.55f, 2.8f)
+                                val contentX = (scrollAtGestureStart * barWidthPx + startPosition.x)
+                                val nextScroll = ((contentX / barWidthPx) - startPosition.x / (with(density) { 74.dp.toPx() } * nextZoom)
+                                    - (centroid.x - startPosition.x) / (with(density) { 74.dp.toPx() } * nextZoom))
+                                    .coerceAtLeast(0f)
+                                onZoom(nextZoom)
+                                onScroll(nextScroll)
+                                previousCentroid = centroid
+                                previousSpan = span
+                            }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        } else if (pressed.size == 1 && !wasMultiTouch) {
+                            val change = pressed.first()
+                            if (change.id != activePointerId) activePointerId = change.id
+                            val delta = change.position - lastPosition
+                            totalPanX += delta.x
+                            totalPanY += delta.y
+                            if (!moved && (totalPanX * totalPanX + totalPanY * totalPanY) > touchSlop * touchSlop) {
+                                moved = true
+                            }
+                            if (moved) {
+                                val pxPerBar = with(density) { 74.dp.toPx() } * zoom
+                                if (pxPerBar > 0f) onScroll((scrollBars - totalPanX / pxPerBar).coerceAtLeast(0f))
+                                change.consume()
+                            }
+                            lastPosition = change.position
+                        }
+                    } while (event.changes.any { it.pressed })
+
+                    if (!moved && !wasMultiTouch) {
+                        val tap = startPosition
+                        if (tap.y >= rulerHeightPx) {
+                            val trackIndex = ((tap.y - rulerHeightPx) / trackHeightPx).toInt()
+                            val contentX = tap.x + scrollBars * barWidthPx
+                            if (trackIndex in project.tracks.indices) {
+                                val track = project.tracks[trackIndex]
+                                val clip = track.clips.firstOrNull { candidate ->
+                                    val left = candidate.startTick.toFloat() / 3840f * barWidthPx
+                                    val right = left + candidate.lengthTicks.toFloat() / 3840f * barWidthPx
+                                    contentX >= left && contentX <= right
+                                }
+                                if (clip != null) onSelectClip(clip.id)
+                            }
+                        }
+                    }
+                }
+            }
+    ) {
         Canvas(Modifier.fillMaxSize()) {
-            val rulerHeight = 24.dp.toPx()
-            val trackHeight = 67.dp.toPx()
             val barWidth = 74.dp.toPx() * zoom
             val offset = scrollBars * barWidth
-            for (bar in 0..64) {
+            for (bar in 0..128) {
                 val x = bar * barWidth - offset
-                if (x >= 0 && x <= size.width) drawLine(
-                    if (bar % 4 == 0) Color(0xFF51555D) else Color(0xFF32363D),
-                    Offset(x, rulerHeight), Offset(x, size.height), if (bar % 4 == 0) 1.5f else 0.7f)
+                if (x >= 0f && x <= size.width) {
+                    drawLine(
+                        if (bar % 4 == 0) Color(0xFF51555D) else Color(0xFF32363D),
+                        Offset(x, rulerHeightPx), Offset(x, size.height),
+                        if (bar % 4 == 0) 1.5f else 0.7f
+                    )
+                }
             }
             for (i in 0..project.tracks.size) {
-                val y = rulerHeight + i * trackHeight
+                val y = rulerHeightPx + i * trackHeightPx
                 drawLine(Color(0xFF3A3D44), Offset(0f, y), Offset(size.width, y), 1f)
             }
         }
-        Row(Modifier.fillMaxWidth().height(24.dp).background(Color(0xFF2B2E34))) {
-            for (bar in 0..16) Box(Modifier.width(74.dp * zoom).fillMaxHeight(), contentAlignment = Alignment.CenterStart) {
-                Text(if (bar % 4 == 0) (bar + 1).toString() else "·", fontSize = 9.sp,
-                    color = if (bar % 4 == 0) Color.White else MutedText)
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(24.dp)
+                .background(Color(0xFF2B2E34))
+        ) {
+            for (bar in 0..128) {
+                val leftPx = bar * barWidthPx - scrollBars * barWidthPx
+                if (leftPx + barWidthPx >= 0f && leftPx <= with(density) { 128.dp.toPx() + size.width }) {
+                    Box(
+                        Modifier
+                            .offset(x = with(density) { leftPx.toDp() })
+                            .width(74.dp * zoom)
+                            .fillMaxHeight(),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Text(
+                            if (bar % 4 == 0) (bar + 1).toString() else "·",
+                            fontSize = 9.sp,
+                            color = if (bar % 4 == 0) Color.White else MutedText
+                        )
+                    }
+                }
             }
         }
+
         Column(Modifier.padding(top = 24.dp)) {
             project.tracks.forEachIndexed { trackIndex, track ->
                 Box(Modifier.fillMaxWidth().height(67.dp)) {
                     track.clips.forEach { clip ->
-                        val x = ((clip.startTick.toFloat() / 3840f * 74f * zoom) - scrollBars * 74f * zoom).dp
-                        val w = (clip.lengthTicks.toFloat() / 3840f * 74f * zoom).dp
-                        val accent = accentColors[trackIndex]
-                        Column(
-                            Modifier.padding(start = x.coerceAtLeast(0.dp), top = 7.dp, bottom = 7.dp)
-                                .width(w.coerceAtLeast(24.dp)).fillMaxHeight()
-                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f), RoundedCornerShape(4.dp))
-                                .clickable { onSelectClip(clip.id) }
-                                .padding(4.dp)
-                        ) {
-                            Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
-                            if (track.kind == "midi") Canvas(Modifier.fillMaxSize()) {
-                                clip.midiNotes.forEach { note ->
-                                    val noteX = note.startTick.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
-                                    val noteW = note.durationTicks.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
-                                    val y = (127 - note.pitch).toFloat() / 127f * size.height
-                                    drawRoundRect(Color.White.copy(alpha = 0.8f), Offset(noteX, y),
-                                        Size(noteW.coerceAtLeast(2f), 3.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
-                                }
-                            } else if (track.kind == "audio") Canvas(Modifier.fillMaxSize()) {
-                                for (i in 0 until 48) {
-                                    val h = ((i * 37 % 19) + 3).toFloat() / 22f * size.height
-                                    drawLine(accent, Offset(i * size.width / 48f, size.height / 2 - h / 2),
-                                        Offset(i * size.width / 48f, size.height / 2 + h / 2), 1.4f)
+                        val clipLeftPx = clip.startTick.toFloat() / 3840f * barWidthPx
+                        val translatedLeftPx = clipLeftPx - scrollBars * barWidthPx
+                        val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barWidthPx
+                        val accent = accentColors.getOrElse(trackIndex) { Mint }
+
+                        if (translatedLeftPx + clipWidthPx >= 0f) {
+                            Column(
+                                Modifier
+                                    .offset(x = with(density) { translatedLeftPx.toDp() })
+                                    .padding(top = 7.dp, bottom = 7.dp)
+                                    .width(with(density) { clipWidthPx.toDp() }.coerceAtLeast(24.dp))
+                                    .fillMaxHeight()
+                                    .background(
+                                        accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(4.dp)
+                            ) {
+                                Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
+                                if (track.kind == "midi") {
+                                    Canvas(Modifier.fillMaxSize()) {
+                                        clip.midiNotes.forEach { note ->
+                                            val noteX = note.startTick.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
+                                            val noteW = note.durationTicks.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
+                                            val y = (127 - note.pitch).toFloat() / 127f * size.height
+                                            drawRoundRect(
+                                                Color.White.copy(alpha = 0.8f),
+                                                Offset(noteX, y),
+                                                Size(noteW.coerceAtLeast(2f), 3.dp.toPx()),
+                                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
+                                            )
+                                        }
+                                    }
+                                } else if (track.kind == "audio") {
+                                    Canvas(Modifier.fillMaxSize()) {
+                                        for (i in 0 until 48) {
+                                            val h = ((i * 37 % 19) + 3).toFloat() / 22f * size.height
+                                            drawLine(
+                                                accent,
+                                                Offset(i * size.width / 48f, size.height / 2 - h / 2),
+                                                Offset(i * size.width / 48f, size.height / 2 + h / 2),
+                                                1.4f
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
