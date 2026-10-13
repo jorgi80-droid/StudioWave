@@ -495,11 +495,12 @@ private fun ArrangementWorkspace(
                 }
                 var addTrackMenu by remember { mutableStateOf(false) }
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
+                    val headerViewportHeightDp = maxHeight.value
                     project.tracks.forEachIndexed { index, track ->
                         val row = trackRowLayout.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
                         val viewTop = (row.topDp - scrollTracks * 67f) * verticalZoom
                         val viewHeight = row.heightDp * verticalZoom
-                        if (viewTop + viewHeight >= -viewHeight && viewTop <= maxHeight.value) {
+                        if (viewTop + viewHeight >= -viewHeight && viewTop <= headerViewportHeightDp) {
                         TrackHeader(track, index, verticalZoom, scrollTracks,
                         rowTopDp = row.topDp, rowHeightDp = row.heightDp,
                         onDoubleTap = { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) },
@@ -1008,12 +1009,13 @@ private fun TimelineGrid(
         }
 
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = 24.dp)) {
+            val timelineViewportHeightDp = maxHeight.value
             Box(Modifier.fillMaxSize()) {
                 project.tracks.forEachIndexed { trackIndex, track ->
                     val row = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
                     val rowTop = (row.topDp - scrollTracks * 67f) * verticalZoom
                     val rowHeight = row.heightDp * verticalZoom
-                    if (rowTop + rowHeight >= -rowHeight && rowTop <= maxHeight.value) {
+                    if (rowTop + rowHeight >= -rowHeight && rowTop <= timelineViewportHeightDp) {
                 BoxWithConstraints(Modifier.fillMaxWidth().offset(y = rowTop.dp).height(rowHeight.dp)) {
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
                     val barWidth = baseBarWidthPx * zoom
