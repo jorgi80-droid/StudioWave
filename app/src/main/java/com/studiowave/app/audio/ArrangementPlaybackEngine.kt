@@ -431,11 +431,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
 
                 for (note in playingNotes) {
+                    val channelMix = mixState.tracks[note.track.id] ?: TrackMix(note.track.volume, note.track.pan, note.track.muted, note.track.solo)
+                    if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
-                    val gain = note.track.volume.coerceIn(0f, 1.5f) * plan.masterGain * (note.velocity / 127f) * 0.19f
-                    val pan = note.track.pan.coerceIn(-1f, 1f)
+                    val gain = channelMix.volume * liveMasterGain * (note.velocity / 127f) * 0.19f
+                    val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     for (absolute in from until to) {
@@ -452,11 +454,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
 
                 for (drum in playingDrums) {
+                    val channelMix = mixState.tracks[drum.track.id] ?: TrackMix(drum.track.volume, drum.track.pan, drum.track.muted, drum.track.solo)
+                    if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val hitEnd = drum.startFrame + DRUM_DURATION_FRAMES
                     val from = max(position, drum.startFrame)
                     val to = min(blockEnd, hitEnd)
-                    val gain = drum.track.volume.coerceIn(0f, 1.5f) * plan.masterGain * 0.38f
-                    val pan = drum.track.pan.coerceIn(-1f, 1f)
+                    val gain = channelMix.volume * liveMasterGain * 0.38f
+                    val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     for (absolute in from until to) {
