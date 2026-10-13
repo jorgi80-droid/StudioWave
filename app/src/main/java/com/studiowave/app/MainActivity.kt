@@ -745,6 +745,8 @@ private fun TimelineGrid(
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
+    val moveCommit by rememberUpdatedState(onMoveClip)
+    val trackCount = project.tracks.size
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
     val currentScroll by rememberUpdatedState(scrollBars)
@@ -905,14 +907,14 @@ private fun TimelineGrid(
                                             val sourceIndex = dragFromTrack
                                             val rowHeightPx = trackHeightPx.coerceAtLeast(1f)
                                             val rowsMoved = kotlin.math.round(dragDy / rowHeightPx).toInt()
-                                            val targetIndex = (sourceIndex + rowsMoved).coerceIn(0, project.tracks.lastIndex.coerceAtLeast(0))
+                                            val targetIndex = (sourceIndex + rowsMoved).coerceIn(0, (trackCount - 1).coerceAtLeast(0))
                                             val source = project.tracks.getOrNull(sourceIndex)
                                             val target = project.tracks.getOrNull(targetIndex)
                                             val sixteenthWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f) / 16f
                                             val movedSixteenths = kotlin.math.round(dragDx / sixteenthWidthPx).toLong()
                                             val newTick = (dragOriginalTick + movedSixteenths * 240L).coerceAtLeast(0L)
                                             if (source != null && target != null && source.kind == target.kind) {
-                                                onMoveClip(clip.id, target.id, newTick)
+                                                moveCommit(clip.id, target.id, newTick)
                                             }
                                             draggingClip = null
                                             dragFromTrack = -1
