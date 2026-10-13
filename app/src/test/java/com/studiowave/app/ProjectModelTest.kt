@@ -62,6 +62,34 @@ class ProjectModelTest {
         }
     }
 
+    @Test fun moveClipReplacesStaleDuplicateIdsAndKeepsExactlyOneClip() {
+        val project = StudioProject()
+        val source = project.tracks.first { it.kind == "midi" }
+        val target = project.tracks.last { it.kind == "midi" }
+        val clip = source.clips.first()
+        val dirty = project.copy(tracks = project.tracks.map { track ->
+            when (track.id) {
+                source.id -> track
+                target.id -> track.copy(clips = track.clips + clip.copy(startTick = 9999L))
+                else -> track
+            }
+        })
+        val moved = dirty.moveClipToTrack(clip.id, target.id, 4800L)
+        assertNotNull(moved)
+        assertEquals(1, moved!!.tracks.flatMap { it.clips }.count { it.id == clip.id })
+        assertTrue(moved.tracks.first { it.id == target.id }.clips.any { it.id == clip.id && it.startTick == 4800L })
+        assertTrue(moved.tracks.first { it.id == source.id }.clips.none { it.id == clip.id })
+    }
+
+    @Test fun moveClipRejectsIncompatibleTrackKindWithoutChangingProject() {
+        val project = StudioProject()
+        val source = project.tracks.first { it.kind == "drum" }
+        val target = project.tracks.first { it.kind == "midi" }
+        val clip = source.clips.first()
+        assertEquals(null, project.moveClipToTrack(clip.id, target.id, 1200L))
+        assertTrue(project.tracks.first { it.id == source.id }.clips.any { it.id == clip.id })
+    }
+
     @Test fun projectLoaderRejectsExcessiveTrackCount() {
         val json = StudioProject().toJson()
         val tracks = json.getJSONArray("tracks")
