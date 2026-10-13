@@ -764,8 +764,8 @@ private fun ArrangementWorkspace(
                     val lastTrackRow = trackRowLayout.lastOrNull()
                     val addAnchorY = lastTrackRow?.let {
                         (it.topDp + it.heightDp - scrollTracks) * verticalZoom
-                    } ?: 0f
-                    val showBottomAddTrack = lastTrackRow != null &&
+                    } ?: 8f
+                    val showBottomAddTrack = if (lastTrackRow == null) true else
                         addAnchorY >= 0f && addAnchorY <= headerViewportHeightDp
                     if (showBottomAddTrack) {
                         Surface(
