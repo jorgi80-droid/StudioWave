@@ -42,10 +42,10 @@ class TimelineViewportTest {
         assertEquals(3840L, timebase.snap(3700L, SnapDivision.BAR))
         assertEquals(1920L, timebase.snap(2050L, SnapDivision.HALF_BEAT))
         assertEquals(320L, timebase.snap(350L, SnapDivision.EIGHTH_TRIPLET))
-        assertEquals(347L, timebase.snap(347L, SnapDivision.OFF))
+        assertTrue(timebase.snap(347L, SnapDivision.OFF) == 347L)
 
         val viewport = TimelineViewport(timebase, 74f, 0.0, 800f)
-        assertEquals(347L, viewport.snapTick(347L, SnapDivision.SIXTEENTH_BEAT, enabled = false))
+        assertTrue(viewport.snapTick(347L, SnapDivision.SIXTEENTH_BEAT, enabled = false) == 347L)
         assertEquals(480L, viewport.snapTick(470L, SnapDivision.SIXTEENTH_BEAT))
     }
 
