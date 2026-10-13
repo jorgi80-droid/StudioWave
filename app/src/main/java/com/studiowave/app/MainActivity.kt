@@ -578,7 +578,7 @@ private fun ArrangementWorkspace(
                     val headerViewportHeightDp = maxHeight.value
                     project.tracks.forEachIndexed { index, track ->
                         val row = trackRowLayout.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
-                        val viewTop = (row.topDp - scrollTracks * 67f) * verticalZoom
+                        val viewTop = (row.topDp - scrollTracks) * verticalZoom
                         val viewHeight = row.heightDp * verticalZoom
                         if (viewTop + viewHeight >= -viewHeight && viewTop <= headerViewportHeightDp) {
                             TrackHeader(
@@ -619,7 +619,7 @@ private fun ArrangementWorkspace(
                     // Keep one compact add control at the end of the track list.
                     // It appears once the user scrolls to the bottom-most track.
                     val totalTrackHeight = trackRowLayout.lastOrNull()?.let { it.topDp + it.heightDp } ?: 0f
-                    val visibleBottom = scrollTracks * 67f + headerViewportHeightDp
+                    val visibleBottom = scrollTracks + headerViewportHeightDp / verticalZoom.coerceAtLeast(0.1f)
                     val showBottomAddTrack =
                         visibleBottom >= totalTrackHeight - (trackRowLayout.lastOrNull()?.heightDp ?: 67f) * 0.9f
                     if (showBottomAddTrack) {
@@ -869,7 +869,7 @@ private fun TrackHeader(
     var reorderDelta by remember(track.id) { mutableFloatStateOf(0f) }
     var scratchDelta by remember(track.id) { mutableFloatStateOf(0f) }
     Row(
-        Modifier.fillMaxWidth().offset(y = ((rowTopDp - scrollTracks * 67f) * verticalZoom).dp)
+        Modifier.fillMaxWidth().offset(y = ((rowTopDp - scrollTracks) * verticalZoom).dp)
             .height((rowHeightDp * verticalZoom).dp).padding(bottom = 2.dp)
             .background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -1003,14 +1003,15 @@ private fun TimelineGrid(
                         val rowY = firstDown.position.y - rulerHeightPx
                         val rowIndex = hitProject.tracks.indices.firstOrNull { index ->
                             val row = currentTrackRows.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
-                            val topPx = with(density) { ((row.topDp - currentScrollTracks * 67f) * currentVerticalZoom).dp.toPx() }
+                            val topPx = with(density) { ((row.topDp - currentScrollTracks) * currentVerticalZoom).dp.toPx() }
                             val heightPx = with(density) { (row.heightDp * currentVerticalZoom).dp.toPx() }
                             rowY >= topPx && rowY <= topPx + heightPx
                         }
                         val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
                         val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
                         hitTrack?.clips?.any { clip ->
-                            val left = ((clip.startTick.toDouble() - currentScroll.toDouble()) * (barWidthPx / timebase.ticksPerBar.toFloat())).toFloat()
+                            val hitViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
+                             val left = hitViewport.timeToViewportX(clip.startTick)
                             val width = (clip.lengthTicks.toFloat() / timebase.ticksPerBar.toFloat() * barWidthPx)
                                 .coerceAtLeast(with(density) { 24.dp.toPx() })
                             val right = left + width
@@ -1042,13 +1043,14 @@ private fun TimelineGrid(
                                 val panY = centroid.y - previousCentroid.y
                                 val oldTicksPerPixel = timebase.ticksPerBar.toDouble() / oldBarWidth
                                 val newTicksPerPixel = timebase.ticksPerBar.toDouble() / newBarWidth
-                                val anchorTick = currentScroll.toDouble() + previousCentroid.x * oldTicksPerPixel
-                                // Keep the musical tick beneath the pinch centroid anchored.
-                                val newScroll = (anchorTick - centroid.x * newTicksPerPixel).toFloat().coerceAtLeast(0f)
-                                val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
-                                val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
-                                val rowHeight = with(density) { 67.dp.toPx() } * newVerticalZoom
-                                val newTrackScroll = (currentScrollTracks - panY / rowHeight).coerceAtLeast(0f)
+                                val pinchViewport = TimelineViewport(timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
+                                 val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x).toDouble()
+                                 // Keep the musical tick beneath the pinch centroid anchored while centroid movement pans.
+                                 val newScroll = (anchorTick - centroid.x * newTicksPerPixel).toFloat().coerceAtLeast(0f)
+                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                                 val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
+                                 val anchorTrackDp = currentScrollTracks + (previousCentroid.y - rulerHeightPx) / (density.density * oldVerticalZoom).coerceAtLeast(0.1f)
+                                 val newTrackScroll = (anchorTrackDp - (centroid.y - rulerHeightPx) / (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
                                 if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                 if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
@@ -1067,10 +1069,8 @@ private fun TimelineGrid(
                                 if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                                    val ticksPerPixel = timebaseNow.ticksPerBar.toDouble() / barWidthPx
-                                    val newScroll = (currentScroll - delta.x * ticksPerPixel.toFloat()).coerceAtLeast(0f)
-                                    val rowHeightPx = with(density) { 67.dp.toPx() } * currentVerticalZoom
-                                    val newTrackScroll = (currentScrollTracks - delta.y / rowHeightPx.coerceAtLeast(1f)).coerceAtLeast(0f)
+                                       val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
+                                    val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
                                     pointer.consume()
@@ -1087,23 +1087,37 @@ private fun TimelineGrid(
         Canvas(Modifier.fillMaxSize().pointerInput(Unit) {
             detectTapGestures(onLongPress = { onTimelineLongPress() })
         }) {
-            val barWidth = baseBarWidthPx * zoom
-            val firstVisibleBar = (scrollTicks / timebase.ticksPerBar).toLong().coerceIn(0L, 4096L).toInt()
-            val visibleBarCount = (size.width / barWidth).toInt().coerceAtLeast(0) + 4
-            val lastVisibleBar = (firstVisibleBar.toLong() + visibleBarCount.toLong()).coerceAtMost(4096L).toInt()
-            for (bar in firstVisibleBar..lastVisibleBar) {
-                val x = bar * barWidth - scrollTicks / timebase.ticksPerBar.toFloat() * barWidth
-                if (x >= -barWidth && x <= size.width + barWidth) {
-                    drawLine(
-                        if (bar % 4 == 0) Color(0xFF51555D) else Color(0xFF32363D),
-                        Offset(x, rulerHeightPx), Offset(x, size.height),
-                        if (bar % 4 == 0) 1.5f else 0.7f
-                    )
-                }
-            }
+            val canvasViewport = viewport.copy(viewportWidthPx = size.width)
+             val firstVisibleBar = canvasViewport.firstVisibleBar().coerceAtMost(4096L).toInt()
+             val lastVisibleBar = canvasViewport.lastVisibleBar().coerceAtMost(4096L).toInt()
+             val barWidth = baseBarWidthPx * zoom
+             for (bar in firstVisibleBar..lastVisibleBar) {
+                 val x = canvasViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
+                 if (x >= -barWidth && x <= size.width + barWidth) {
+                     drawLine(if (bar % 4 == 0) Color(0xFF51555D) else Color(0xFF32363D),
+                         Offset(x, rulerHeightPx), Offset(x, size.height),
+                         if (bar % 4 == 0) 1.5f else 0.7f)
+                     val beatTicks = timebase.ticksPerBeat
+                     val beatPixels = beatTicks * canvasViewport.pixelsPerTick
+                     if (beatPixels >= 14.0) {
+                         for (beat in 0 until timebase.safeNumerator) {
+                             val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
+                             val beatX = canvasViewport.timeToViewportX(beatTick)
+                             if (beat > 0) drawLine(Color(0xFF292D33), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
+                             if (beatPixels >= 34.0) {
+                                 val halfTick = beatTicks / 2L
+                                 if (halfTick > 0L) {
+                                     val halfX = canvasViewport.timeToViewportX(beatTick + halfTick)
+                                     drawLine(Color(0xFF24272D), Offset(halfX, rulerHeightPx), Offset(halfX, size.height), 0.6f)
+                                 }
+                             }
+                         }
+                     }
+                 }
+             }
             trackRowLayout.forEach { row ->
                 val rowTopPx = rulerHeightPx + with(density) {
-                    ((row.topDp - scrollTracks * 67f) * verticalZoom).dp.toPx()
+                    ((row.topDp - scrollTracks) * verticalZoom).dp.toPx()
                 }
                 if (rowTopPx >= rulerHeightPx && rowTopPx <= size.height) {
                     drawLine(Color(0xFF3A3D44), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
@@ -1117,26 +1131,24 @@ private fun TimelineGrid(
                 .fillMaxWidth()
                 .height(24.dp)
         ) {
-            val barWidth = baseBarWidthPx * zoom
-            val visibleBarCount = (size.width / barWidth).toInt() + 4
-            val firstVisibleBar = (scrollTicks / timebase.ticksPerBar).toInt().coerceAtLeast(0)
-            val lastVisibleBar = (firstVisibleBar + visibleBarCount).coerceAtMost(4096)
-            for (bar in firstVisibleBar..lastVisibleBar) {
-                val x = bar * barWidth - scrollTicks / timebase.ticksPerBar.toFloat() * barWidth
-                if (bar % 4 == 0) {
+            val rulerViewport = viewport.copy(viewportWidthPx = size.width)
+             val barWidth = baseBarWidthPx * zoom
+             val firstVisibleBar = rulerViewport.firstVisibleBar().coerceAtMost(4096L).toInt()
+             val lastVisibleBar = rulerViewport.lastVisibleBar().coerceAtMost(4096L).toInt()
+             val labelEveryBar = barWidth >= with(density) { 94.dp.toPx() }
+             for (bar in firstVisibleBar..lastVisibleBar) {
+                 val x = rulerViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
+                 if (bar % 4 == 0 || labelEveryBar) {
                     drawContext.canvas.nativeCanvas.drawText(
                         (bar + 1).toString(),
                         x + with(density) { 5.dp.toPx() },
                         size.height * 0.68f,
                         rulerPaint
                     )
-                } else {
-                    drawCircle(
-                        color = MutedText,
-                        radius = with(density) { 1.dp.toPx() },
-                        center = Offset(x, size.height * 0.55f)
-                    )
-                }
+                } else if (bar % 4 != 0) {
+                     drawCircle(color = MutedText, radius = with(density) { 1.dp.toPx() },
+                         center = Offset(x, size.height * 0.55f))
+                 }
             }
             drawRect(Color(0xFF2B2E34), size = Size(size.width, with(density) { 2.dp.toPx() }))
         }
@@ -1146,16 +1158,15 @@ private fun TimelineGrid(
             Box(Modifier.fillMaxSize()) {
                 project.tracks.forEachIndexed { trackIndex, track ->
                     val row = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
-                    val rowTop = (row.topDp - scrollTracks * 67f) * verticalZoom
+                    val rowTop = (row.topDp - scrollTracks) * verticalZoom
                     val rowHeight = row.heightDp * verticalZoom
                     if (rowTop + rowHeight >= -rowHeight && rowTop <= timelineViewportHeightDp) {
                 BoxWithConstraints(Modifier.fillMaxWidth().offset(y = rowTop.dp).height(rowHeight.dp)) {
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
                     val barWidth = baseBarWidthPx * zoom
                     track.clips.forEach { clip ->
-                        val clipStartPx = clip.startTick.toFloat() / timebase.ticksPerBar.toFloat() * barWidth
-                        val clipWidthPx = clip.lengthTicks.toFloat() / timebase.ticksPerBar.toFloat() * barWidth
-                        val displayLeftPx = (clip.startTick.toDouble() - scrollTicks.toDouble()).toFloat() / timebase.ticksPerBar.toFloat() * barWidth
+                        val clipWidthPx = (clip.lengthTicks.toDouble() * viewport.pixelsPerTick).coerceIn(1.0, 1_000_000.0).toFloat()
+                         val displayLeftPx = viewport.timeToViewportX(clip.startTick)
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
@@ -1228,7 +1239,7 @@ private fun TimelineGrid(
                                     )
                                 }
                                 .combinedClickable(
-                                    onClick = { onSelectClip(clip.id); onClipLongPress(clip.id) },
+                                    onClick = { onSelectClip(clip.id) },
                                     onDoubleClick = { onSelectClip(clip.id); onOpenEditor(clip.id) },
                                     onLongClick = { onSelectClip(clip.id); onClipLongPress(clip.id) }
                                 )
@@ -1265,19 +1276,18 @@ private fun TimelineGrid(
                                 var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
                                 Box(
                                     Modifier.align(Alignment.CenterEnd)
-                                        .width(27.dp).height(28.dp)
+                                        .width(with(density) { (clipWidthPx.toDp().value / 2f).coerceIn(10f, 27f).dp }).height(28.dp)
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
                                         .pointerInput(clip.id, zoom, clip.lengthTicks) {
                                             detectDragGestures(
                                                 onDragStart = { resizeDeltaPx = 0f },
                                                 onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
                                                 onDragEnd = {
-                                                    val deltaTicks = (resizeDeltaPx / (baseBarWidthPx * zoom).coerceAtLeast(1f) * timebase.ticksPerBar.toFloat()).toLong()
-                                                    val rawLength = (clip.lengthTicks + deltaTicks).coerceAtLeast(1L)
-                                                    val snapStep = snapDivision.ticks(timebase)
-                                                    val newLength = if (snapToGrid && snapStep > 0L) {
-                                                        (((rawLength + snapStep / 2L) / snapStep) * snapStep).coerceAtLeast(snapStep)
-                                                    } else rawLength
+                                                    val deltaTicks = (resizeDeltaPx.toDouble() / (baseBarWidthPx * zoom).coerceAtLeast(1f).toDouble() * timebase.ticksPerBar.toDouble()).toLong()
+                                                     val rawEndTick = (clip.startTick + clip.lengthTicks + deltaTicks).coerceAtLeast(clip.startTick + 1L)
+                                                     val snapStep = snapDivision.ticks(timebase)
+                                                     val snappedEndTick = if (snapToGrid && snapStep > 0L) timebase.snap(rawEndTick, snapDivision) else rawEndTick
+                                                     val newLength = (snappedEndTick - clip.startTick).coerceAtLeast(if (snapToGrid && snapStep > 0L) snapStep else 1L)
                                                     onResizeClip(clip.id, newLength)
                                                     resizeDeltaPx = 0f
                                                 },
@@ -1307,7 +1317,7 @@ private fun TimelineGrid(
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
             val menuRow = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
-            val y = (24.dp + ((menuRow.topDp - scrollTracks * 67f) * verticalZoom).dp - 35.dp).coerceAtLeast(24.dp)
+            val y = (24.dp + ((menuRow.topDp - scrollTracks) * verticalZoom).dp - 35.dp).coerceAtLeast(24.dp)
             Row(
                 Modifier.offset(x = x, y = y)
                     .background(Color(0xFF30343A), RoundedCornerShape(20.dp))
