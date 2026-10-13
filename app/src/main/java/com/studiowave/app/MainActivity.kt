@@ -824,24 +824,12 @@ private fun TimelineGrid(
                             initialized = true
                             event.changes.forEach { change -> if (change.position != change.previousPosition) change.consume() }
                         } else {
+                            // One-finger scrolling is intentionally disabled here. Clip and
+                            // track children own drags; this handler only handles two-finger
+                            // navigation above, preventing viewport movement during clip edits.
                             initialized = false
                             previousSpan = 0f
-                            val pointer = pointers.firstOrNull()
-                            if (pointer != null) {
-                                val delta = pointer.position - previousSinglePosition
-                                // Clip drag handlers consume their own changes. Only unconsumed
-                                // one-finger motion pans the empty timeline background.
-                                if (!pointer.isConsumed && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
-                                    val barWidth = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
-                                    val newScroll = (currentScroll - delta.x / barWidth).coerceAtLeast(0f)
-                                    val rowHeight = with(density) { 67.dp.toPx() } * currentVerticalZoom
-                                    val newTrackScroll = (currentScrollTracks - delta.y / rowHeight).coerceAtLeast(0f)
-                                    if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
-                                    if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
-                                    pointer.consume()
-                                }
-                                previousSinglePosition = pointer.position
-                            }
+                            previousSinglePosition = pointers.firstOrNull()?.position ?: previousSinglePosition
                         }
                     } while (event.changes.any { it.pressed })
                 }
@@ -985,22 +973,29 @@ private fun TimelineGrid(
                                 .padding(4.dp)
                         ) {
                             var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
-                            Box(Modifier.fillMaxWidth().height(7.dp).pointerInput(clip.id, zoom) {
-                                detectDragGestures(
-                                    onDragStart = { resizeDeltaPx = 0f },
-                                    onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
-                                    onDragEnd = {
-                                        val deltaTicks = (resizeDeltaPx / (baseBarWidthPx * zoom) * 3840f).toLong()
-                                        val rawLength = (clip.lengthTicks + deltaTicks).coerceAtLeast(240L)
-                                        val newLength = if (snapToGrid) {
-                                            (((rawLength + 120L) / 240L) * 240L).coerceAtLeast(240L)
-                                        } else rawLength
-                                        onResizeClip(clip.id, newLength)
-                                        resizeDeltaPx = 0f
-                                    },
-                                    onDragCancel = { resizeDeltaPx = 0f }
-                                )
-                            }.background(Color.White.copy(alpha = 0.65f), RoundedCornerShape(3.dp)))
+                            Row(Modifier.fillMaxWidth().height(18.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.width(32.dp).fillMaxHeight()
+                                        .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(5.dp))
+                                        .pointerInput(clip.id, zoom, clip.lengthTicks) {
+                                            detectDragGestures(
+                                                onDragStart = { resizeDeltaPx = 0f },
+                                                onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
+                                                onDragEnd = {
+                                                    val deltaTicks = (resizeDeltaPx / (baseBarWidthPx * zoom).coerceAtLeast(1f) * 3840f).toLong()
+                                                    val rawLength = (clip.lengthTicks + deltaTicks).coerceAtLeast(240L)
+                                                    val newLength = if (snapToGrid) (((rawLength + 120L) / 240L) * 240L).coerceAtLeast(240L) else rawLength
+                                                    onResizeClip(clip.id, newLength)
+                                                    resizeDeltaPx = 0f
+                                                },
+                                                onDragCancel = { resizeDeltaPx = 0f }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("↔", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                             Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
                             if (track.kind == "drum") {
                                 Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
