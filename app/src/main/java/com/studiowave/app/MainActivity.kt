@@ -826,7 +826,6 @@ private fun TimelineGrid(
                         }
                         }
                     }
-                    }
                 }
             }
         }
