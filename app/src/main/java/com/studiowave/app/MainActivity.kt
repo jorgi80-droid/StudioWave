@@ -478,8 +478,12 @@ private fun ArrangementWorkspace(
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
                 }
                 var addTrackMenu by remember { mutableStateOf(false) }
-                Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
+                BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
+                    val firstVisibleHeader = (scrollTracks - 1f / verticalZoom).toInt().coerceAtLeast(0)
+                    val lastVisibleHeader = (scrollTracks + maxHeight.value / (67f * verticalZoom) + 1f)
+                        .toInt().coerceAtMost(project.tracks.lastIndex)
                     project.tracks.forEachIndexed { index, track ->
+                        if (index in firstVisibleHeader..lastVisibleHeader) {
                         TrackHeader(track, index, verticalZoom, scrollTracks,
                         onDoubleTap = { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) },
                         onColorTap = {
@@ -490,6 +494,7 @@ private fun ArrangementWorkspace(
                         },
                         onMuteToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) },
                         onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) })
+                        }
                     }
                     val showBottomAddTrack = project.tracks.size > 4 && scrollTracks + (4f / verticalZoom) >= project.tracks.size - 0.75f
                     if (showBottomAddTrack) {
