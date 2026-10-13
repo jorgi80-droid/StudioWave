@@ -26,7 +26,7 @@ data class TimelineTimebase(
         if (step <= 0L) return safeTick
         val quotient = safeTick / step
         val remainder = safeTick % step
-        val roundedQuotient = if (remainder >= (step + 1L) / 2L) quotient + 1L else quotient
+        val roundedQuotient = if (remainder >= step / 2L + step % 2L) quotient + 1L else quotient
         return if (roundedQuotient > Long.MAX_VALUE / step) Long.MAX_VALUE - (Long.MAX_VALUE % step)
         else (roundedQuotient * step).coerceAtLeast(0L)
     }
