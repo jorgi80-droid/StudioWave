@@ -853,6 +853,14 @@ private fun TimelineGrid(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
+    val trackHeaderWidthPx = with(density) { 104.dp.toPx() }
+    val timebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
+        TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+    }
+    val pixelsPerBar = baseBarWidthPx * zoom
+    val transform = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
+        TimelineViewport(timebase, pixelsPerBar, scrollTicks.toDouble(), 0f, trackHeaderWidthPx)
+    }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
     val moveCommit by rememberUpdatedState(onMoveClip)
