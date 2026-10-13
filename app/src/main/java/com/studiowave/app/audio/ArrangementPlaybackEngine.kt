@@ -284,7 +284,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                 bytes.limit(info.offset + info.size)
                                 val pcm = bytes.slice().order(ByteOrder.nativeOrder())
                                 val frames = (info.size / bytesPerSample) / outputChannels
-                                val baseFrame = (info.presentationTimeUs * outputRate / 1_000_000L).coerceAtLeast(0L)
+                                val baseFrame = (info.presentationTimeUs * sampleRate / 1_000_000L).coerceAtLeast(0L)
                                 for (frame in 0 until frames) {
                                     val targetFrame = baseFrame + frame.toLong() * sampleRate / outputRate
                                     if (targetFrame < 0 || targetFrame >= maxFrames) continue
@@ -342,9 +342,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
         val sampleRate = plan.sampleRate
-        val activeAudio = plan.audio
-        val activeNotes = plan.notes
-        val activeDrums = plan.drums
+        val scheduledAudio = plan.audio
+        val scheduledNotes = plan.notes
+        val scheduledDrums = plan.drums
+        val playingAudio = ArrayList<AudioEvent>()
+        val playingNotes = ArrayList<NoteEvent>()
+        val playingDrums = ArrayList<DrumEvent>()
+        var audioCursor = 0
+        var noteCursor = 0
+        var drumCursor = 0
         var position = 0L
         try {
             while (running.get() && generation.get() == token && position < plan.totalFrames) {
@@ -353,10 +359,20 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
                 val blockEnd = position + frames
 
-                activeAudio.asSequence()
-                    .takeWhile { it.startFrame < blockEnd }
-                    .filter { it.endFrame > position }
-                    .forEach { event ->
+                playingAudio.removeAll { it.endFrame <= position }
+                while (audioCursor < scheduledAudio.size && scheduledAudio[audioCursor].startFrame < blockEnd) {
+                    playingAudio.add(scheduledAudio[audioCursor++])
+                }
+                playingNotes.removeAll { it.endFrame <= position }
+                while (noteCursor < scheduledNotes.size && scheduledNotes[noteCursor].startFrame < blockEnd) {
+                    playingNotes.add(scheduledNotes[noteCursor++])
+                }
+                playingDrums.removeAll { it.startFrame + DRUM_DURATION_FRAMES <= position }
+                while (drumCursor < scheduledDrums.size && scheduledDrums[drumCursor].startFrame < blockEnd) {
+                    playingDrums.add(scheduledDrums[drumCursor++])
+                }
+
+                for (event in playingAudio) {
                     val from = max(position, event.startFrame)
                     val to = min(blockEnd, event.endFrame)
                     val trackGain = event.track.volume.coerceIn(0f, 1.5f) * plan.masterGain
@@ -374,10 +390,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
-                activeNotes.asSequence()
-                    .takeWhile { it.startFrame < blockEnd }
-                    .filter { it.endFrame > position }
-                    .forEach { note ->
+                for (note in playingNotes) {
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
@@ -398,11 +411,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
-                activeDrums.asSequence()
-                    .takeWhile { it.startFrame < blockEnd }
-                    .filter { it.startFrame + (sampleRate * 0.20).toLong() > position }
-                    .forEach { drum ->
-                    val hitEnd = drum.startFrame + (sampleRate * 0.20).toLong()
+                for (drum in playingDrums) {
+                    val hitEnd = drum.startFrame + DRUM_DURATION_FRAMES
                     val from = max(position, drum.startFrame)
                     val to = min(blockEnd, hitEnd)
                     val gain = drum.track.volume.coerceIn(0f, 1.5f) * plan.masterGain * 0.38f
@@ -483,6 +493,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     companion object {
         const val OUTPUT_SAMPLE_RATE = 44100
         const val BLOCK_FRAMES = 256
+        val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 60
         const val MAX_ARRANGEMENT_SECONDS = 60 * 15
         const val MAX_TOTAL_PCM_BYTES = 64L * 1024L * 1024L
