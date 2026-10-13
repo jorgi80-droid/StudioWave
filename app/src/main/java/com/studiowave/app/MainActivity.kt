@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -312,13 +313,15 @@ private fun TimelineGrid(
 
         Column(Modifier.padding(top = 24.dp)) {
             project.tracks.forEachIndexed { trackIndex, track ->
-                Box(Modifier.fillMaxWidth().height(67.dp)) {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(67.dp)) {
+                    val viewportWidthPx = with(density) { maxWidth.toPx() }
+                    val barWidth = baseBarWidthPx * zoom
                     track.clips.forEach { clip ->
-                        val barWidth = baseBarWidthPx * zoom
                         val clipStartPx = clip.startTick.toFloat() / 3840f * barWidth
                         val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barWidth
                         val displayLeftPx = clipStartPx - scrollBars * barWidth
-                        // Skip clips outside the viewport before composing their contents.
+                        // Avoid composing or drawing clips fully outside the viewport.
+                        if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = accentColors.getOrElse(trackIndex) { Mint }
                         Column(
                             Modifier
@@ -361,6 +364,7 @@ private fun TimelineGrid(
                                     }
                                 }
                             }
+                        }
                         }
                     }
                 }
