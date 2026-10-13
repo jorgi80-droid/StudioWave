@@ -148,9 +148,22 @@ private fun StudioWaveApp() {
             selectedWorkspace = "ARRANGEMENT"
         }
     }
+    val latestProject by rememberUpdatedState(project)
     LaunchedEffect(project) {
         delay(350)
-        runCatching { preferences.edit().putString("project_json", project.toJson().toString()).apply() }
+        val snapshot = project
+        try {
+            val serialized = withContext(Dispatchers.Default) { snapshot.toJson().toString() }
+            if (latestProject === snapshot) {
+                withContext(Dispatchers.IO) {
+                    preferences.edit().putString("project_json", serialized).apply()
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Autosave must not crash editing; the next project change will retry it.
+        }
     }
     DisposableEffect(engine, arrangementPlayback) {
         onDispose {
