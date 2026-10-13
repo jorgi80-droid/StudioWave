@@ -562,8 +562,9 @@ private fun TimelineGrid(
                                             val source = project.tracks.getOrNull(dragFromTrack)
                                             val targetIndex = (dragFromTrack + (dragDy / trackHeightPx).toInt()).coerceIn(0, project.tracks.lastIndex.coerceAtLeast(0))
                                             val target = project.tracks.getOrNull(targetIndex)
-                                            val movedBars = (dragDx / (baseBarWidthPx * zoom)).toLong()
-                                            val newTick = (dragOriginalTick + movedBars * 3840L).coerceAtLeast(0L)
+                                            val sixteenthWidthPx = (baseBarWidthPx * zoom) / 16f
+                                            val movedSixteenths = (dragDx / sixteenthWidthPx.coerceAtLeast(1f)).toLong()
+                                            val newTick = (dragOriginalTick + movedSixteenths * 240L).coerceAtLeast(0L)
                                             if (source != null && target != null && source.kind == target.kind) onMoveClip(clip.id, target.id, newTick)
                                             draggingClip = null
                                             dragFromTrack = -1
