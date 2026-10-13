@@ -304,7 +304,9 @@ private fun ArrangementWorkspace(
                             val current = palette.indexOf(track.colorArgb)
                             val next = palette[((current + 1).coerceAtLeast(0)) % palette.size]
                             onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(colorArgb = next) else it }))
-                        })
+                        },
+                        onMuteToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) },
+                        onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) })
                     }
                     val showBottomAddTrack = project.tracks.size > 4 && scrollTracks + (4f / verticalZoom) >= project.tracks.size - 0.75f
                     if (showBottomAddTrack) {
@@ -471,7 +473,7 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
 }
 
 @Composable
-private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit, onColorTap: () -> Unit) {
+private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit, onColorTap: () -> Unit, onMuteToggle: () -> Unit, onSoloToggle: () -> Unit) {
     val accent = Color(track.colorArgb.toInt())
     Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = {}),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -480,8 +482,8 @@ private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scr
             Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("M", fontSize = 8.sp, color = MutedText)
-                Text("S", fontSize = 8.sp, color = Mint)
+                Text("M", fontSize = 8.sp, color = if (track.muted) Red else MutedText, modifier = Modifier.clickable { onMuteToggle() })
+                Text("S", fontSize = 8.sp, color = if (track.solo) Mint else MutedText, modifier = Modifier.clickable { onSoloToggle() })
                 Text("ARM", fontSize = 7.sp, color = if (index == 0) Red else MutedText)
             }
         }
