@@ -71,6 +71,8 @@ private val Mint = Color(0xFF00D2B4)
 private val Green = Color(0xFF22C55E)
 private val Red = Color(0xFFEF4444)
 
+private data class TrackRowLayout(val topDp: Float, val heightDp: Float)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -273,7 +275,8 @@ private fun StudioWaveApp() {
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace })
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                            onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) })
                     }
                 }
                 if (showDock) {
@@ -356,6 +359,14 @@ private fun ArrangementWorkspace(
 ) {
     val densityScale = androidx.compose.ui.platform.LocalDensity.current.density
     val trackHeights = remember { mutableStateMapOf<String, Float>() }
+    val trackIds = project.tracks.map { it.id }
+    val trackRowLayout = remember(trackIds, trackHeights.toMap()) {
+        var top = 0f
+        trackIds.map { id ->
+            val height = (trackHeights[id] ?: 67f).coerceIn(44f, 160f)
+            TrackRowLayout(topDp = top, heightDp = height).also { top += height }
+        }
+    }
     var selectedClip by remember { mutableStateOf<String?>(null) }
     var clipMenu by remember { mutableStateOf<String?>(null) }
     var showTimelineMenu by remember { mutableStateOf(false) }
@@ -484,12 +495,13 @@ private fun ArrangementWorkspace(
                 }
                 var addTrackMenu by remember { mutableStateOf(false) }
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
-                    val firstVisibleHeader = (scrollTracks - 1f / verticalZoom).toInt().coerceAtLeast(0)
-                    val lastVisibleHeader = (scrollTracks + maxHeight.value / (67f * verticalZoom) + 1f)
-                        .toInt().coerceAtMost(project.tracks.lastIndex)
                     project.tracks.forEachIndexed { index, track ->
-                        if (index in firstVisibleHeader..lastVisibleHeader) {
+                        val row = trackRowLayout.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
+                        val viewTop = (row.topDp - scrollTracks * 67f) * verticalZoom
+                        val viewHeight = row.heightDp * verticalZoom
+                        if (viewTop + viewHeight >= -viewHeight && viewTop <= maxHeight.value) {
                         TrackHeader(track, index, verticalZoom, scrollTracks,
+                        rowTopDp = row.topDp, rowHeightDp = row.heightDp,
                         onDoubleTap = { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) },
                         onColorTap = {
                             val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEE)
@@ -499,8 +511,25 @@ private fun ArrangementWorkspace(
                         },
                         onMuteToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) },
                         onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) },
-                        onResizeTrack = { delta -> trackHeights[track.id] = ((trackHeights[track.id] ?: 67f) + delta / densityScale).coerceIn(44f, 160f) },
-                        onScratch = { delta -> if (track.kind == "audio") onScratchTrack(track.id, delta) })
+                        onResizeTrack = { delta ->
+                            trackHeights[track.id] = ((trackHeights[track.id] ?: 67f) + delta / (densityScale * verticalZoom).coerceAtLeast(0.1f)).coerceIn(44f, 160f)
+                        },
+                        onScratch = { delta -> if (track.kind == "audio") onScratchTrack(track.id, delta / densityScale * 8f) },
+                        onReorderTrack = { deltaPx ->
+                            val from = project.tracks.indexOfFirst { it.id == track.id }
+                            val fromRow = trackRowLayout.getOrNull(from)
+                            if (from >= 0 && fromRow != null && project.tracks.size > 1) {
+                                val desiredCenter = fromRow.topDp + fromRow.heightDp / 2f + deltaPx / (densityScale * verticalZoom).coerceAtLeast(0.1f)
+                                val target = trackRowLayout.indices.minByOrNull { targetIndex ->
+                                    kotlin.math.abs(trackRowLayout[targetIndex].topDp + trackRowLayout[targetIndex].heightDp / 2f - desiredCenter)
+                                } ?: from
+                                if (target != from) {
+                                    val reordered = project.tracks.toMutableList()
+                                    reordered.add(target, reordered.removeAt(from))
+                                    onProjectChange(project.copy(tracks = reordered))
+                                }
+                            }
+                        })
                         }
                     }
                     val showBottomAddTrack = project.tracks.size > 4 && scrollTracks + (4f / verticalZoom) >= project.tracks.size - 0.75f
@@ -524,7 +553,7 @@ private fun ArrangementWorkspace(
             TimelineGrid(
                 modifier = Modifier.weight(1f).fillMaxHeight(), project = project, zoom = zoom, onZoom = onZoom,
                 scrollBars = scrollBars, onScroll = onScroll, verticalZoom = verticalZoom, onVerticalZoom = onVerticalZoom,
-                scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, snapEnabled = snapEnabled, selectedClip = selectedClip,
+                scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, trackRowLayout = trackRowLayout, snapEnabled = snapEnabled, selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it },
                 onOpenEditor = { clipId ->
                     if (clipId == null) {
@@ -720,15 +749,17 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
 @Composable
 private fun TrackHeader(
     track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float,
+    rowTopDp: Float = index * 67f, rowHeightDp: Float = 67f,
     onDoubleTap: () -> Unit, onColorTap: () -> Unit, onMuteToggle: () -> Unit, onSoloToggle: () -> Unit,
-    onResizeTrack: (Float) -> Unit = {}, onScratch: (Float) -> Unit = {}
+    onResizeTrack: (Float) -> Unit = {}, onScratch: (Float) -> Unit = {}, onReorderTrack: (Float) -> Unit = {}
 ) {
     val accent = Color(track.colorArgb.toInt())
     var resizeDelta by remember(track.id) { mutableFloatStateOf(0f) }
+    var reorderDelta by remember(track.id) { mutableFloatStateOf(0f) }
     var scratchDelta by remember(track.id) { mutableFloatStateOf(0f) }
     Row(
-        Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp)
-            .height((67f * verticalZoom).dp).padding(bottom = 2.dp)
+        Modifier.fillMaxWidth().offset(y = ((rowTopDp - scrollTracks * 67f) * verticalZoom).dp)
+            .height((rowHeightDp * verticalZoom).dp).padding(bottom = 2.dp)
             .background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
@@ -749,7 +780,7 @@ private fun TrackHeader(
                                     onHorizontalDrag = { change, amount ->
                                         change.consume()
                                         scratchDelta += amount
-                                        onScratch(amount / 3f)
+                                        onScratch(amount)
                                     }
                                 )
                             },
@@ -758,16 +789,24 @@ private fun TrackHeader(
                 }
             }
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Canvas(Modifier.size(17.dp)) {
-                drawCircle(color = accent.copy(alpha = 0.22f))
-                drawArc(color = accent, startAngle = -90f, sweepAngle = 220f, useCenter = false,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
-            }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(
-                Modifier.size(width = 23.dp, height = 17.dp)
-                    .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
-                    .pointerInput(track.id, verticalZoom) {
+                Modifier.size(width = 23.dp, height = 18.dp)
+                    .background(Color.White.copy(alpha = 0.10f), RoundedCornerShape(4.dp))
+                    .pointerInput(track.id, rowTopDp, rowHeightDp) {
+                        detectDragGestures(
+                            onDragStart = { reorderDelta = 0f },
+                            onDrag = { change, amount -> change.consume(); reorderDelta += amount.y },
+                            onDragEnd = { onReorderTrack(reorderDelta); reorderDelta = 0f },
+                            onDragCancel = { reorderDelta = 0f }
+                        )
+                    },
+                contentAlignment = Alignment.Center
+            ) { Text("⠿", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+            Box(
+                Modifier.size(width = 23.dp, height = 18.dp)
+                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+                    .pointerInput(track.id, verticalZoom, rowHeightDp) {
                         detectDragGestures(
                             onDragStart = { resizeDelta = 0f },
                             onDrag = { change, amount -> change.consume(); resizeDelta += amount.y },
@@ -794,6 +833,7 @@ private fun TimelineGrid(
     snapEnabled: Boolean,
     scrollTracks: Float,
     onScrollTracks: (Float) -> Unit,
+    trackRowLayout: List<TrackRowLayout>,
     selectedClip: String?,
     onSelectClip: (String) -> Unit,
     onOpenEditor: (String) -> Unit,
@@ -938,13 +978,13 @@ private fun TimelineGrid(
         }
 
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = 24.dp)) {
-            val firstVisibleTrack = (scrollTracks - 1f / verticalZoom).toInt().coerceAtLeast(0)
-            val lastVisibleTrack = (scrollTracks + maxHeight.value / (67f * verticalZoom) + 1f)
-                .toInt().coerceAtMost(project.tracks.lastIndex)
             Box(Modifier.fillMaxSize()) {
                 project.tracks.forEachIndexed { trackIndex, track ->
-                    if (trackIndex in firstVisibleTrack..lastVisibleTrack) {
-                BoxWithConstraints(Modifier.fillMaxWidth().offset(y = ((trackIndex - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp)) {
+                    val row = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
+                    val rowTop = (row.topDp - scrollTracks * 67f) * verticalZoom
+                    val rowHeight = row.heightDp * verticalZoom
+                    if (rowTop + rowHeight >= -rowHeight && rowTop <= maxHeight.value) {
+                BoxWithConstraints(Modifier.fillMaxWidth().offset(y = rowTop.dp).height(rowHeight.dp)) {
                     val viewportWidthPx = with(density) { maxWidth.toPx() }
                     val barWidth = baseBarWidthPx * zoom
                     track.clips.forEach { clip ->
@@ -1087,7 +1127,8 @@ private fun TimelineGrid(
             val menuWidth = 220.dp
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
-            val y = (24.dp + ((trackIndex - scrollTracks) * 67f * verticalZoom).dp - 35.dp).coerceAtLeast(24.dp)
+            val menuRow = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
+            val y = (24.dp + ((menuRow.topDp - scrollTracks * 67f) * verticalZoom).dp - 35.dp).coerceAtLeast(24.dp)
             Row(
                 Modifier.offset(x = x, y = y)
                     .background(Color(0xFF30343A), RoundedCornerShape(20.dp))
