@@ -716,9 +716,13 @@ private fun TimelineGrid(
         }
 
         Box(Modifier.fillMaxSize().padding(top = 24.dp)) {
-            project.tracks.forEachIndexed { trackIndex, track ->
-                BoxWithConstraints(Modifier.fillMaxWidth().offset(y = ((trackIndex - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp)) {
-                    val viewportWidthPx = with(density) { maxWidth.toPx() }
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val viewportWidthPx = with(density) { maxWidth.toPx() }
+                val firstVisibleTrack = (scrollTracks - 1f / verticalZoom).toInt().coerceAtLeast(0)
+                val lastVisibleTrack = (scrollTracks + maxHeight.value / (67f * verticalZoom) + 1f).toInt().coerceAtMost(project.tracks.size - 1)
+                project.tracks.forEachIndexed { trackIndex, track ->
+                    if (trackIndex in firstVisibleTrack..lastVisibleTrack) {
+                        BoxWithConstraints(Modifier.fillMaxWidth().offset(y = ((trackIndex - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp)) {
                     val barWidth = baseBarWidthPx * zoom
                     track.clips.forEach { clip ->
                         val clipStartPx = clip.startTick.toFloat() / 3840f * barWidth
@@ -818,6 +822,7 @@ private fun TimelineGrid(
                             }
                         }
                         }
+                    }
                     }
                 }
             }
