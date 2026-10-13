@@ -1662,8 +1662,7 @@ private fun TimelineGrid(
                                                     val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
                                                     val earliestStart = (clip.startTick - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
                                                     val latestStart = (originalEnd - minimumLength).coerceAtLeast(earliestStart)
-                                                    val rawStart = (clip.startTick + resizeViewport.pixelsToTickDelta(leftResizeDeltaPx))
-                                                        .coerceAtLeast(0L)
+                                                    val rawStart = (clip.startTick + resizeViewport.pixelsToTickDelta(leftResizeDeltaPx)).coerceAtLeast(0L)
                                                     val snappedStart = if (snapToGrid && snapStep > 0L) timebase.snap(rawStart, snapDivision) else rawStart
                                                     val newStart = snappedStart.coerceIn(earliestStart, latestStart)
                                                     val newLength = (originalEnd - newStart).coerceAtLeast(minimumLength)
