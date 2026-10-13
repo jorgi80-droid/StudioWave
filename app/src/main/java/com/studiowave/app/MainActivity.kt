@@ -187,13 +187,25 @@ private fun StudioWaveApp() {
                             audioError = null
                             playbackJob = playbackScope.launch {
                                 try {
-                                    arrangementPlayback.start(project, master) {
-                                        playbackScope.launch {
-                                            playing = false
-                                            playbackLoading = false
-                                            playbackJob = null
+                                    arrangementPlayback.start(
+                                        project,
+                                        master,
+                                        onCompleted = {
+                                            playbackScope.launch {
+                                                playing = false
+                                                playbackLoading = false
+                                                playbackJob = null
+                                            }
+                                        },
+                                        onError = { message ->
+                                            playbackScope.launch {
+                                                playing = false
+                                                playbackLoading = false
+                                                playbackJob = null
+                                                audioError = message
+                                            }
                                         }
-                                    }
+                                    )
                                     playing = true
                                 } catch (_: CancellationException) {
                                     // A stop request cancelled media preparation.
