@@ -836,11 +836,47 @@ private fun ArrangementWorkspace(
                 clipMenuClipId = clipMenu,
                 onClipAction = { action, clipId -> handleClipAction(action, clipId) },
                 onDismissClipMenu = { clipMenu = null },
-                onResizeClip = { clipId, lengthTicks ->
+                onResizeClip = { clipId, newStartTick, lengthTicks ->
                     val safeLength = lengthTicks.coerceIn(1L, Long.MAX_VALUE / 2L)
                     onProjectChange(project.copy(tracks = project.tracks.map { track ->
                         track.copy(clips = track.clips.map { clip ->
-                            if (clip.id == clipId) clip.copy(lengthTicks = safeLength) else clip
+                            if (clip.id != clipId) clip else {
+                                val delta = newStartTick - clip.startTick
+                                val oldLength = clip.lengthTicks.coerceAtLeast(1L)
+                                val safeStart = newStartTick.coerceAtLeast(0L)
+                                val safeDelta = safeStart - clip.startTick
+                                val nextNotes = if (safeDelta > 0L) {
+                                    clip.midiNotes.mapNotNull { note ->
+                                        val noteEnd = note.startTick + note.durationTicks.coerceAtLeast(1L)
+                                        if (noteEnd <= safeDelta) null else {
+                                            val clippedStart = note.startTick.coerceAtLeast(safeDelta)
+                                            note.copy(
+                                                startTick = (clippedStart - safeDelta).coerceAtLeast(0L),
+                                                durationTicks = (noteEnd - clippedStart).coerceAtLeast(1L)
+                                            )
+                                        }
+                                    }
+                                } else if (safeDelta < 0L) {
+                                    clip.midiNotes.map { note -> note.copy(startTick = note.startTick - safeDelta) }
+                                } else clip.midiNotes
+                                val nextDrumSteps = if (clip.drumSteps.isEmpty() || safeDelta == 0L) clip.drumSteps else {
+                                    val stepTicks = (oldLength.toDouble() / clip.drumSteps.size).coerceAtLeast(1.0)
+                                    if (safeDelta > 0L) {
+                                        val drop = kotlin.math.floor(safeDelta / stepTicks).toInt().coerceIn(0, clip.drumSteps.size)
+                                        clip.drumSteps.drop(drop)
+                                    } else {
+                                        val prepend = kotlin.math.ceil(-safeDelta / stepTicks).toInt().coerceIn(0, StudioProject.MAX_DRUM_STEPS_PER_CLIP - clip.drumSteps.size)
+                                        List(prepend) { false } + clip.drumSteps
+                                    }
+                                }
+                                clip.copy(
+                                    startTick = safeStart,
+                                    lengthTicks = safeLength,
+                                    sourceOffsetTicks = (clip.sourceOffsetTicks + safeDelta).coerceAtLeast(0L),
+                                    midiNotes = nextNotes,
+                                    drumSteps = nextDrumSteps
+                                )
+                            }
                         })
                     }))
                 },
@@ -1139,7 +1175,7 @@ private fun TimelineGrid(
     clipMenuClipId: String?,
     onClipAction: (String, String) -> Unit,
     onDismissClipMenu: () -> Unit,
-    onResizeClip: (String, Long) -> Unit,
+    onResizeClip: (String, Long, Long) -> Unit,
     onMoveClip: (String, String, Long) -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -1529,7 +1565,7 @@ private fun TimelineGrid(
                                                      val snapStep = snapDivision.ticks(timebase)
                                                      val snappedEndTick = if (snapToGrid && snapStep > 0L) timebase.snap(rawEndTick, snapDivision) else rawEndTick
                                                      val newLength = (snappedEndTick - clip.startTick).coerceAtLeast(if (snapToGrid && snapStep > 0L) snapStep else 1L)
-                                                    onResizeClip(clip.id, newLength)
+                                                    onResizeClip(clip.id, clip.startTick, newLength)
                                                     resizeDeltaPx = 0f
                                                 },
                                                 onDragCancel = { resizeDeltaPx = 0f }
