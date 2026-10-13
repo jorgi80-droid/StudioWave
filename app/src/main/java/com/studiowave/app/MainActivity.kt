@@ -1386,17 +1386,31 @@ private fun TimelineGrid(
                          if (bar % 4 == 0) 1.5f else 0.7f)
                      val beatTicks = timebase.ticksPerBeat
                      val beatPixels = beatTicks * canvasViewport.pixelsPerTick
-                     if (beatPixels >= 14.0) {
-                         for (beat in 0 until timebase.safeNumerator) {
-                             val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
-                             val beatX = canvasViewport.timeToViewportX(beatTick)
-                             if (beat > 0) drawLine(Color(0xFF292D33), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
-                             if (beatPixels >= 34.0) {
-                                 val halfTick = beatTicks / 2L
-                                 if (halfTick > 0L) {
-                                     val halfX = canvasViewport.timeToViewportX(beatTick + halfTick)
-                                     drawLine(Color(0xFF24272D), Offset(halfX, rulerHeightPx), Offset(halfX, size.height), 0.6f)
+                     // Use a progressive musical grid like FL Studio Mobile: the
+                     // horizontal zoom decides which subdivisions are worth drawing.
+                     val subdivision = when {
+                         beatPixels >= 80.0 -> beatTicks / 16L
+                         beatPixels >= 52.0 -> beatTicks / 8L
+                         beatPixels >= 30.0 -> beatTicks / 4L
+                         beatPixels >= 16.0 -> beatTicks / 2L
+                         else -> 0L
+                     }
+                     for (beat in 0 until timebase.safeNumerator) {
+                         val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
+                         val beatX = canvasViewport.timeToViewportX(beatTick)
+                         if (beat > 0) drawLine(Color(0xFF292D33), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
+                         if (subdivision > 0L) {
+                             var tickOffset = subdivision
+                             while (tickOffset < beatTicks) {
+                                 val subX = canvasViewport.timeToViewportX(beatTick + tickOffset)
+                                 val alpha = when (tickOffset) {
+                                     beatTicks / 2L -> 0.48f
+                                     beatTicks / 4L -> 0.38f
+                                     else -> 0.24f
                                  }
+                                 drawLine(Color(0xFF30343B).copy(alpha = alpha),
+                                     Offset(subX, rulerHeightPx), Offset(subX, size.height), 0.55f)
+                                 tickOffset += subdivision
                              }
                          }
                      }
