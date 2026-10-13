@@ -64,7 +64,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         if (value <= 0.000001f) -120f else (20f * kotlin.math.log10(value)).coerceIn(-120f, 0f)
 
     private fun dbfsToLinear(value: Float): Float =
-        kotlin.math.pow(10.0, value.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
+        Math.pow(10.0, value.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
     private val audioAssetCache = object : android.util.LruCache<String, AudioAsset>(MAX_ASSET_CACHE_KIB) {
         override fun sizeOf(key: String, value: AudioAsset): Int =
             (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
