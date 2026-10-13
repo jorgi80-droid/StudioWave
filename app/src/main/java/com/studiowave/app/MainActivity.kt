@@ -120,7 +120,7 @@ private fun StudioWaveApp() {
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
                         "MIXER" -> MixerWorkspace(project.tracks)
-                        "PIANO ROLL" -> PianoRollWorkspace(onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        "PIANO ROLL" -> PianoRollWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, project, { project = it }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "BROWSER" -> BrowserWorkspace()
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { project = it }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
@@ -733,26 +733,54 @@ private fun TimelineGrid(
 }
 
 @Composable
-private fun PianoRollWorkspace(onBack: () -> Unit) {
+private fun PianoRollWorkspace(
+    track: StudioTrack?,
+    project: StudioProject,
+    onProjectChange: (StudioProject) -> Unit,
+    onBack: () -> Unit
+) {
+    val clip = track?.clips?.firstOrNull()
+    val notes = clip?.midiNotes ?: emptyList()
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp)) {
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("PIANO ROLL", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+            Spacer(Modifier.width(8.dp))
+            Text(track?.name ?: "Select a MIDI track", color = MutedText, fontSize = 9.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text("SNAP 1/16 • VELOCITY", color = MutedText, fontSize = 9.sp)
+            Text("TAP GRID: ADD / REMOVE NOTE", color = MutedText, fontSize = 9.sp)
             Spacer(Modifier.width(8.dp))
             Surface(color = Raised, shape = RoundedCornerShape(6.dp), modifier = Modifier.size(27.dp).clickable { onBack() }) {
                 Box(contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 20.sp) }
             }
         }
-        Canvas(Modifier.fillMaxSize().padding(top = 4.dp)) {
+        Canvas(Modifier.fillMaxSize().padding(top = 4.dp).pointerInput(track?.id, clip?.id, notes) {
+            detectTapGestures { point ->
+                if (track == null || clip == null) return@detectTapGestures
+                val rowH = size.height / 24f
+                val colW = size.width / 32f
+                val row = (point.y / rowH).toInt().coerceIn(0, 23)
+                val col = (point.x / colW).toInt().coerceIn(0, 31)
+                val pitch = (84 - row * 3).coerceIn(0, 127)
+                val startTick = col * 240L
+                val existing = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
+                val updatedNotes = if (existing != null) notes.filterNot { it.id == existing.id }
+                    else notes + com.studiowave.app.data.MidiNote(pitch = pitch, startTick = startTick, durationTicks = 240)
+                onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c }) else item
+                }))
+            }
+        }) {
             val rowH = size.height / 24f
             val colW = size.width / 32f
             for (r in 0..24) drawLine(if (r % 12 == 0) Color(0xFF5D626B) else Color(0xFF343840),
                 Offset(0f, r * rowH), Offset(size.width, r * rowH), if (r % 12 == 0) 1.5f else 0.6f)
-            for (c in 0..32) drawLine(if (c % 4 == 0) Color(0xFF5D626B) else Color(0xFF343840),
-                Offset(c * colW, 0f), Offset(c * colW, size.height), if (c % 4 == 0) 1.2f else 0.6f)
-            listOf(3, 6, 10, 13, 17, 20).forEachIndexed { i, row ->
-                drawRoundRect(Mint, Offset(i * colW * 4, row * rowH), Size(colW * 3.2f, rowH * 0.7f),
+            for (col in 0..32) drawLine(if (col % 4 == 0) Color(0xFF5D626B) else Color(0xFF343840),
+                Offset(col * colW, 0f), Offset(col * colW, size.height), if (col % 4 == 0) 1.2f else 0.6f)
+            notes.forEach { note ->
+                val x = note.startTick.toFloat() / 240f * colW
+                val y = (84 - note.pitch).toFloat() / 3f * rowH
+                val width = note.durationTicks.toFloat() / 240f * colW
+                drawRoundRect(Mint, Offset(x, y.coerceIn(0f, size.height - rowH)), Size(width.coerceAtLeast(3f), rowH * 0.72f),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
             }
         }
