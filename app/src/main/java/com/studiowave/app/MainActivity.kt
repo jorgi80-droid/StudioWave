@@ -756,18 +756,22 @@ private fun ArrangementWorkspace(
                         }
                     }
 
-                    // Keep one compact add control at the end of the track list.
-                    // It appears once the user scrolls to the bottom-most track.
-                    val totalTrackHeight = trackRowLayout.lastOrNull()?.let { it.topDp + it.heightDp } ?: 0f
-                    val visibleBottom = scrollTracks + headerViewportHeightDp / verticalZoom.coerceAtLeast(0.1f)
-                    val showBottomAddTrack =
-                        visibleBottom >= totalTrackHeight - (trackRowLayout.lastOrNull()?.heightDp ?: 67f) * 0.9f
+                    // Anchor the add-track control to the actual end of the final track row,
+                    // rather than pinning it to the viewport bottom while the tracks scroll.
+                    val lastTrackRow = trackRowLayout.lastOrNull()
+                    val addAnchorY = lastTrackRow?.let {
+                        (it.topDp + it.heightDp - scrollTracks) * verticalZoom
+                    } ?: 0f
+                    val showBottomAddTrack = lastTrackRow != null &&
+                        addAnchorY >= 0f && addAnchorY <= headerViewportHeightDp
                     if (showBottomAddTrack) {
                         Surface(
                             color = Mint,
                             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp),
                             shadowElevation = 5.dp,
-                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 5.dp, bottom = 5.dp)
+                            modifier = Modifier.align(Alignment.TopEnd)
+                                .offset(y = (addAnchorY - 17.dp.value).coerceAtLeast(0f).dp)
+                                .padding(end = 5.dp)
                                 .size(34.dp).clickable { addTrackMenu = !addTrackMenu }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -780,7 +784,9 @@ private fun ArrangementWorkspace(
                             color = Raised,
                             shape = RoundedCornerShape(10.dp),
                             shadowElevation = 8.dp,
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 36.dp)
+                            modifier = Modifier.align(Alignment.TopEnd)
+                                .offset(y = (addAnchorY - 174f).coerceAtLeast(0f).dp)
+                                .padding(end = 40.dp)
                         ) {
                             Column(Modifier.width(174.dp).padding(5.dp)) {
                                 Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
