@@ -34,7 +34,7 @@ class TimelineViewportTest {
         val anchorScreenX = 102f + 318f
         val anchorTick = initial.screenXToTime(anchorScreenX)
         val zoomed = initial.zoomKeepingAnchor(176f, anchorScreenX)
-        assertEquals(anchorTick, zoomed.screenXToTime(anchorScreenX), 1L)
+        assertTrue(kotlin.math.abs(anchorTick - zoomed.screenXToTime(anchorScreenX)) <= 1L)
     }
 
     @Test fun snapIsAppliedInMusicalTicksAndOffPreservesTicks() {
