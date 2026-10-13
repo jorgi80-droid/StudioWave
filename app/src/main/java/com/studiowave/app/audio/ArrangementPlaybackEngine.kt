@@ -328,7 +328,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private fun renderPlan(
         track: AudioTrack,
         plan: Plan,
-        onCompleted: () -> Unit,
         token: Long,
         onCompleted: () -> Unit,
         onError: (String) -> Unit
