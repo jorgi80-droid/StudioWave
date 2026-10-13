@@ -1135,4 +1135,4 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
 }
 
 private fun waveformPeaksForUnlinkedClip(sourceUri: String?): List<Float> =
-    if (sourceUri.isNullOrBlank()) List(48) { 0f } else List(48) { 0f }
+    List(48) { 0f }
