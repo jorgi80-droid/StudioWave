@@ -41,9 +41,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     // Peak/RMS snapshot from the final master PCM block, before 16-bit quantization.
     private val masterPeakBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
     private val masterRmsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
+    private val masterLufsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(MasterLoudnessMeter.SILENCE_LUFS))
+    private val loudnessMeter = MasterLoudnessMeter(OUTPUT_SAMPLE_RATE)
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
 
-    data class MasterMeterSnapshot(val peakDbfs: Float, val rmsDbfs: Float) {
+    data class MasterMeterSnapshot(val peakDbfs: Float, val rmsDbfs: Float, val momentaryLufs: Float) {
         // Convert meter values to linear amplitude for the scrolling level trace.
         val peakLinear: Float get() = Math.pow(10.0, peakDbfs.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
         val rmsLinear: Float get() = Math.pow(10.0, rmsDbfs.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
@@ -52,12 +54,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     fun masterMeterSnapshot(): MasterMeterSnapshot {
         val peak = java.lang.Float.intBitsToFloat(masterPeakBits.get()).coerceIn(0f, 1f)
         val rms = java.lang.Float.intBitsToFloat(masterRmsBits.get()).coerceIn(0f, 1f)
-        return MasterMeterSnapshot(linearToDbfs(peak), linearToDbfs(rms))
+        val lufs = java.lang.Float.intBitsToFloat(masterLufsBits.get()).coerceIn(-120f, 6f)
+        return MasterMeterSnapshot(linearToDbfs(peak), linearToDbfs(rms), lufs)
     }
 
-    private fun publishMasterMeter(peak: Float, rms: Float) {
+    private fun publishMasterMeter(peak: Float, rms: Float, momentaryLufs: Float) {
         masterPeakBits.set(java.lang.Float.floatToRawIntBits(peak.coerceIn(0f, 1f)))
         masterRmsBits.set(java.lang.Float.floatToRawIntBits(rms.coerceIn(0f, 1f)))
+        masterLufsBits.set(java.lang.Float.floatToRawIntBits(momentaryLufs.coerceIn(-120f, 6f)))
     }
 
     private fun linearToDbfs(value: Float): Float =
@@ -134,7 +138,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         scratchOffsetsMs.clear()
         stopOutputOnly()
         liveMasterGain = masterGain.coerceIn(0f, 1f)
-        publishMasterMeter(0f, 0f)
+        loudnessMeter.reset()
+        publishMasterMeter(0f, 0f, MasterLoudnessMeter.SILENCE_LUFS)
         updateMix(project)
         val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
         check(!closed.get()) { "Playback engine is closed" }
@@ -558,7 +563,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     blockSquares += sample.toDouble() * sample.toDouble()
                     pcm[i] = (sample * 32767f).toInt().toShort()
                 }
-                publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat())
+                val momentaryLufs = loudnessMeter.processBlock(mix, sampleCount)
+                publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat(), momentaryLufs)
                 var offset = 0
                 while (offset < sampleCount && running.get()) {
                     val written = track.write(pcm, offset, sampleCount - offset, AudioTrack.WRITE_BLOCKING)
