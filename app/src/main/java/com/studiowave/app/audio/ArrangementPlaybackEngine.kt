@@ -82,7 +82,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
         stopOutputOnly()
-        val plan = withContext(Dispatchers.IO) { buildPlan(project, masterGain.coerceIn(0f, 1f)) }
+        val plan = withContext(Dispatchers.IO) { buildPlan(project, masterGain.coerceIn(0f, 1f), token) }
         check(!closed.get()) { "Playback engine is closed" }
         check(generation.get() == token) { "Playback start was cancelled" }
         val minBuffer = AudioTrack.getMinBufferSize(
@@ -124,7 +124,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
 
-    private fun buildPlan(project: StudioProject, masterGain: Float): Plan {
+    private fun buildPlan(project: StudioProject, masterGain: Float, token: Long): Plan {
+        fun ensureCurrent() {
+            check(!closed.get() && generation.get() == token) { "Playback preparation cancelled" }
+        }
         val bpm = project.bpm.coerceIn(40, 240)
         val ppq = project.ppq.coerceIn(24, 3840)
         val sampleRate = OUTPUT_SAMPLE_RATE
@@ -152,6 +155,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val assets = HashMap<String, AudioAsset>()
         var estimatedBytes = 0L
         requestedTicksByUri.forEach { (uriString, ticks) ->
+            ensureCurrent()
             val seconds = (ticks.toDouble() * 60.0 / (bpm.toDouble() * ppq))
                 .coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
             val estimated = ceil(seconds * sampleRate).toLong() * 4L
@@ -159,7 +163,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
                 "Arrangement audio cache exceeds the safe memory budget; shorten clips or reduce the number of source files"
             }
-            assets[uriString] = decodeAudioAsset(Uri.parse(uriString), seconds)
+            assets[uriString] = decodeAudioAsset(Uri.parse(uriString), seconds, token)
         }
 
         val audioEvents = ArrayList<AudioEvent>()
@@ -209,7 +213,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         )
     }
 
-    private fun decodeAudioAsset(uri: Uri, durationSeconds: Double): AudioAsset {
+    private fun decodeAudioAsset(uri: Uri, durationSeconds: Double, token: Long): AudioAsset {
+        fun ensureCurrent() {
+            check(!closed.get() && generation.get() == token) { "Playback preparation cancelled" }
+        }
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
         try {
@@ -226,8 +233,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             }
             val format = sourceFormat ?: error("Audio source has no decodable audio stream: $uri")
             extractor.selectTrack(selected)
-            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceIn(8000, 192000)
+            val sourceRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceIn(8000, 192000)
             val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 8)
+            val sampleRate = OUTPUT_SAMPLE_RATE
             val maxFrames = ceil(durationSeconds * sampleRate).toInt().coerceIn(1, sampleRate * MAX_SOURCE_SECONDS)
             val pcmOut = ShortArray(maxFrames * 2)
             decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME) ?: error("Unknown audio MIME"))
@@ -238,12 +246,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             var inputDone = false
             var outputDone = false
             var outputChannels = channels
-            var outputRate = sampleRate
+            var outputRate = sourceRate
             var encoding = AudioFormat.ENCODING_PCM_16BIT
             var framesWritten = 0
             var stagnant = 0
 
             while (!outputDone && framesWritten < maxFrames) {
+                ensureCurrent()
                 var progress = false
                 if (!inputDone) {
                     val inputIndex = decoder.dequeueInputBuffer(10_000)
@@ -288,8 +297,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                 val frames = (info.size / bytesPerSample) / outputChannels
                                 val baseFrame = (info.presentationTimeUs * sampleRate / 1_000_000L).coerceAtLeast(0L)
                                 for (frame in 0 until frames) {
+                                    if ((baseFrame + frame.toLong() * sampleRate / outputRate) >= maxFrames) break
                                     val targetFrame = baseFrame + frame.toLong() * sampleRate / outputRate
-                                    if (targetFrame < 0 || targetFrame >= maxFrames) continue
+                                    if (targetFrame < 0) continue
                                     val index = frame * outputChannels
                                     val left = readPcmSample(pcm, index, encoding)
                                     val right = if (outputChannels > 1) readPcmSample(pcm, index + 1, encoding) else left
@@ -310,7 +320,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 if (stagnant > 500) error("Audio decoder stopped making progress")
             }
             check(framesWritten > 0) { "No PCM audio samples could be decoded from $uri" }
-            return AudioAsset(sampleRate, pcmOut.copyOf(framesWritten * 2))
+            return AudioAsset(OUTPUT_SAMPLE_RATE, pcmOut.copyOf(framesWritten * 2))
         } finally {
             runCatching { decoder?.stop() }
             runCatching { decoder?.release() }
