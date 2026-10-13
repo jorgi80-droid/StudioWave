@@ -319,7 +319,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             else -> buffer.getShort(sampleIndex * 2) / 32768f
         }
 
-    private fun renderPlan(track: AudioTrack, plan: Plan, onCompleted: () -> Unit) {
+    private fun renderPlan(
+        track: AudioTrack,
+        plan: Plan,
+        onCompleted: () -> Unit,
+        onError: (String) -> Unit
+    ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
         val sampleRate = plan.sampleRate
@@ -408,10 +413,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             if (running.compareAndSet(true, false)) onCompleted()
         } catch (_: InterruptedException) {
             running.set(false)
-        } catch (_: IllegalStateException) {
+            Thread.currentThread().interrupt()
+        } catch (failure: Exception) {
             running.set(false)
-        } catch (_: Exception) {
-            running.set(false)
+            runCatching { onError(failure.message ?: "Arrangement audio output failed") }
         } finally {
             synchronized(this) {
                 if (output === track) {
