@@ -35,6 +35,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
+    private val generation = java.util.concurrent.atomic.AtomicLong(0L)
     @Volatile private var worker: Thread? = null
     @Volatile private var output: AudioTrack? = null
 
@@ -79,9 +80,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         onError: (String) -> Unit = {}
     ) {
         check(!closed.get()) { "Playback engine is closed" }
-        stop()
+        val token = generation.incrementAndGet()
+        stopOutputOnly()
         val plan = withContext(Dispatchers.IO) { buildPlan(project, masterGain.coerceIn(0f, 1f)) }
         check(!closed.get()) { "Playback engine is closed" }
+        check(generation.get() == token) { "Playback start was cancelled" }
         val minBuffer = AudioTrack.getMinBufferSize(
             plan.sampleRate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT
         )
@@ -100,14 +103,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             error("AudioTrack initialization failed")
         }
         synchronized(this) {
-            check(!closed.get()) { track.release(); "Playback engine is closed" }
+            if (closed.get() || generation.get() != token) {
+                track.release()
+                error("Playback start was cancelled")
+            }
             output = track
             running.set(true)
             try {
                 track.play()
                 worker = Thread({
                     Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-                    renderPlan(track, plan, onCompleted, onError)
+                    renderPlan(track, plan, token, onCompleted, onError)
                 }, "StudioWave-Arrangement").also { it.start() }
             } catch (failure: Throwable) {
                 running.set(false)
@@ -323,6 +329,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         track: AudioTrack,
         plan: Plan,
         onCompleted: () -> Unit,
+        token: Long,
+        onCompleted: () -> Unit,
         onError: (String) -> Unit
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
@@ -333,7 +341,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val activeDrums = plan.drums
         var position = 0L
         try {
-            while (running.get() && position < plan.totalFrames) {
+            while (running.get() && generation.get() == token && position < plan.totalFrames) {
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
                 val sampleCount = frames * 2
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
@@ -410,7 +418,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
                 position = blockEnd
             }
-            if (running.compareAndSet(true, false)) onCompleted()
+            if (position >= plan.totalFrames && generation.get() == token && running.compareAndSet(true, false)) onCompleted()
         } catch (_: InterruptedException) {
             running.set(false)
             Thread.currentThread().interrupt()
@@ -430,6 +438,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     }
 
     fun stop() {
+        generation.incrementAndGet()
+        stopOutputOnly()
+    }
+
+    private fun stopOutputOnly() {
         running.set(false)
         val thread = worker
         if (thread != null && thread !== Thread.currentThread()) {
