@@ -64,4 +64,24 @@ class TimelineViewportTest {
         assertEquals(0L, viewport.firstVisibleBar())
         assertEquals(5L, viewport.lastVisibleBar())
     }
+    @Test fun zoomAnchorsRemainStableAtMinimumAndMaximumScale() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val initial = TimelineViewport(timebase, 74f, 3840.0, 900f, 104f)
+        val anchorX = 104f + 420f
+        val tickUnderAnchor = initial.screenXToTime(anchorX)
+        listOf(41f, 74f, 220f, 560f).forEach { scale ->
+            val zoomed = initial.zoomKeepingAnchor(scale, anchorX)
+            assertTrue(kotlin.math.abs(tickUnderAnchor - zoomed.screenXToTime(anchorX)) <= 1L)
+        }
+    }
+
+    @Test fun snappingNeverProducesNegativeTicksOrZeroSizedSteps() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        listOf(SnapDivision.BAR, SnapDivision.BEAT, SnapDivision.SIXTEENTH_BEAT,
+            SnapDivision.EIGHTH_TRIPLET, SnapDivision.QUARTER_TRIPLET).forEach { division ->
+            assertTrue(timebase.snap(-100L, division) >= 0L)
+            assertTrue(division.ticks(timebase) > 0L)
+        }
+    }
+
 }
