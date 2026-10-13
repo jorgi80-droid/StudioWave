@@ -196,7 +196,7 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
                 }
                 Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
-                    project.tracks.forEachIndexed { index, track -> TrackHeader(track, index, verticalZoom, scrollTracks) }
+                    project.tracks.forEachIndexed { index, track -> TrackHeader(track, index, verticalZoom, scrollTracks) { onOpenEditor(if (track.kind == "drum") "DRUM SEQUENCER" else if (track.kind == "audio") "AUDIO EDITOR" else "PIANO ROLL", track.id) } }
                 }
             }
             TimelineGrid(
@@ -253,7 +253,7 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
 @Composable
 private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit) {
     val accent = Color(track.colorArgb.toInt())
-    Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp),
+    Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = {}),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
         Box(Modifier.width(4.dp).height(47.dp).background(accent, RoundedCornerShape(2.dp)))
         Column(Modifier.weight(1f)) {
