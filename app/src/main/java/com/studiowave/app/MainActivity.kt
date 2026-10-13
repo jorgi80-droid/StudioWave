@@ -476,7 +476,7 @@ private fun StudioWaveApp() {
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.25f, 4f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 4f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
                             onPlaybackRestart = { updatedProject ->
                                 if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
                             },
@@ -752,7 +752,7 @@ private fun ArrangementWorkspace(
             val baseBarWidthPx = with(density) { 74.dp.toPx() }.coerceAtLeast(1f)
             (timelineWidthPx.toDouble() * fitTimebase.ticksPerBar.toDouble() /
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
-                .toFloat().coerceIn(0.25f, 4f)
+                .toFloat().coerceIn(0.1f, 4f)
         }
         Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -1336,8 +1336,8 @@ private fun TimelineGrid(
                             val span = pointers.map { (it.position - centroid).getDistance() }.average().toFloat() * 2f
                             if (initialized) {
                                 val zoomFactor = if (previousSpan > 1f && span > 1f) (span / previousSpan).coerceIn(0.85f, 1.18f) else 1f
-                                val oldZoom = currentZoom.coerceIn(0.25f, 4f)
-                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.25f, 4f)
+                                val oldZoom = currentZoom.coerceIn(0.1f, 4f)
+                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.1f, 4f)
                                 val oldBarWidth = TimelineViewport(timebase, baseBarWidthPx * oldZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
                                 val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
                                 val pinchViewport = TimelineViewport(
