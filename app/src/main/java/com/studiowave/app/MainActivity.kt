@@ -209,6 +209,8 @@ private fun ArrangementWorkspace(
     var showAddTrack by remember { mutableStateOf(false) }
     var snapEnabled by remember { mutableStateOf(true) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var renameClipId by remember { mutableStateOf<String?>(null) }
+    var renameText by remember { mutableStateOf("") }
     var copiedClip by remember { mutableStateOf<Pair<StudioTrack, com.studiowave.app.data.WaveClip>?>(null) }
 
     fun addTrack(kind: String) {
@@ -255,9 +257,8 @@ private fun ArrangementWorkspace(
                 statusMessage = "Clip color changed"
             }
             "Rename" -> {
-                val renamed = clip.copy(name = if (clip.name.endsWith(" *")) clip.name.removeSuffix(" *") else clip.name + " *")
-                onProjectChange(project.copy(tracks = project.tracks.map { item -> if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clipId) renamed else c }) else item }))
-                statusMessage = "Clip renamed (tap Rename again to toggle marker)"
+                renameClipId = clipId
+                renameText = clip.name
             }
             "Snap" -> { snapEnabled = !snapEnabled; statusMessage = if (snapEnabled) "Snap on" else "Snap off" }
             "Delete" -> {
@@ -379,6 +380,34 @@ private fun ArrangementWorkspace(
                     }
                 }
             }
+        }
+        if (renameClipId != null) {
+            AlertDialog(
+                onDismissRequest = { renameClipId = null },
+                title = { Text("Rename clip") },
+                text = {
+                    OutlinedTextField(
+                        value = renameText,
+                        onValueChange = { renameText = it },
+                        singleLine = true,
+                        label = { Text("Clip name") }
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val id = renameClipId
+                        val cleanName = renameText.trim()
+                        if (id != null && cleanName.isNotEmpty()) {
+                            onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                                item.copy(clips = item.clips.map { clip -> if (clip.id == id) clip.copy(name = cleanName) else clip })
+                            }))
+                            statusMessage = "Clip renamed"
+                        }
+                        renameClipId = null
+                    }) { Text("Save") }
+                },
+                dismissButton = { TextButton(onClick = { renameClipId = null }) { Text("Cancel") } }
+            )
         }
     }
 }
