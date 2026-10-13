@@ -136,6 +136,7 @@ private fun StudioWaveApp() {
     var master by remember { mutableFloatStateOf(0.72f) }
     var masterPeakDbfs by remember { mutableFloatStateOf(-120f) }
     var masterRmsDbfs by remember { mutableFloatStateOf(-120f) }
+    var masterMomentaryLufs by remember { mutableFloatStateOf(-120f) }
     var masterPeakHistory by remember { mutableStateOf(List(48) { 0f }) }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showDock by remember { mutableStateOf(true) }
@@ -340,6 +341,7 @@ private fun StudioWaveApp() {
             val meter = arrangementPlayback.masterMeterSnapshot()
             masterPeakDbfs = meter.peakDbfs
             masterRmsDbfs = meter.rmsDbfs
+            masterMomentaryLufs = meter.momentaryLufs
             masterPeakHistory = masterPeakHistory.drop(1) + meter.peakLinear.coerceIn(0f, 1f)
             delay(50)
         }
@@ -386,6 +388,7 @@ private fun StudioWaveApp() {
                     master,
                     masterPeakDbfs,
                     masterRmsDbfs,
+                    masterMomentaryLufs,
                     masterPeakHistory,
                     musicalPositionLabel(playheadTick, project.ppq, project.numerator, project.denominator),
                     "${project.numerator}/${project.denominator}",
@@ -454,7 +457,7 @@ private fun StudioWaveApp() {
 @Composable
 private fun TransportBar(
     playing: Boolean, bpm: Int, master: Float,
-    peakDbfs: Float, rmsDbfs: Float, peakHistory: List<Float>,
+    peakDbfs: Float, rmsDbfs: Float, momentaryLufs: Float, peakHistory: List<Float>,
     positionLabel: String, timeSignatureLabel: String,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
     onUndo: () -> Unit, onRedo: () -> Unit,
@@ -481,12 +484,12 @@ private fun TransportBar(
         Spacer(Modifier.weight(1f))
         Text("MST", color = MutedText, fontSize = 7.sp)
         Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(46.dp).height(22.dp), valueRange = 0f..1f)
-        Column(Modifier.width(96.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+        Column(Modifier.width(122.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("PEAK", color = Mint, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 7.sp, maxLines = 1)
+                Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("M ${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            Canvas(Modifier.fillMaxWidth().height(10.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(9.dp)) {
                 drawLine(Color(0xFF343A40), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
                 peakHistory.forEachIndexed { index, level ->
                     val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
@@ -494,7 +497,7 @@ private fun TransportBar(
                     drawLine(Mint.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar), (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
                 }
             }
-            Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 7.sp, maxLines = 1)
+            Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 6.sp, maxLines = 1)
         }
     }
 }
