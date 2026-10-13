@@ -101,7 +101,7 @@ private fun StudioWaveApp() {
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
                         "MIXER" -> MixerWorkspace(project.tracks)
-                        "PIANO ROLL" -> PianoRollWorkspace()
+                        "PIANO ROLL" -> PianoRollWorkspace(onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "BROWSER" -> BrowserWorkspace()
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
@@ -261,10 +261,13 @@ private fun ArrangementWorkspace(
                     project.tracks.forEachIndexed { index, track ->
                         TrackHeader(track, index, verticalZoom, scrollTracks) { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) }
                     }
-                    Surface(color = Mint, shape = RoundedCornerShape(9.dp), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp).size(30.dp).clickable { addTrackMenu = !addTrackMenu }) {
-                        Box(contentAlignment = Alignment.Center) { Text("+", color = Room, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                    val showBottomAddTrack = project.tracks.size > 4 && scrollTracks + (4f / verticalZoom) >= project.tracks.size - 0.75f
+                    if (showBottomAddTrack) {
+                        Surface(color = Mint, shape = RoundedCornerShape(9.dp), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp).size(30.dp).clickable { addTrackMenu = !addTrackMenu }) {
+                            Box(contentAlignment = Alignment.Center) { Text("+", color = Room, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                        }
                     }
-                    if (addTrackMenu) {
+                    if (showBottomAddTrack && addTrackMenu) {
                         Surface(color = Raised, shape = RoundedCornerShape(10.dp), shadowElevation = 8.dp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)) {
                             Column(Modifier.width(150.dp).padding(5.dp)) {
                                 Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
@@ -347,9 +350,12 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onBack: () -> Unit) {
 @Composable
 private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("‹  BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+        Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
             Text((track?.name ?: "AUDIO").uppercase() + " • AUDIO EDITOR", color = Color.White, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Surface(color = Raised, shape = RoundedCornerShape(6.dp), modifier = Modifier.size(28.dp).clickable { onBack() }) {
+                Box(contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 20.sp) }
+            }
         }
         Spacer(Modifier.height(12.dp))
         Box(Modifier.fillMaxWidth().weight(1f).background(Raised, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
@@ -571,12 +577,16 @@ private fun TimelineGrid(
 }
 
 @Composable
-private fun PianoRollWorkspace() {
+private fun PianoRollWorkspace(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp)) {
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("PIANO ROLL", fontWeight = FontWeight.Bold, fontSize = 11.sp)
             Spacer(Modifier.weight(1f))
             Text("SNAP 1/16 • VELOCITY", color = MutedText, fontSize = 9.sp)
+            Spacer(Modifier.width(8.dp))
+            Surface(color = Raised, shape = RoundedCornerShape(6.dp), modifier = Modifier.size(27.dp).clickable { onBack() }) {
+                Box(contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 20.sp) }
+            }
         }
         Canvas(Modifier.fillMaxSize().padding(top = 4.dp)) {
             val rowH = size.height / 24f
