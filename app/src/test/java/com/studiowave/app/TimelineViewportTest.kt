@@ -69,10 +69,25 @@ class TimelineViewportTest {
         val initial = TimelineViewport(timebase, 74f, 3840.0, 900f, 104f)
         val anchorX = 104f + 420f
         val tickUnderAnchor = initial.screenXToTime(anchorX)
-        listOf(41f, 74f, 220f, 560f).forEach { scale ->
-            val zoomed = initial.zoomKeepingAnchor(scale, anchorX)
+        listOf(20f, 41f, 74f, 220f, 560f, 1200f, 2400f).forEach { requestedScale ->
+            val zoomed = initial.zoomKeepingAnchor(requestedScale, anchorX)
+            val effectiveScale = requestedScale.coerceIn(
+                TimelineViewport.MIN_PIXELS_PER_BAR, TimelineViewport.MAX_PIXELS_PER_BAR
+            )
+            assertEquals(effectiveScale, zoomed.pixelsPerBar, 0.001f)
             assertTrue(kotlin.math.abs(tickUnderAnchor - zoomed.screenXToTime(anchorX)) <= 1L)
         }
+    }
+
+    @Test fun viewportClampsInvalidScaleAndScrollWithoutOverflow() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewport = TimelineViewport(timebase, 74f, 3840.0, 800f)
+        assertEquals(TimelineViewport.MIN_PIXELS_PER_BAR,
+            viewport.zoomKeepingAnchor(0f, 200f).pixelsPerBar)
+        assertEquals(TimelineViewport.MAX_PIXELS_PER_BAR,
+            viewport.zoomKeepingAnchor(Float.POSITIVE_INFINITY, 200f).pixelsPerBar)
+        assertTrue(viewport.copy(scrollTimeTicks = Long.MAX_VALUE.toDouble())
+            .panByScreenPixels(-500f).scrollTimeTicks <= Long.MAX_VALUE.toDouble())
     }
 
     @Test fun snappingNeverProducesNegativeTicksOrZeroSizedSteps() {
