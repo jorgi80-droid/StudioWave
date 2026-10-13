@@ -592,6 +592,7 @@ private fun TimelineGrid(
                                 .width(with(density) { clipWidthPx.toDp() }.coerceAtLeast(24.dp))
                                 .fillMaxHeight()
                                 .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
+                                .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
                                 .pointerInput(clip.id, trackIndex, zoom) {
                                     detectDragGestures(
                                         onDragStart = {
