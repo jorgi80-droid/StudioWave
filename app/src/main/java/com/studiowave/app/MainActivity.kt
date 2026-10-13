@@ -134,18 +134,31 @@ private fun StudioWaveApp() {
     }
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            runCatching { context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
             val audioTrack = project.tracks.firstOrNull { it.kind == "audio" }
             val target = audioTrack ?: StudioTrack(name = "AUDIO 1", colorArgb = 0xFF3B82F6L, kind = "audio")
-            val clip = com.studiowave.app.data.WaveClip(
-                name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
-                startTick = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L,
-                lengthTicks = 15360L,
-                sourceUri = uri.toString()
-            )
-            val updatedTrack = target.copy(clips = target.clips + clip)
-            changeProject(project.copy(tracks = if (audioTrack == null) project.tracks + updatedTrack else project.tracks.map { if (it.id == target.id) updatedTrack else it }))
-            selectedWorkspace = "ARRANGEMENT"
+            when {
+                audioTrack == null && project.tracks.size >= StudioProject.MAX_TRACKS -> {
+                    audioError = "Track limit reached (${StudioProject.MAX_TRACKS}); remove a track before importing."
+                }
+                target.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK -> {
+                    audioError = "Clip limit reached for the audio track."
+                }
+                else -> {
+                    val clip = com.studiowave.app.data.WaveClip(
+                        name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
+                        startTick = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L,
+                        lengthTicks = 15360L,
+                        sourceUri = uri.toString()
+                    )
+                    val updatedTrack = target.copy(clips = target.clips + clip)
+                    changeProject(project.copy(tracks = if (audioTrack == null) project.tracks + updatedTrack else project.tracks.map { if (it.id == target.id) updatedTrack else it }))
+                    selectedWorkspace = "ARRANGEMENT"
+                    audioError = null
+                }
+            }
         }
     }
     val latestProject by rememberUpdatedState(project)
