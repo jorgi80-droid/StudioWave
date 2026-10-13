@@ -1576,10 +1576,10 @@ private fun TimelineGrid(
                                                 } ?: startIndex
                                             }
                                             val target = currentTracks.getOrNull(targetIndex)
-                                            val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
+                                            val barWidthPx = viewport.effectivePixelsPerBar
                                             val dragViewport = TimelineViewport(
                                                 timebase, barWidthPx, currentScroll.toDouble(),
-                                                size.width.toFloat(), trackHeaderWidthPx
+                                                timelineWidthPx, trackHeaderWidthPx
                                             )
                                             val dragStartX = dragViewport.timeToViewportX(dragOriginalTick)
                                             val rawStartTick = dragViewport.viewportXToTime(dragStartX + dragDx)
@@ -1688,10 +1688,11 @@ private fun TimelineGrid(
                                                 onDragStart = { resizeDeltaPx = 0f },
                                                 onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
                                                 onDragEnd = {
-                                                    val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
-                                                     val resizeViewport = TimelineViewport(timebase, barWidthPx, scrollTicks.toDouble(), viewportWidthPx, trackHeaderWidthPx)
+                                                    val barWidthPx = viewport.effectivePixelsPerBar
+                                                     val resizeViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), viewportWidthPx, trackHeaderWidthPx)
                                                      val originalEndX = resizeViewport.timeToViewportX(clip.startTick + clip.lengthTicks)
-                                                     val rawEndTick = resizeViewport.viewportXToTime(originalEndX + resizeDeltaPx).coerceAtLeast(clip.startTick + 1L)
+                                                     val rawEndTick = (clip.startTick + clip.lengthTicks.coerceAtLeast(1L) +
+                                                         resizeViewport.pixelsToTickDelta(resizeDeltaPx)).coerceAtLeast(clip.startTick + 1L)
                                                      val snapStep = snapDivision.ticks(timebase)
                                                      val snappedEndTick = if (snapToGrid && snapStep > 0L) timebase.snap(rawEndTick, snapDivision) else rawEndTick
                                                      val newLength = (snappedEndTick - clip.startTick).coerceAtLeast(if (snapToGrid && snapStep > 0L) snapStep else 1L)
