@@ -251,6 +251,48 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
 }
 
 @Composable
+private fun DrumSequencerWorkspace(track: StudioTrack?, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("‹  BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+            Text((track?.name ?: "DRUM").uppercase() + " • STEP SEQUENCER", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            (0..15).forEach { step ->
+                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.fillMaxWidth().height(70.dp).background(if (step % 4 == 0) Mint.copy(alpha = 0.65f) else Raised, RoundedCornerShape(4.dp)).clickable { }.padding(2.dp))
+                    Text((step + 1).toString(), color = MutedText, fontSize = 8.sp)
+                }
+            }
+        }
+        Text("Drum steps editor • per-step editing integration pending", color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 12.dp))
+    }
+}
+
+@Composable
+private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("‹  BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+            Text((track?.name ?: "AUDIO").uppercase() + " • AUDIO EDITOR", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(12.dp))
+        Box(Modifier.fillMaxWidth().weight(1f).background(Raised, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize().padding(12.dp)) {
+                val mid = size.height / 2f
+                for (i in 0..120) {
+                    val x = size.width * i / 120f
+                    val amp = (kotlin.math.abs(kotlin.math.sin(i * 1.71)) * size.height * 0.36f).toFloat()
+                    drawLine(Mint.copy(alpha = 0.8f), Offset(x, mid - amp), Offset(x, mid + amp), 1.2f)
+                }
+            }
+        }
+        Text("Waveform preview • source-linked editing integration pending", color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp))
+    }
+}
+
+@Composable
 private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit) {
     val accent = Color(track.colorArgb.toInt())
     Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = {}),
