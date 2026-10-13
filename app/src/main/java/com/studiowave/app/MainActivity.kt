@@ -525,7 +525,8 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
         loading = true
         val result = runCatching {
             withContext(Dispatchers.IO) {
-                decodeWaveformPeaks(context, Uri.parse(source), 240)
+                WaveformPeakCache.get(source) ?: decodeWaveformPeaks(context, Uri.parse(source), 240)
+                    .also { WaveformPeakCache.put(source, it) }
             }
         }
         result.onSuccess { waveform = it }
@@ -810,14 +811,7 @@ private fun TimelineGrid(
                                     }
                                 }
                             } else if (track.kind == "audio") {
-                                Canvas(Modifier.fillMaxSize()) {
-                                    val peaks = waveformPeaksForUnlinkedClip(clip.sourceUri)
-                                    for (i in peaks.indices) {
-                                        val h = peaks[i] * size.height * 0.48f
-                                        val x = (i + 0.5f) * size.width / peaks.size.coerceAtLeast(1)
-                                        drawLine(accent, Offset(x, size.height / 2 - h), Offset(x, size.height / 2 + h), 1.4f)
-                                    }
-                                }
+                                AudioClipWaveform(clip.sourceUri, accent)
                             }
                         }
                         }
@@ -1133,5 +1127,40 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
     }
 }
 
-private fun waveformPeaksForUnlinkedClip(sourceUri: String?): List<Float> =
-    List(48) { 0f }
+private object WaveformPeakCache {
+    private val cache = android.util.LruCache<String, List<Float>>(12)
+    @Synchronized fun get(uri: String): List<Float>? = cache.get(uri)
+    @Synchronized fun put(uri: String, peaks: List<Float>) {
+        cache.put(uri, peaks)
+    }
+}
+
+@Composable
+private fun AudioClipWaveform(sourceUri: String?, accent: Color) {
+    val context = LocalContext.current
+    var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
+    LaunchedEffect(sourceUri) {
+        peaks = emptyList()
+        if (sourceUri.isNullOrBlank()) return@LaunchedEffect
+        val loaded = runCatching {
+            withContext(Dispatchers.IO) {
+                WaveformPeakCache.get(sourceUri) ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 48)
+                    .also { WaveformPeakCache.put(sourceUri, it) }
+            }
+        }.getOrDefault(emptyList())
+        peaks = loaded
+    }
+    Canvas(Modifier.fillMaxSize()) {
+        if (peaks.isEmpty()) {
+            drawLine(accent.copy(alpha = 0.25f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 1f)
+        } else {
+            val mid = size.height / 2f
+            val dx = size.width / peaks.size.coerceAtLeast(1)
+            peaks.forEachIndexed { index, peak ->
+                val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.48f
+                val x = (index + 0.5f) * dx
+                drawLine(accent, Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 2f))
+            }
+        }
+    }
+}
