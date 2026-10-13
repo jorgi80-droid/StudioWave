@@ -1037,7 +1037,6 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
         val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION))
             format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(1L) else 1L
         val peaks = FloatArray(peakCount)
-        val counts = IntArray(peakCount)
         val info = android.media.MediaCodec.BufferInfo()
         var inputDone = false
         var outputDone = false
@@ -1114,7 +1113,6 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
                             val timeUs = info.presentationTimeUs + (frame.toLong() * 1_000_000L / currentRate)
                             val bin = ((timeUs.toDouble() / durationUs) * peakCount).toInt().coerceIn(0, peakCount - 1)
                             peaks[bin] = maxOf(peaks[bin], peak)
-                            counts[bin]++
                         }
                         if (frames > 0) {
                             decodedFrames += frames
