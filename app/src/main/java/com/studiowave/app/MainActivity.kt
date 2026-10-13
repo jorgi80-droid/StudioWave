@@ -751,21 +751,19 @@ private fun TimelineGrid(
             .pointerInput(Unit) { detectTapGestures(onLongPress = { onTimelineLongPress() }) }
             .pointerInput(baseBarWidthPx) {
                 detectTransformGestures(panZoomLock = true) { centroid, pan, gestureZoom, _ ->
+                    // One-finger drags belong to clips. Pan/zoom only with a multi-touch gesture.
+                    if (centroid == Offset.Unspecified || gestureZoom == 1f && pan == Offset.Zero) return@detectTransformGestures
                     val oldZoom = currentZoom.coerceIn(0.55f, 2.8f)
                     val newZoom = (oldZoom * gestureZoom).coerceIn(0.55f, 2.8f)
                     val oldBarWidthPx = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
                     val newBarWidthPx = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
-
-                    // Keep the bar under the gesture centroid anchored while zooming.
                     val contentUnderCentroid = currentScroll * oldBarWidthPx + centroid.x
                     val zoomAdjustedScroll = (contentUnderCentroid - centroid.x) / newBarWidthPx
-                    val panAdjustedScroll = -pan.x / newBarWidthPx
-                    val newScroll = (zoomAdjustedScroll + panAdjustedScroll).coerceAtLeast(0f)
+                    val newScroll = (zoomAdjustedScroll - pan.x / newBarWidthPx).coerceAtLeast(0f)
                     val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                     val newVerticalZoom = (oldVerticalZoom * gestureZoom).coerceIn(0.65f, 1.8f)
                     val trackHeight = with(density) { 67.dp.toPx() }
                     val verticalScroll = (currentScrollTracks - pan.y / (trackHeight * newVerticalZoom)).coerceAtLeast(0f)
-
                     if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                     if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
@@ -861,7 +859,8 @@ private fun TimelineGrid(
                                         onDrag = { change, amount -> change.consume(); dragDx += amount.x; dragDy += amount.y },
                                         onDragEnd = {
                                             val source = project.tracks.getOrNull(dragFromTrack)
-                                            val targetIndex = (dragFromTrack + (dragDy / trackHeightPx).toInt()).coerceIn(0, project.tracks.lastIndex.coerceAtLeast(0))
+                                            val rowOffset = (dragDy / trackHeightPx).toInt()
+                                            val targetIndex = (dragFromTrack + rowOffset).coerceIn(0, project.tracks.lastIndex.coerceAtLeast(0))
                                             val target = project.tracks.getOrNull(targetIndex)
                                             val sixteenthWidthPx = (baseBarWidthPx * zoom) / 16f
                                             val movedSixteenths = (dragDx / sixteenthWidthPx.coerceAtLeast(1f)).toLong()
