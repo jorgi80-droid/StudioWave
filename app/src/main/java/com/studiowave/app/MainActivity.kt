@@ -1240,7 +1240,7 @@ private fun TimelineGrid(
                 .height(24.dp)
                 .pointerInput(scrollTicks, zoom, timebase) {
                     detectTapGestures(onTap = { offset ->
-                        currentOnSeekTick(viewport.copy(viewportWidthPx = size.width).viewportXToTime(offset.x))
+                        currentOnSeekTick(viewport.copy(viewportWidthPx = size.width.toFloat()).viewportXToTime(offset.x))
                     })
                 }
         ) {
