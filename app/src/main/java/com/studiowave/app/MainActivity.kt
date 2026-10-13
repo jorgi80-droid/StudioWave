@@ -633,11 +633,29 @@ private fun ArrangementWorkspace(
         showTimelineMenu = false
     }
 
-    Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val fitTimebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
+            TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+        }
+        val maxEndTick = remember(project.tracks) {
+            project.tracks.asSequence().flatMap { it.clips.asSequence() }.maxOfOrNull { clip ->
+                val start = clip.startTick.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 2L)
+                val length = clip.lengthTicks.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / 2L)
+                start + length
+            } ?: 1L
+        }.coerceAtLeast(1L)
+        val fitZoom = remember(maxWidth, maxEndTick, fitTimebase, density) {
+            val timelineWidthPx = with(density) { (maxWidth - 8.dp - 104.dp).coerceAtLeast(1.dp).toPx() }
+            val baseBarWidthPx = with(density) { 74.dp.toPx() }.coerceAtLeast(1f)
+            (timelineWidthPx.toDouble() * fitTimebase.ticksPerBar.toDouble() /
+                (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
+                .toFloat().coerceIn(0.55f, 2.8f)
+        }
+        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
         Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF), maxLines = 1)
             SmallAction("FIT") {
-                onZoom(1f)
+                onZoom(fitZoom)
                 onVerticalZoom(1f)
                 onScroll(0f)
                 onScrollTracks(0f)
@@ -1014,6 +1032,7 @@ private fun TrackHeader(
                     },
                 contentAlignment = Alignment.Center
             ) { Text("↕", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+        }
         }
     }
 }
