@@ -133,4 +133,38 @@ class TimelineViewportTest {
         }
     }
 
+    @Test fun clipEndRemainsAlignedWithRulerAcrossZoomLevels() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val clipStart = timebase.ticksPerBar * 4L + 720L
+        val clipLength = timebase.ticksPerBar * 5L + 960L
+        val clipEnd = clipStart + clipLength
+
+        listOf(20f, 41f, 74f, 180f, 600f, 1199f, 1800f).forEach { requestedScale ->
+            val viewport = TimelineViewport(
+                timebase, requestedScale, 2400.0, 1200f, 104f
+            )
+            val drawnWidth = viewport.tickDeltaToPixels(clipLength)
+            val mappedWidth = viewport.timeToViewportX(clipEnd) - viewport.timeToViewportX(clipStart)
+            assertEquals("scale=$requestedScale", mappedWidth, drawnWidth, 0.01f)
+            assertEquals("scale=$requestedScale", viewport.effectivePixelsPerBar,
+                (viewport.pixelsPerTick * timebase.ticksPerBar).toFloat(), 0.01f)
+            assertTrue("scale=$requestedScale", kotlin.math.abs(
+                viewport.viewportXToTime(viewport.timeToViewportX(clipEnd)) - clipEnd
+            ) <= 1L)
+        }
+    }
+
+    @Test fun freeResizeDeltaDoesNotDependOnZoomOrScroll() {
+        val timebase = TimelineTimebase(126, 4, 4, 960)
+        val startTick = 8123L
+        val lengthTicks = 19321L
+        listOf(36f, 74f, 180f, 500f, 1100f).forEach { scale ->
+            val viewport = TimelineViewport(timebase, scale, 5000.0, 900f)
+            val endX = viewport.timeToViewportX(startTick + lengthTicks)
+            val startX = viewport.timeToViewportX(startTick)
+            val lengthFromPixels = viewport.pixelsToTickDelta(endX - startX)
+            assertTrue(kotlin.math.abs(lengthFromPixels - lengthTicks) <= 1L)
+        }
+    }
+
 }
