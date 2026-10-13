@@ -414,10 +414,22 @@ private fun StudioWaveApp() {
                     }
                 }
                 if (showDock) {
-                    Spacer(Modifier.height(3.dp))
-                    DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
+                    Box(Modifier.fillMaxWidth().height(105.dp)) {
+                        DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
+                        Surface(
+                            color = Raised.copy(alpha = 0.96f),
+                            shape = RoundedCornerShape(50),
+                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 5.dp)
+                                .size(24.dp).clickable { showDock = false }
+                        ) { Box(contentAlignment = Alignment.Center) { Text("×", color = MutedText, fontSize = 16.sp) } }
+                    }
                 } else {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { SmallAction("SHOW DEVICES") { showDock = true } }
+                    Box(Modifier.fillMaxWidth().height(25.dp), contentAlignment = Alignment.CenterEnd) {
+                        Surface(
+                            color = Raised, shape = RoundedCornerShape(50),
+                            modifier = Modifier.size(24.dp).clickable { showDock = true }
+                        ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Tune, contentDescription = "Show devices", tint = Mint, modifier = Modifier.size(15.dp)) } }
+                    }
                 }
             }
         }
