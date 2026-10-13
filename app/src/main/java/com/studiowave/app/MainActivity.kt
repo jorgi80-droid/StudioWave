@@ -281,7 +281,6 @@ private fun TimelineGrid(
         ) {
             for (bar in 0..256) {
                 val leftPx = bar * baseBarWidthPx * zoom - scrollBars * baseBarWidthPx * zoom
-                if (leftPx <= size.width && leftPx + baseBarWidthPx * zoom >= 0f) {
                     Box(
                         Modifier
                             .offset(x = with(density) { leftPx.toDp() })
@@ -295,7 +294,6 @@ private fun TimelineGrid(
                             color = if (bar % 4 == 0) Color.White else MutedText
                         )
                     }
-                }
             }
         }
 
@@ -308,7 +306,6 @@ private fun TimelineGrid(
                         val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barWidth
                         val displayLeftPx = clipStartPx - scrollBars * barWidth
                         val accent = accentColors.getOrElse(trackIndex) { Mint }
-                        if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= size.width) {
                             Column(
                                 Modifier
                                     .offset(x = with(density) { displayLeftPx.toDp() })
@@ -351,7 +348,6 @@ private fun TimelineGrid(
                                     }
                                 }
                             }
-                        }
                     }
                 }
             }
