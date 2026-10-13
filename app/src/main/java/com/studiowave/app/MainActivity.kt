@@ -877,6 +877,26 @@ private fun TimelineGrid(
             .pointerInput(baseBarWidthPx) {
                 awaitEachGesture {
                     val firstDown = awaitFirstDown(requireUnconsumed = false)
+                    // A one-finger drag that starts on a clip belongs to the clip, never
+                    // to viewport navigation. Empty arrangement space may still pan.
+                    val startsOnClip = run {
+                        val hitProject = latestProject
+                        val rowY = firstDown.position.y - rulerHeightPx
+                        val rowIndex = hitProject.tracks.indices.firstOrNull { index ->
+                            val row = currentTrackRows.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
+                            val topPx = with(density) { ((row.topDp - currentScrollTracks * 67f) * currentVerticalZoom).dp.toPx() }
+                            val heightPx = with(density) { (row.heightDp * currentVerticalZoom).dp.toPx() }
+                            rowY >= topPx && rowY <= topPx + heightPx
+                        }
+                        val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
+                        val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
+                        hitTrack?.clips?.any { clip ->
+                            val left = clip.startTick.toFloat() / 3840f * barWidthPx - currentScroll * barWidthPx
+                            val width = (clip.lengthTicks.toFloat() / 3840f * barWidthPx)
+                                .coerceAtLeast(with(density) { 24.dp.toPx() })
+                            firstDown.position.x >= left && firstDown.position.x <= left + width
+                        } == true
+                    }
                     var previousSinglePosition = firstDown.position
                     var previousCentroid = Offset.Zero
                     var previousSpan = 0f
@@ -914,12 +934,22 @@ private fun TimelineGrid(
                             initialized = true
                             event.changes.forEach { change -> if (change.position != change.previousPosition) change.consume() }
                         } else {
-                            // One-finger scrolling is intentionally disabled here. Clip and
-                            // track children own drags; this handler only handles two-finger
-                            // navigation above, preventing viewport movement during clip edits.
                             initialized = false
                             previousSpan = 0f
-                            previousSinglePosition = pointers.firstOrNull()?.position ?: previousSinglePosition
+                            val pointer = pointers.firstOrNull()
+                            if (pointer != null) {
+                                val delta = pointer.position - previousSinglePosition
+                                if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
+                                    val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
+                                    val newScroll = (currentScroll - delta.x / barWidthPx).coerceAtLeast(0f)
+                                    val rowHeightPx = with(density) { 67.dp.toPx() } * currentVerticalZoom
+                                    val newTrackScroll = (currentScrollTracks - delta.y / rowHeightPx.coerceAtLeast(1f)).coerceAtLeast(0f)
+                                    if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
+                                    if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
+                                    pointer.consume()
+                                }
+                                previousSinglePosition = pointer.position
+                            }
                         }
                     } while (event.changes.any { it.pressed })
                 }
