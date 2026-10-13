@@ -110,7 +110,7 @@ private fun StudioWaveApp() {
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showDock by remember { mutableStateOf(true) }
     var zoom by remember { mutableFloatStateOf(1f) }
-    var scrollBars by remember { mutableFloatStateOf(0f) }
+    var scrollTicks by remember { mutableFloatStateOf(0f) }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
@@ -276,7 +276,7 @@ private fun StudioWaveApp() {
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
                             trackHeights = trackHeightsDp,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) })
                     }
@@ -353,7 +353,7 @@ private fun ArrangementWorkspace(
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
     zoom: Float, onZoom: (Float) -> Unit,
-    scrollBars: Float, onScroll: (Float) -> Unit,
+    scrollTicks: Float, onScroll: (Float) -> Unit,
     verticalZoom: Float, onVerticalZoom: (Float) -> Unit,
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
@@ -374,6 +374,7 @@ private fun ArrangementWorkspace(
     var showTimelineMenu by remember { mutableStateOf(false) }
     var showAddTrack by remember { mutableStateOf(false) }
     var snapEnabled by remember { mutableStateOf(true) }
+    var snapDivision by remember { mutableStateOf(SnapDivision.SIXTEENTH_BEAT) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var renameClipId by remember { mutableStateOf<String?>(null) }
     var renameText by remember { mutableStateOf("") }
@@ -489,6 +490,8 @@ private fun ArrangementWorkspace(
             SmallAction("AUDIO") { addTrack("audio") }
             Spacer(Modifier.weight(1f))
             SmallAction("FIT") { onZoom(1f); onVerticalZoom(1f); onScroll(0f); onScrollTracks(0f) }
+            SmallAction(if (snapEnabled) "SNAP ON" else "SNAP OFF") { snapEnabled = !snapEnabled }
+            SmallAction(snapDivision.label) { snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it } }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.width(104.dp)) {
@@ -555,8 +558,8 @@ private fun ArrangementWorkspace(
             }
             TimelineGrid(
                 modifier = Modifier.weight(1f).fillMaxHeight(), project = project, zoom = zoom, onZoom = onZoom,
-                scrollBars = scrollBars, onScroll = onScroll, verticalZoom = verticalZoom, onVerticalZoom = onVerticalZoom,
-                scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, trackRowLayout = trackRowLayout, snapEnabled = snapEnabled, selectedClip = selectedClip,
+                scrollTicks = scrollTicks, onScroll = onScroll, verticalZoom = verticalZoom, onVerticalZoom = onVerticalZoom,
+                scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, trackRowLayout = trackRowLayout, snapEnabled = snapEnabled, snapDivision = snapDivision, selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it },
                 onOpenEditor = { clipId ->
                     if (clipId == null) {
@@ -828,7 +831,7 @@ private fun TimelineGrid(
     project: StudioProject,
     zoom: Float,
     onZoom: (Float) -> Unit,
-    scrollBars: Float,
+    scrollTicks: Float,
     onScroll: (Float) -> Unit,
     verticalZoom: Float,
     onVerticalZoom: (Float) -> Unit,
@@ -857,7 +860,7 @@ private fun TimelineGrid(
     val trackCount = project.tracks.size
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
-    val currentScroll by rememberUpdatedState(scrollBars)
+    val currentScroll by rememberUpdatedState(scrollTicks)
     val currentScrollTracks by rememberUpdatedState(scrollTracks)
     val currentVerticalZoom by rememberUpdatedState(verticalZoom)
     val currentOnVerticalZoom by rememberUpdatedState(onVerticalZoom)
@@ -963,10 +966,10 @@ private fun TimelineGrid(
             detectTapGestures(onLongPress = { onTimelineLongPress() })
         }) {
             val barWidth = baseBarWidthPx * zoom
-            val firstVisibleBar = (scrollBars - 1f / zoom).toInt().coerceAtLeast(0)
-            val lastVisibleBar = (scrollBars + size.width / barWidth + 2f).toInt().coerceAtMost(4096)
+            val firstVisibleBar = (scrollTicks - 1f / zoom).toInt().coerceAtLeast(0)
+            val lastVisibleBar = (scrollTicks + size.width / barWidth + 2f).toInt().coerceAtMost(4096)
             for (bar in firstVisibleBar..lastVisibleBar) {
-                val x = bar * barWidth - scrollBars * barWidth
+                val x = bar * barWidth - scrollTicks * barWidth
                 if (x >= -barWidth && x <= size.width + barWidth) {
                     drawLine(
                         if (bar % 4 == 0) Color(0xFF51555D) else Color(0xFF32363D),
@@ -992,10 +995,10 @@ private fun TimelineGrid(
                 .height(24.dp)
         ) {
             val barWidth = baseBarWidthPx * zoom
-            val firstVisibleBar = (scrollBars - 1f / zoom).toInt().coerceAtLeast(0)
-            val lastVisibleBar = (scrollBars + size.width / barWidth + 2f).toInt().coerceAtMost(4096)
+            val firstVisibleBar = (scrollTicks - 1f / zoom).toInt().coerceAtLeast(0)
+            val lastVisibleBar = (scrollTicks + size.width / barWidth + 2f).toInt().coerceAtMost(4096)
             for (bar in firstVisibleBar..lastVisibleBar) {
-                val x = bar * barWidth - scrollBars * barWidth
+                val x = bar * barWidth - scrollTicks * barWidth
                 if (bar % 4 == 0) {
                     drawContext.canvas.nativeCanvas.drawText(
                         (bar + 1).toString(),
@@ -1028,7 +1031,7 @@ private fun TimelineGrid(
                     track.clips.forEach { clip ->
                         val clipStartPx = clip.startTick.toFloat() / 3840f * barWidth
                         val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barWidth
-                        val displayLeftPx = clipStartPx - scrollBars * barWidth
+                        val displayLeftPx = clipStartPx - scrollTicks * barWidth
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
@@ -1174,7 +1177,7 @@ private fun TimelineGrid(
         if (menuTrack != null && menuClip != null && clipMenuClipId != null) {
             val trackIndex = project.tracks.indexOfFirst { it.id == menuTrack.id }
             val barWidth = baseBarWidthPx * zoom
-            val clipLeft = with(density) { (menuClip.startTick.toFloat() / 3840f * barWidth - scrollBars * barWidth).toDp() }
+            val clipLeft = with(density) { (menuClip.startTick.toFloat() / 3840f * barWidth - scrollTicks * barWidth).toDp() }
             val menuWidth = 220.dp
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
