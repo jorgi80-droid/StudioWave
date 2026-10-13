@@ -558,6 +558,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 var blockSquares = 0.0
                 for (i in 0 until sampleCount) {
                     val sample = mix[i].coerceIn(-0.98f, 0.98f)
+                    mix[i] = sample // Meter the same clipped master signal that is sent to AudioTrack.
                     val absolute = kotlin.math.abs(sample)
                     if (absolute > blockPeak) blockPeak = absolute
                     blockSquares += sample.toDouble() * sample.toDouble()
