@@ -722,12 +722,16 @@ private fun ArrangementWorkspace(
                     if (showBottomAddTrack) {
                         Surface(
                             color = Mint,
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp).size(28.dp)
-                                .clickable { addTrackMenu = !addTrackMenu }
+                            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp),
+                            shadowElevation = 5.dp,
+                            modifier = Modifier.align(Alignment.BottomEnd).padding(end = 5.dp, bottom = 5.dp)
+                                .size(34.dp).clickable { addTrackMenu = !addTrackMenu }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(if (addTrackMenu) "×" else "+", color = Room, fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                                Text(if (addTrackMenu) "×" else "✦", color = Room, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                            }
+                        }
+                    }                   Text(if (addTrackMenu) "×" else "+", color = Room, fontSize = 21.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
