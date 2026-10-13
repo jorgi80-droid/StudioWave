@@ -95,7 +95,8 @@ data class TimelineViewport(
     /** Change scale without changing the musical tick under the screen anchor. */
     fun zoomKeepingAnchor(newPixelsPerBar: Float, anchorScreenX: Float): TimelineViewport {
         val anchorTick = screenXToTime(anchorScreenX).toDouble()
-        val clampedScale = newPixelsPerBar.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
+        val requestedScale = if (newPixelsPerBar.isFinite()) newPixelsPerBar else MAX_PIXELS_PER_BAR
+        val clampedScale = requestedScale.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
         val newScale = clampedScale.toDouble() / timebase.ticksPerBar.toDouble()
         // scrollTimeTicks is the tick at the left edge of the timeline pane, not
         // the left edge of the whole arrangement including the track header.
