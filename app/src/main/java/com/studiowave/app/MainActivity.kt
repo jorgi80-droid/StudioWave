@@ -440,7 +440,6 @@ private fun TransportBar(
         Text(positionLabel, fontSize = 9.sp, color = Color(0xFFDADEE5), maxLines = 1)
         SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
         SmallIconButton(Icons.Default.Stop, MutedText, onStop)
-        SmallIconButton(Icons.Default.Mic, Red) { }
         SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
         SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
         SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
@@ -565,7 +564,9 @@ private fun ArrangementWorkspace(
                 if (track.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK) {
                     statusMessage = "Clip limit reached for this track"
                 } else {
-                    val duplicate = clip.copy(id = java.util.UUID.randomUUID().toString(), name = clip.name + " copy", startTick = clip.startTick + clip.lengthTicks)
+                    val nextStart = if (clip.startTick > Long.MAX_VALUE - clip.lengthTicks.coerceAtLeast(1L))
+                        Long.MAX_VALUE - clip.lengthTicks.coerceAtLeast(1L) else clip.startTick + clip.lengthTicks.coerceAtLeast(1L)
+                    val duplicate = clip.copy(id = java.util.UUID.randomUUID().toString(), name = clip.name + " copy", startTick = nextStart)
                     onProjectChange(project.copy(tracks = project.tracks.map { item -> if (item.id == track.id) item.copy(clips = item.clips + duplicate) else item }))
                     statusMessage = "Clip duplicated"
                 }
@@ -605,8 +606,22 @@ private fun ArrangementWorkspace(
             return
         }
         val source = copied.second
-        val nextStart = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L
-        val pasted = source.copy(id = java.util.UUID.randomUUID().toString(), name = source.name + " copy", startTick = nextStart)
+        if (target.kind != copied.first.kind) {
+            statusMessage = "Paste requires a track with matching type"
+            showTimelineMenu = false
+            return
+        }
+        if (target.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK) {
+            statusMessage = "Clip limit reached for this track"
+            showTimelineMenu = false
+            return
+        }
+        val nextStart = target.clips.maxOfOrNull {
+            if (it.startTick > Long.MAX_VALUE - it.lengthTicks.coerceAtLeast(1L)) Long.MAX_VALUE
+            else it.startTick + it.lengthTicks.coerceAtLeast(1L)
+        } ?: 0L
+        val safeStart = nextStart.coerceAtMost(Long.MAX_VALUE - source.lengthTicks.coerceAtLeast(1L))
+        val pasted = source.copy(id = java.util.UUID.randomUUID().toString(), name = source.name + " copy", startTick = safeStart)
         onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item -> if (index == targetIndex) item.copy(clips = item.clips + pasted) else item }))
         statusMessage = "Clip pasted"
         showTimelineMenu = false
@@ -652,11 +667,10 @@ private fun ArrangementWorkspace(
                                 onReorderTrack = { deltaPx ->
                                     val from = project.tracks.indexOfFirst { it.id == track.id }
                                     val fromRow = trackRowLayout.getOrNull(from)
-                                    if (from >= 0 && fromRow != null && project.tracks.size > 1) {
-                                        val desiredCenter = fromRow.topDp + fromRow.heightDp / 2f + deltaPx / (densityScale * verticalZoom).coerceAtLeast(0.1f)
-                                        val target = trackRowLayout.indices.minByOrNull { targetIndex ->
-                                            kotlin.math.abs(trackRowLayout[targetIndex].topDp + trackRowLayout[targetIndex].heightDp / 2f - desiredCenter)
-                                        } ?: from
+                                    if (from >= 0 && fromRow != null && project.tracks.size > 1 && deltaPx.isFinite()) {
+                                        val rowStep = (fromRow.heightDp * verticalZoom).coerceAtLeast(1f)
+                                        val steps = kotlin.math.round(deltaPx / (densityScale * rowStep)).toInt()
+                                        val target = (from + steps).coerceIn(0, project.tracks.lastIndex)
                                         if (target != from) {
                                             val reordered = project.tracks.toMutableList()
                                             reordered.add(target, reordered.removeAt(from))
@@ -1101,13 +1115,15 @@ private fun TimelineGrid(
                                 val newZoom = (oldZoom * zoomFactor).coerceIn(0.55f, 2.8f)
                                 val oldBarWidth = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
                                 val newBarWidth = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
-                                val panY = centroid.y - previousCentroid.y
-                                val oldTicksPerPixel = timebase.ticksPerBar.toDouble() / oldBarWidth
-                                val newTicksPerPixel = timebase.ticksPerBar.toDouble() / newBarWidth
-                                val pinchViewport = TimelineViewport(timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
-                                 val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x).toDouble()
-                                 // Keep the musical tick beneath the pinch centroid anchored while centroid movement pans.
-                                 val newScroll = (anchorTick - centroid.x * newTicksPerPixel).toFloat().coerceAtLeast(0f)
+                                val pinchViewport = TimelineViewport(
+                                    timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx
+                                )
+                                val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x).toDouble()
+                                // Convert the global point to the timeline-pane-local x before calculating scroll.
+                                val newScroll = (anchorTick -
+                                    (centroid.x - trackHeaderWidthPx).toDouble() *
+                                    timebase.ticksPerBar.toDouble() / newBarWidth.toDouble()
+                                ).coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
                                  val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                  val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
                                  val anchorTrackDp = currentScrollTracks + (previousCentroid.y - rulerHeightPx) / (density.density * oldVerticalZoom).coerceAtLeast(0.1f)
@@ -1158,7 +1174,7 @@ private fun TimelineGrid(
                     val targetX = timelineWidthPx * 0.70f
                     val nextScroll = (playheadTick.toDouble() -
                         targetX.toDouble() / barWidthPx * timebase.ticksPerBar.toDouble())
-                        .coerceAtLeast(0.0).toFloat()
+                        .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
                     if (kotlin.math.abs(nextScroll - scrollTicks) > 1f) currentOnScroll(nextScroll)
                 }
             }

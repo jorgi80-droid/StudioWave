@@ -24,7 +24,11 @@ data class TimelineTimebase(
         val safeTick = tick.coerceAtLeast(0L)
         val step = division.ticks(this)
         if (step <= 0L) return safeTick
-        return ((safeTick.toDouble() / step).roundToLong() * step).coerceAtLeast(0L)
+        val quotient = safeTick / step
+        val remainder = safeTick % step
+        val roundedQuotient = if (remainder >= (step + 1L) / 2L) quotient + 1L else quotient
+        return if (roundedQuotient > Long.MAX_VALUE / step) Long.MAX_VALUE - (Long.MAX_VALUE % step)
+        else (roundedQuotient * step).coerceAtLeast(0L)
     }
 }
 
@@ -70,11 +74,14 @@ data class TimelineViewport(
     val trackHeaderWidthPx: Float = 0f
 ) {
     val pixelsPerTick: Double =
-        (pixelsPerBar.coerceAtLeast(1f).toDouble() / timebase.ticksPerBar.toDouble())
-            .coerceAtLeast(0.000001)
+        ((if (pixelsPerBar.isFinite()) pixelsPerBar else MIN_PIXELS_PER_BAR)
+            .coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR).toDouble() /
+            timebase.ticksPerBar.toDouble()).coerceAtLeast(0.000001)
 
-    fun timeToScreenX(tick: Long): Float =
-        (trackHeaderWidthPx + (tick.toDouble() - scrollTimeTicks) * pixelsPerTick).toFloat()
+    fun timeToScreenX(tick: Long): Float {
+        val x = trackHeaderWidthPx.toDouble() + (tick.toDouble() - scrollTimeTicks) * pixelsPerTick
+        return x.coerceIn(-Float.MAX_VALUE.toDouble(), Float.MAX_VALUE.toDouble()).toFloat()
+    }
 
     fun screenXToTime(screenX: Float): Long =
         (scrollTimeTicks + (screenX.toDouble() - trackHeaderWidthPx) / pixelsPerTick)

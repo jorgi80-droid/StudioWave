@@ -100,6 +100,21 @@ class TimelineViewportTest {
             .panByScreenPixels(-500f).scrollTimeTicks <= Long.MAX_VALUE.toDouble())
     }
 
+    @Test fun snapDoesNotWrapNearLongMaxValue() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val snapped = timebase.snap(Long.MAX_VALUE, SnapDivision.BAR)
+        assertTrue(snapped >= 0L)
+        assertTrue(snapped <= Long.MAX_VALUE)
+        assertEquals(0L, snapped % timebase.ticksPerBar)
+    }
+
+    @Test fun viewportClampsNanScaleAndNonFiniteScrollCoordinates() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewport = TimelineViewport(timebase, Float.NaN, 0.0, 640f)
+        assertEquals(TimelineViewport.MIN_PIXELS_PER_BAR, viewport.pixelsPerTick.toFloat() * timebase.ticksPerBar, 0.01f)
+        assertTrue(viewport.timeToScreenX(Long.MAX_VALUE).isFinite())
+    }
+
     @Test fun snappingNeverProducesNegativeTicksOrZeroSizedSteps() {
         val timebase = TimelineTimebase(120, 4, 4, 960)
         listOf(SnapDivision.BAR, SnapDivision.BEAT, SnapDivision.SIXTEENTH_BEAT,
