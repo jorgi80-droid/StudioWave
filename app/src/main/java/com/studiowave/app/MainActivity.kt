@@ -750,24 +750,41 @@ private fun TimelineGrid(
             .clipToBounds()
             .pointerInput(Unit) { detectTapGestures(onLongPress = { onTimelineLongPress() }) }
             .pointerInput(baseBarWidthPx) {
-                detectTransformGestures(panZoomLock = true) { centroid, pan, gestureZoom, _ ->
-                    // One-finger drags belong to clips. Pan/zoom only with a multi-touch gesture.
-                    if (centroid == Offset.Unspecified || gestureZoom == 1f && pan == Offset.Zero) return@detectTransformGestures
-                    val oldZoom = currentZoom.coerceIn(0.55f, 2.8f)
-                    val newZoom = (oldZoom * gestureZoom).coerceIn(0.55f, 2.8f)
-                    val oldBarWidthPx = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
-                    val newBarWidthPx = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
-                    val contentUnderCentroid = currentScroll * oldBarWidthPx + centroid.x
-                    val zoomAdjustedScroll = (contentUnderCentroid - centroid.x) / newBarWidthPx
-                    val newScroll = (zoomAdjustedScroll - pan.x / newBarWidthPx).coerceAtLeast(0f)
-                    val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
-                    val newVerticalZoom = (oldVerticalZoom * gestureZoom).coerceIn(0.65f, 1.8f)
-                    val trackHeight = with(density) { 67.dp.toPx() }
-                    val verticalScroll = (currentScrollTracks - pan.y / (trackHeight * newVerticalZoom)).coerceAtLeast(0f)
-                    if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
-                    if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
-                    if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
-                    if (kotlin.math.abs(verticalScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(verticalScroll)
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var multiTouch = false
+                    do {
+                        val event = awaitPointerEvent()
+                        val pressedCount = event.changes.count { it.pressed }
+                        if (pressedCount >= 2) multiTouch = true
+                        if (multiTouch) {
+                            val pressed = event.changes.filter { it.pressed }
+                            if (pressed.size >= 2) {
+                                val centroidX = pressed.map { it.position.x }.average().toFloat()
+                                val centroidY = pressed.map { it.position.y }.average().toFloat()
+                                val panX = pressed.sumOf { it.positionChange().x.toDouble() }.toFloat() / pressed.size
+                                val panY = pressed.sumOf { it.positionChange().y.toDouble() }.toFloat() / pressed.size
+                                val oldZoom = currentZoom.coerceIn(0.55f, 2.8f)
+                                val span = pressed.sumOf { (it.position - Offset(centroidX, centroidY)).getDistance().toDouble() }.toFloat()
+                                val previousSpan = pressed.sumOf { (it.previousPosition - Offset(centroidX - panX, centroidY - panY)).getDistance().toDouble() }.toFloat()
+                                val gestureZoom = if (previousSpan > 1f && span > 1f) (span / previousSpan).coerceIn(0.85f, 1.18f) else 1f
+                                val newZoom = (oldZoom * gestureZoom).coerceIn(0.55f, 2.8f)
+                                val oldBarWidthPx = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
+                                val newBarWidthPx = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
+                                val contentUnderCentroid = currentScroll * oldBarWidthPx + centroidX
+                                val newScroll = ((contentUnderCentroid - centroidX) / newBarWidthPx - panX / newBarWidthPx).coerceAtLeast(0f)
+                                val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                                val newVerticalZoom = (oldVerticalZoom * gestureZoom).coerceIn(0.65f, 1.8f)
+                                val trackHeight = with(density) { 67.dp.toPx() }
+                                val newTrackScroll = (currentScrollTracks - panY / (trackHeight * newVerticalZoom)).coerceAtLeast(0f)
+                                if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
+                                if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
+                                if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
+                                if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
+                                event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            }
+                        }
+                    } while (event.changes.any { it.pressed })
                 }
             }
     ) {
