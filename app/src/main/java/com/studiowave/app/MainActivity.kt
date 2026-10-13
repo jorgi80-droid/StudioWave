@@ -61,7 +61,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.studiowave.app.audio.NativeAudioEngine
 import com.studiowave.app.data.StudioProject
+import com.studiowave.app.data.StudioProjectFile
 import com.studiowave.app.data.StudioTrack
+import android.widget.Toast
 
 private val Room = Color(0xFF141517)
 private val CanvasSurface = Color(0xFF1E2024)
@@ -85,6 +87,16 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = android.graphics.Color.rgb(20, 21, 23)
         setContent { StudioWaveApp() }
     }
+}
+
+private fun suggestedSdawFileName(projectName: String): String {
+    val safeName = projectName.trim()
+        .replace(Regex("[^A-Za-z0-9 _.-]"), "")
+        .trim()
+        .trimEnd('.')
+        .take(64)
+        .ifBlank { "StudioWave Project" }
+    return if (safeName.endsWith(".sdaw", ignoreCase = true)) safeName else "$safeName.sdaw"
 }
 
 @Composable
@@ -118,6 +130,7 @@ private fun StudioWaveApp() {
     var scratchOffset by remember { mutableFloatStateOf(0f) }
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
+    var pendingExportProject by remember { mutableStateOf<StudioProject?>(null) }
     fun changeProject(next: StudioProject) {
         if (next != project) {
             undoHistory = (undoHistory + project).takeLast(100)
@@ -172,6 +185,63 @@ private fun StudioWaveApp() {
         }
     }
     val latestProject by rememberUpdatedState(project)
+    val exportProjectLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        val snapshot = pendingExportProject ?: latestProject
+        pendingExportProject = null
+        if (uri != null) {
+            playbackScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val output = context.contentResolver.openOutputStream(uri, "wt")
+                            ?: error("Tidak dapat membuka tujuan penyimpanan proyek")
+                        output.use { StudioProjectFile.write(snapshot, it) }
+                    }
+                    Toast.makeText(context, "Proyek .sdaw berhasil disimpan", Toast.LENGTH_SHORT).show()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    audioError = failure.message ?: "Ekspor proyek gagal"
+                }
+            }
+        }
+    }
+    val importProjectLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            playbackScope.launch {
+                try {
+                    val imported = withContext(Dispatchers.IO) {
+                        val input = context.contentResolver.openInputStream(uri)
+                            ?: error("Tidak dapat membuka file proyek")
+                        input.use { StudioProjectFile.read(it) }
+                    }
+                    playbackJob?.cancel()
+                    playbackJob = null
+                    arrangementPlayback.stop()
+                    engine.stop()
+                    playing = false
+                    playbackLoading = false
+                    changeProject(imported)
+                    bpm = imported.bpm
+                    scrollTicks = 0f
+                    scrollTracks = 0f
+                    zoom = 1f
+                    verticalZoom = 1f
+                    editorTrackId = null
+                    selectedWorkspace = "ARRANGEMENT"
+                    audioError = null
+                    Toast.makeText(context, "Proyek .sdaw berhasil dibuka", Toast.LENGTH_SHORT).show()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    audioError = failure.message ?: "Impor proyek gagal"
+                }
+            }
+        }
+    }
     LaunchedEffect(project) {
         delay(350)
         val snapshot = project
@@ -212,6 +282,11 @@ private fun StudioWaveApp() {
                     bpm = value.coerceIn(40, 240)
                     changeProject(project.copy(bpm = bpm))
                 }, { value -> master = value; arrangementPlayback.setMasterGain(value) }, onUndo = { undoProject() }, onRedo = { redoProject() },
+                    onSaveProject = {
+                        pendingExportProject = project
+                        exportProjectLauncher.launch(suggestedSdawFileName(project.name))
+                    },
+                    onOpenProject = { importProjectLauncher.launch(arrayOf("*/*")) },
                     onPlay = {
                         if (playing || playbackLoading) {
                             playbackJob?.cancel()
@@ -296,7 +371,8 @@ private fun StudioWaveApp() {
 private fun TransportBar(
     playing: Boolean, bpm: Int, master: Float,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
-    onUndo: () -> Unit, onRedo: () -> Unit
+    onUndo: () -> Unit, onRedo: () -> Unit,
+    onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     Row(
         Modifier.fillMaxWidth().height(40.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
@@ -314,6 +390,8 @@ private fun TransportBar(
         SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
         SmallIconButton(Icons.Default.Stop, MutedText, onStop)
         SmallIconButton(Icons.Default.Mic, Red) { }
+        SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
+        SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
         SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
         SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
         Spacer(Modifier.weight(1f))

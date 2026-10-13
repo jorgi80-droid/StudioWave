@@ -107,8 +107,11 @@ data class StudioProject(
         const val CURRENT_SCHEMA_VERSION = 1
         const val MAX_TRACKS = 256
         const val MAX_CLIPS_PER_TRACK = 4096
+        const val MAX_TOTAL_CLIPS = 16384
         const val MAX_NOTES_PER_CLIP = 16384
+        const val MAX_TOTAL_MIDI_NOTES = 65536
         const val MAX_DRUM_STEPS_PER_CLIP = 4096
+        const val MAX_TOTAL_DRUM_STEPS = 65536
 
         fun fromJson(json: JSONObject): StudioProject {
             val version = json.optInt("schemaVersion", 0)
@@ -119,6 +122,8 @@ data class StudioProject(
             val loadedTracks = buildList {
                 for (i in 0 until tracksJson.length()) {
                     val t = tracksJson.getJSONObject(i)
+                    val kind = t.optString("kind", "midi")
+                    require(kind in setOf("audio", "midi", "drum")) { "Unsupported track kind: $kind" }
                     val clipsJson = t.optJSONArray("clips") ?: JSONArray()
                     require(clipsJson.length() <= MAX_CLIPS_PER_TRACK) { "Track contains too many clips" }
                     val clips = buildList {
@@ -157,7 +162,7 @@ data class StudioProject(
                         id = t.optString("id", UUID.randomUUID().toString()),
                         name = t.optString("name", "Track ${i + 1}"),
                         colorArgb = t.optLong("colorArgb", 0xFF00D2B4),
-                        kind = t.optString("kind", "midi"),
+                        kind = kind,
                         muted = t.optBoolean("muted"),
                         solo = t.optBoolean("solo"),
                         volume = t.optDouble("volume", 0.8).toFloat().coerceIn(0f, 1.5f),
@@ -165,6 +170,22 @@ data class StudioProject(
                         clips = clips
                     ))
                 }
+            }
+            require(loadedTracks.sumOf { it.clips.size } <= MAX_TOTAL_CLIPS) {
+                "Project contains too many clips"
+            }
+            require(loadedTracks.sumOf { track -> track.clips.sumOf { it.midiNotes.size } } <= MAX_TOTAL_MIDI_NOTES) {
+                "Project contains too many MIDI notes"
+            }
+            require(loadedTracks.sumOf { track -> track.clips.sumOf { it.drumSteps.size } } <= MAX_TOTAL_DRUM_STEPS) {
+                "Project contains too many drum steps"
+            }
+            require(loadedTracks.map { it.id }.distinct().size == loadedTracks.size) {
+                "Project contains duplicate track IDs"
+            }
+            val allClips = loadedTracks.flatMap { it.clips }
+            require(allClips.map { it.id }.distinct().size == allClips.size) {
+                "Project contains duplicate clip IDs"
             }
             return StudioProject(
                 schemaVersion = version,

@@ -121,4 +121,37 @@ class ProjectModelTest {
         assertEquals(0L, restoredNote.startTick)
     }
 
+
+    @Test fun projectLoaderRejectsUnknownTrackKindsAndDuplicateIds() {
+        val unsupportedKind = StudioProject().toJson()
+        unsupportedKind.getJSONArray("tracks").getJSONObject(0).put("kind", "plugin")
+        try {
+            StudioProject.fromJson(unsupportedKind)
+            fail("unknown track kind must be rejected")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("Unsupported track kind"))
+        }
+
+        val duplicateTrack = StudioProject().toJson()
+        val tracks = duplicateTrack.getJSONArray("tracks")
+        tracks.getJSONObject(1).put("id", tracks.getJSONObject(0).getString("id"))
+        try {
+            StudioProject.fromJson(duplicateTrack)
+            fail("duplicate track ids must be rejected")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("duplicate track IDs"))
+        }
+
+        val duplicateClip = StudioProject().toJson()
+        val clipTracks = duplicateClip.getJSONArray("tracks")
+        val firstClipId = clipTracks.getJSONObject(0).getJSONArray("clips").getJSONObject(0).getString("id")
+        clipTracks.getJSONObject(1).getJSONArray("clips").getJSONObject(0).put("id", firstClipId)
+        try {
+            StudioProject.fromJson(duplicateClip)
+            fail("duplicate clip ids must be rejected")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("duplicate clip IDs"))
+        }
+    }
+
 }

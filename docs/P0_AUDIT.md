@@ -1,24 +1,28 @@
-# P0 Audit — StudioWave Independent Native Android DAW
+# StudioWave — P0/P1 Status Audit
 
-## Isolation
-- This is a standalone Android-native source tree. Do not copy from or modify `jorgi80-droid/openDAW`.
+## Implemented in the current Android-native source
+- Kotlin/Jetpack Compose landscape workspaces and the Arrangement timeline.
+- Shared musical timebase/viewport helpers for PPQ, meter, snap divisions, coordinate mapping and zoom anchors.
+- JSON project model with entity limits, autosave to app-private storage, and bounded .sdaw UTF-8 JSON import/export.
+- Arrangement playback path that decodes source-linked audio off the real-time thread and schedules audio clips, synthesized MIDI notes and drum steps.
+- Per-track volume, pan, mute/solo and master gain state in the arrangement mixer.
+- Audio-source PCM waveform preview decoding with cancellation and caching.
+- CI workflow that builds the debug APK and runs local unit tests.
 
-## Architecture
-- UI: Kotlin + Jetpack Compose, landscape workspace in `app/src/main/java/com/studiowave/app/MainActivity.kt`.
-- Data: JSON project model in `data/ProjectModel.kt`.
-- Audio prototype: `AudioTrack` stream through Kotlin/JNI and C++ tone generator.
-- Native build: CMake / Android NDK; Oboe is not yet integrated.
-- CI workflow: `.github/workflows/android-ci.yml` builds debug APK and runs unit tests on push/PR.
+## Remaining gaps (not implied to be complete by a successful build)
+- Audio recording and recording permissions/workflow.
+- Loop/selection regions, seekable playhead, reliable playback autoscroll, split/trim/time-stretch and clip looping.
+- Production instrument/plugin hosting and production DSP effect chains.
+- Low-latency Oboe backend (current output still uses AudioTrack), measured underrun/latency tests and Eco/Standard performance profiles.
+- Project bundle with copied/embedded source media; .sdaw currently stores JSON and source URI references only.
+- Mixdown/WAV export, recovery/versioned backups, settings/log screen, and real-device lifecycle/audio tests.
+- Final UX verification on Android hardware, especially long projects, large source files and repeated start/stop/import operations.
 
-## Current limitations
-The project is a prototype. Arrangement clips and waveforms are not yet backed by full audio/MIDI scheduling. Mixer routing, production DSP effects, recording, `.sdaw` persistence, autosave/recovery, ZIP sharing, mastering, WAV export, full Settings/Log, Oboe low-latency backend, and measured Eco/Standard profiles are not complete.
+## Acceptance and verification
+1. assembleDebug must pass for the exact integration commit.
+2. testDebugUnitTest must pass for the same commit.
+3. Device-only checks must be recorded separately: landscape/system bars, imported URI access, play/stop, lifecycle cleanup, audio glitches and long-session memory.
+4. Do not report latency, crash-free operation or production readiness without measured device evidence.
 
-## P0 acceptance criteria
-1. `assembleDebug` succeeds using JDK 17, SDK platform 36, NDK 27.2.12479018, and CMake 3.22.1.
-2. `testDebugUnitTest` passes.
-3. Install and launch on a real Android device; verify landscape, system bars, JNI load, play/stop lifecycle, and crash log.
-4. Test project-model round trip and invalid schema behavior.
-5. Keep CI/build evidence separate from device-playback evidence. Do not claim latency/underrun performance without measurements.
-
-## Next
-Push the complete independent source tree, inspect CI failures, then fix P0 before interactive timeline P1.
+## Integration strategy
+Group related changes into coherent commits. A single integration commit is reasonable for project I/O, model validation, regression tests and documentation; completing every production DAW feature in one commit is not safe or realistic.
