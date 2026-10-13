@@ -482,16 +482,11 @@ private fun ArrangementWorkspace(
 
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
         Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
-            SmallAction("TRACK +") { showAddTrack = true }
-            SmallAction("MIDI") { addTrack("midi", openEditor = true) }
-            SmallAction("INSTR") { addTrack("midi", openEditor = true) }
-            SmallAction("DRUM STEP") { addTrack("drum", openEditor = true) }
-            SmallAction("AUDIO") { addTrack("audio") }
-            Spacer(Modifier.weight(1f))
+            Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF), maxLines = 1)
             SmallAction("FIT") { onZoom(1f); onVerticalZoom(1f); onScroll(0f); onScrollTracks(0f) }
-            SmallAction(if (snapEnabled) "SNAP ON" else "SNAP OFF") { snapEnabled = !snapEnabled }
+            SmallAction(if (snapEnabled) "SNAP" else "SNAP OFF") { snapEnabled = !snapEnabled }
             SmallAction(snapDivision.label) { snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it } }
+            Spacer(Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.width(104.dp)) {
