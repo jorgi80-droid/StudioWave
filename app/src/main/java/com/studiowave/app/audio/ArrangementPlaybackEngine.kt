@@ -380,11 +380,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
-                activeDrums.forEach { drum ->
-                    val elapsed = (position until blockEnd).firstOrNull { it >= drum.startFrame } ?: return@forEach
-                    if (drum.startFrame >= blockEnd) return@forEach
+                activeDrums.forEach drumLoop@{ drum ->
+                    val hitEnd = drum.startFrame + (sampleRate * 0.20).toLong()
+                    if (drum.startFrame >= blockEnd || hitEnd <= position) return@drumLoop
                     val from = max(position, drum.startFrame)
-                    val to = min(blockEnd, drum.startFrame + (sampleRate * 0.20).toLong())
+                    val to = min(blockEnd, hitEnd)
                     val gain = drum.track.volume.coerceIn(0f, 1.5f) * plan.masterGain * 0.38f
                     val pan = drum.track.pan.coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
@@ -429,7 +429,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
 
-    @Synchronized
     fun stop() {
         running.set(false)
         val thread = worker
@@ -440,12 +439,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 Thread.currentThread().interrupt()
             }
         }
-        worker = null
-        output?.let { current ->
-            runCatching { current.pause(); current.flush() }
-            runCatching { current.release() }
+        synchronized(this) {
+            worker = null
+            output?.let { current ->
+                runCatching { current.pause(); current.flush() }
+                runCatching { current.release() }
+            }
+            output = null
         }
-        output = null
     }
 
     override fun close() {
