@@ -36,6 +36,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
+    private val scratchOffsetsMs = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
     @Volatile private var liveMasterGain = 0.72f
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
     private val audioAssetCache = object : android.util.LruCache<String, AudioAsset>(MAX_ASSET_CACHE_KIB) {
@@ -100,6 +101,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
+        scratchOffsetsMs.clear()
         stopOutputOnly()
         liveMasterGain = masterGain.coerceIn(0f, 1f)
         updateMix(project)
@@ -421,8 +423,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     for (absolute in from until to) {
                         val relative = absolute - event.startFrame
-                        val sourceFrame = (relative.toDouble() * event.asset.sampleRate / sampleRate).toInt()
-                        if (sourceFrame >= event.asset.frames) continue
+                        val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
+                        val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
+                        val sourceFrame = (relative.toDouble() * event.asset.sampleRate / sampleRate).toLong()
+                            .plus(scratchFrames).coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
+                        if (sourceFrame !in 0 until event.asset.frames) continue
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
                         mix[outIndex] += event.asset.pcmStereo[sourceIndex] / 32768f * trackGain * leftPan
@@ -523,8 +528,25 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         liveMasterGain = gain.coerceIn(0f, 1f)
     }
 
+    /**
+     * Scrub an audio track while it is playing. The gesture changes the source read
+     * position by a bounded millisecond offset; the realtime worker reads only atomics.
+     */
+    fun scratchTrack(trackId: String, deltaMilliseconds: Float) {
+        if (closed.get() || !running.get() || trackId.isBlank() || !deltaMilliseconds.isFinite()) return
+        val delta = deltaMilliseconds.toLong()
+        if (delta == 0L) return
+        val offset = scratchOffsetsMs.computeIfAbsent(trackId) { java.util.concurrent.atomic.AtomicLong(0L) }
+        while (true) {
+            val old = offset.get()
+            val next = (old + delta).coerceIn(-MAX_SCRATCH_OFFSET_MS, MAX_SCRATCH_OFFSET_MS)
+            if (offset.compareAndSet(old, next)) break
+        }
+    }
+
     fun stop() {
         generation.incrementAndGet()
+        scratchOffsetsMs.clear()
         stopOutputOnly()
     }
 
@@ -570,6 +592,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     companion object {
         const val OUTPUT_SAMPLE_RATE = 44100
+        const val MAX_SCRATCH_OFFSET_MS = 10_000L
         const val BLOCK_FRAMES = 256
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 60
