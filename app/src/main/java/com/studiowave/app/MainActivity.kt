@@ -227,101 +227,46 @@ private fun TimelineGrid(
     onSelectClip: (String) -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val accentColors = project.tracks.map { Color(it.colorArgb.toInt()) }
-    val barWidthPx = with(density) { 74.dp.toPx() } * zoom
-    val trackHeightPx = with(density) { 67.dp.toPx() }
+    val pxPerBar = with(density) { 74.dp.toPx() } * zoom
     val rulerHeightPx = with(density) { 24.dp.toPx() }
+    val trackHeightPx = with(density) { 67.dp.toPx() }
+    val accentColors = project.tracks.map { Color(it.colorArgb.toInt()) }
 
-    // One gesture owner for the timeline avoids clip taps competing with the
-    // parent transform detector. Tap, one-finger pan, and two-finger zoom are
-    // classified independently, with the system touch slop filtering jitter.
+    // Keep one authoritative horizontal viewport. Zoom preserves the timeline
+    // coordinate beneath the pinch centroid; pan uses incremental deltas only.
+    var gestureZoom by remember { mutableFloatStateOf(zoom) }
+    var gestureScroll by remember { mutableFloatStateOf(scrollBars) }
+    LaunchedEffect(zoom) { gestureZoom = zoom }
+    LaunchedEffect(scrollBars) { gestureScroll = scrollBars }
+
     Box(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF17191C))
-            .pointerInput(project, zoom, scrollBars, barWidthPx, trackHeightPx, rulerHeightPx) {
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false)
-                    val startPosition = down.position
-                    var lastPosition = startPosition
-                    var activePointerId = down.id
-                    var moved = false
-                    var wasMultiTouch = false
-                    var zoomAtGestureStart = zoom
-                    var scrollAtGestureStart = scrollBars
-                    var previousCentroid = startPosition
-                    var previousSpan = 0f
-                    var totalPanX = 0f
-                    var totalPanY = 0f
-                    val touchSlop = viewConfiguration.touchSlop
+            .pointerInput(project, zoom, scrollBars, pxPerBar, rulerHeightPx, trackHeightPx) {
+                detectTransformGestures(
+                    panZoomLock = true
+                ) { centroid, pan, gestureScale, _ ->
+                    val oldZoom = gestureZoom.coerceIn(0.55f, 2.8f)
+                    val newZoom = (oldZoom * gestureScale).coerceIn(0.55f, 2.8f)
+                    val baseBarPx = with(density) { 74.dp.toPx() }
+                    val oldBarPx = (baseBarPx * oldZoom).coerceAtLeast(1f)
+                    val newBarPx = (baseBarPx * newZoom).coerceAtLeast(1f)
 
-                    do {
-                        val event = awaitPointerEvent()
-                        val pressed = event.changes.filter { it.pressed }
-                        if (pressed.size >= 2) {
-                            if (!wasMultiTouch) {
-                                wasMultiTouch = true
-                                moved = true
-                                zoomAtGestureStart = zoom
-                                scrollAtGestureStart = scrollBars
-                                previousCentroid = Offset(
-                                    (pressed[0].position.x + pressed[1].position.x) / 2f,
-                                    (pressed[0].position.y + pressed[1].position.y) / 2f
-                                )
-                                previousSpan = (pressed[0].position - pressed[1].position).getDistance().coerceAtLeast(1f)
-                            } else {
-                                val centroid = Offset(
-                                    pressed.map { it.position.x }.average().toFloat(),
-                                    pressed.map { it.position.y }.average().toFloat()
-                                )
-                                val span = if (pressed.size >= 2) {
-                                    (pressed[0].position - pressed[1].position).getDistance().coerceAtLeast(1f)
-                                } else previousSpan
-                                val factor = if (previousSpan > 0f) span / previousSpan else 1f
-                                val nextZoom = (zoomAtGestureStart * factor).coerceIn(0.55f, 2.8f)
-                                val contentX = (scrollAtGestureStart * barWidthPx + startPosition.x)
-                                val nextScroll = ((contentX / barWidthPx) - startPosition.x / (with(density) { 74.dp.toPx() } * nextZoom)
-                                    - (centroid.x - startPosition.x) / (with(density) { 74.dp.toPx() } * nextZoom))
-                                    .coerceAtLeast(0f)
-                                onZoom(nextZoom)
-                                onScroll(nextScroll)
-                                previousCentroid = centroid
-                                previousSpan = span
-                            }
-                            event.changes.forEach { if (it.positionChanged()) it.consume() }
-                        } else if (pressed.size == 1 && !wasMultiTouch) {
-                            val change = pressed.first()
-                            if (change.id != activePointerId) activePointerId = change.id
-                            val delta = change.position - lastPosition
-                            totalPanX += delta.x
-                            totalPanY += delta.y
-                            if (!moved && (totalPanX * totalPanX + totalPanY * totalPanY) > touchSlop * touchSlop) {
-                                moved = true
-                            }
-                            if (moved) {
-                                val pxPerBar = with(density) { 74.dp.toPx() } * zoom
-                                if (pxPerBar > 0f) onScroll((scrollBars - totalPanX / pxPerBar).coerceAtLeast(0f))
-                                change.consume()
-                            }
-                            lastPosition = change.position
-                        }
-                    } while (event.changes.any { it.pressed })
+                    // Convert screen focal point to content-space before scaling.
+                    // This keeps the bar under the fingers stationary while zooming.
+                    val focusContentX = gestureScroll * oldBarPx + centroid.x
+                    val zoomedScroll = (focusContentX - centroid.x) / newBarPx
+                    val panScroll = -pan.x / newBarPx
+                    val nextScroll = (zoomedScroll + panScroll).coerceAtLeast(0f)
 
-                    if (!moved && !wasMultiTouch) {
-                        val tap = startPosition
-                        if (tap.y >= rulerHeightPx) {
-                            val trackIndex = ((tap.y - rulerHeightPx) / trackHeightPx).toInt()
-                            val contentX = tap.x + scrollBars * barWidthPx
-                            if (trackIndex in project.tracks.indices) {
-                                val track = project.tracks[trackIndex]
-                                val clip = track.clips.firstOrNull { candidate ->
-                                    val left = candidate.startTick.toFloat() / 3840f * barWidthPx
-                                    val right = left + candidate.lengthTicks.toFloat() / 3840f * barWidthPx
-                                    contentX >= left && contentX <= right
-                                }
-                                if (clip != null) onSelectClip(clip.id)
-                            }
-                        }
+                    if (newZoom != oldZoom) {
+                        gestureZoom = newZoom
+                        onZoom(newZoom)
+                    }
+                    if (nextScroll != gestureScroll) {
+                        gestureScroll = nextScroll
+                        onScroll(nextScroll)
                     }
                 }
             }
@@ -329,7 +274,7 @@ private fun TimelineGrid(
         Canvas(Modifier.fillMaxSize()) {
             val barWidth = 74.dp.toPx() * zoom
             val offset = scrollBars * barWidth
-            for (bar in 0..128) {
+            for (bar in 0..256) {
                 val x = bar * barWidth - offset
                 if (x >= 0f && x <= size.width) {
                     drawLine(
@@ -345,15 +290,26 @@ private fun TimelineGrid(
             }
         }
 
-        Row(
+        // Ruler and clips are offset in the same pixel coordinate system as the grid.
+        Box(
             Modifier
                 .fillMaxWidth()
                 .height(24.dp)
                 .background(Color(0xFF2B2E34))
+                .pointerInput(project, zoom, scrollBars) {
+                    detectTapGestures { tap ->
+                        val contentX = tap.x + scrollBars * (74.dp.toPx() * zoom)
+                        val barIndex = (contentX / (74.dp.toPx() * zoom)).toInt().coerceAtLeast(0)
+                        if (barIndex >= 0) {
+                            // Ruler taps are intentionally non-destructive; this detector
+                            // exists only so taps never get mistaken for a pan.
+                        }
+                    }
+                }
         ) {
-            for (bar in 0..128) {
-                val leftPx = bar * barWidthPx - scrollBars * barWidthPx
-                if (leftPx + barWidthPx >= 0f && leftPx <= with(density) { 128.dp.toPx() + size.width }) {
+            for (bar in 0..256) {
+                val leftPx = bar * (74.dp.toPx() * zoom) - scrollBars * (74.dp.toPx() * zoom)
+                if (leftPx <= size.width && leftPx + (74.dp.toPx() * zoom) >= 0f) {
                     Box(
                         Modifier
                             .offset(x = with(density) { leftPx.toDp() })
@@ -375,12 +331,13 @@ private fun TimelineGrid(
             project.tracks.forEachIndexed { trackIndex, track ->
                 Box(Modifier.fillMaxWidth().height(67.dp)) {
                     track.clips.forEach { clip ->
-                        val clipLeftPx = clip.startTick.toFloat() / 3840f * barWidthPx
-                        val translatedLeftPx = clipLeftPx - scrollBars * barWidthPx
-                        val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barWidthPx
+                        val barPx = 74.dp.toPx() * zoom
+                        val clipLeftPx = clip.startTick.toFloat() / 3840f * barPx
+                        val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barPx
+                        val translatedLeftPx = clipLeftPx - scrollBars * barPx
                         val accent = accentColors.getOrElse(trackIndex) { Mint }
 
-                        if (translatedLeftPx + clipWidthPx >= 0f) {
+                        if (translatedLeftPx + clipWidthPx >= 0f && translatedLeftPx <= size.width) {
                             Column(
                                 Modifier
                                     .offset(x = with(density) { translatedLeftPx.toDp() })
@@ -391,6 +348,7 @@ private fun TimelineGrid(
                                         accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f),
                                         RoundedCornerShape(4.dp)
                                     )
+                                    .clickable { onSelectClip(clip.id) }
                                     .padding(4.dp)
                             ) {
                                 Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
