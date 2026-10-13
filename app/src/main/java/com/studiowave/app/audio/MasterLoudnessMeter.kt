@@ -28,8 +28,8 @@ internal class MasterLoudnessMeter(
     private var writeIndex = 0
     private var filledFrames = 0
     private var energySum = 0.0
-    private val leftShelf = Biquad.highShelf(sampleRate, 1681.974450955533, 3.999843853973347, 0.7071752369554196)
-    private val rightShelf = Biquad.highShelf(sampleRate, 1681.974450955533, 3.999843853973347, 0.7071752369554196)
+    private val leftShelf = Biquad.highShelf(sampleRate, 1681.974450955533, 3.999843853973347, 1.0)
+    private val rightShelf = Biquad.highShelf(sampleRate, 1681.974450955533, 3.999843853973347, 1.0)
     private val leftHighPass = Biquad.highPass(sampleRate, 38.13547087602444, 0.5003270373238773)
     private val rightHighPass = Biquad.highPass(sampleRate, 38.13547087602444, 0.5003270373238773)
 
