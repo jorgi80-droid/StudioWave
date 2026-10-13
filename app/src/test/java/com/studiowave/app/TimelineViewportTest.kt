@@ -66,7 +66,9 @@ class TimelineViewportTest {
     }
     @Test fun zoomAnchorsRemainStableAtMinimumAndMaximumScale() {
         val timebase = TimelineTimebase(120, 4, 4, 960)
-        val initial = TimelineViewport(timebase, 74f, 3840.0, 900f, 104f)
+        // Keep enough content to the left that every tested zoom level can preserve
+        // the anchor without requiring a negative scroll position.
+        val initial = TimelineViewport(timebase, 74f, 200_000.0, 900f, 104f)
         val anchorX = 104f + 420f
         val tickUnderAnchor = initial.screenXToTime(anchorX)
         listOf(20f, 41f, 74f, 220f, 560f, 1200f, 2400f).forEach { requestedScale ->
@@ -77,6 +79,14 @@ class TimelineViewportTest {
             assertEquals(effectiveScale, zoomed.pixelsPerBar, 0.001f)
             assertTrue(kotlin.math.abs(tickUnderAnchor - zoomed.screenXToTime(anchorX)) <= 1L)
         }
+    }
+
+    @Test fun zoomAtTimelineStartClampsScrollToZero() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewport = TimelineViewport(timebase, 74f, 0.0, 800f, 104f)
+        val zoomedOut = viewport.zoomKeepingAnchor(20f, 104f + 420f)
+        assertEquals(0.0, zoomedOut.scrollTimeTicks, 0.0)
+        assertEquals(20f, zoomedOut.pixelsPerBar, 0.001f)
     }
 
     @Test fun viewportClampsInvalidScaleAndScrollWithoutOverflow() {
