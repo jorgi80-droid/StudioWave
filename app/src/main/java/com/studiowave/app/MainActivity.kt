@@ -740,7 +740,8 @@ private fun ArrangementWorkspace(
                 .toFloat().coerceIn(0.55f, 2.8f)
         }
         Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
-        Row(Modifier.fillMaxWidth().weight(1f)) {
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+        Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(104.dp)) {
                 Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
@@ -931,15 +932,15 @@ private fun ArrangementWorkspace(
                 }
             )
         }
-        // Floating controls remain outside the ruler/clip canvas to preserve timeline space.
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-            Row(
-                Modifier.padding(end = 8.dp, bottom = 8.dp)
-                    .background(Raised.copy(alpha = 0.94f), RoundedCornerShape(28.dp))
-                    .padding(horizontal = 5.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+        // Floating controls overlay the weighted Arrangement workspace without
+        // becoming a separate Column child that could steal timeline height.
+        Row(
+            Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
+                .background(Raised.copy(alpha = 0.94f), RoundedCornerShape(28.dp))
+                .padding(horizontal = 5.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
                 FloatingTimelineControl("FIT", "Fit clips to view") {
                     onZoom(fitZoom)
                     onVerticalZoom(1f)
