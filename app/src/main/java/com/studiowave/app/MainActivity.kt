@@ -221,6 +221,26 @@ private fun ArrangementWorkspace(
                 statusMessage = "Clip cut"
             }
             "Copy" -> { copiedClip = track to clip; statusMessage = "Clip copied" }
+            "Duplicate" -> {
+                val duplicate = clip.copy(id = java.util.UUID.randomUUID().toString(), name = clip.name + " copy", startTick = clip.startTick + clip.lengthTicks)
+                onProjectChange(project.copy(tracks = project.tracks.map { item -> if (item.id == track.id) item.copy(clips = item.clips + duplicate) else item }))
+                statusMessage = "Clip duplicated"
+            }
+            "Color" -> {
+                val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEEL)
+                val current = clip.colorArgb ?: track.colorArgb
+                val paletteIndex = palette.indexOf(current)
+                val nextColor = palette[((paletteIndex + 1).coerceAtLeast(0)) % palette.size]
+                onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clipId) c.copy(colorArgb = nextColor) else c }) else item
+                }))
+                statusMessage = "Clip color changed"
+            }
+            "Rename" -> {
+                val renamed = clip.copy(name = if (clip.name.endsWith(" *")) clip.name.removeSuffix(" *") else clip.name + " *")
+                onProjectChange(project.copy(tracks = project.tracks.map { item -> if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clipId) renamed else c }) else item }))
+                statusMessage = "Clip renamed (tap Rename again to toggle marker)"
+            }
             "Snap" -> { snapEnabled = !snapEnabled; statusMessage = if (snapEnabled) "Snap on" else "Snap off" }
             "Delete" -> {
                 onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item -> if (index == trackIndex) item.copy(clips = item.clips.filterNot { it.id == clipId }) else item }))
@@ -550,7 +570,7 @@ private fun TimelineGrid(
                         val displayLeftPx = clipStartPx - scrollBars * barWidth
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
-                        val accent = accentColors.getOrElse(trackIndex) { Mint }
+                        val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
                         val drawingLeft = displayLeftPx + if (draggingClip == clip.id) dragDx else 0f
                         val drawingTop = if (draggingClip == clip.id) dragDy else 0f
                         Column(
@@ -611,7 +631,7 @@ private fun TimelineGrid(
                             if (track.kind == "drum") {
                                 Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
                                     (0 until 16).forEach { step ->
-                                        val active = when (step % 8) { 0, 4 -> true; 2, 6 -> track.name.contains("808", true); else -> false }
+                                        val active = clip.drumSteps.getOrNull(step) ?: false
                                         Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.88f else 0.24f).background(if (active) accent.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.16f), RoundedCornerShape(1.dp)))
                                     }
                                 }
@@ -631,14 +651,11 @@ private fun TimelineGrid(
                                 }
                             } else if (track.kind == "audio") {
                                 Canvas(Modifier.fillMaxSize()) {
-                                    for (i in 0 until 48) {
-                                        val h = ((i * 37 % 19) + 3).toFloat() / 22f * size.height
-                                        drawLine(
-                                            accent,
-                                            Offset(i * size.width / 48f, size.height / 2 - h / 2),
-                                            Offset(i * size.width / 48f, size.height / 2 + h / 2),
-                                            1.4f
-                                        )
+                                    val peaks = waveformPeaksForUnlinkedClip(clip.sourceUri)
+                                    for (i in peaks.indices) {
+                                        val h = peaks[i] * size.height * 0.48f
+                                        val x = (i + 0.5f) * size.width / peaks.size.coerceAtLeast(1)
+                                        drawLine(accent, Offset(x, size.height / 2 - h), Offset(x, size.height / 2 + h), 1.4f)
                                     }
                                 }
                             }
@@ -665,8 +682,8 @@ private fun TimelineGrid(
                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                listOf("Open editor", "Cut", "Copy", "Snap", "Delete", "×").forEach { action ->
-                    val label = when (action) { "Open editor" -> "Edit"; "Delete" -> "Del"; else -> action }
+                listOf("Open editor", "Cut", "Copy", "Duplicate", "Color", "Rename", "Snap", "Delete", "×").forEach { action ->
+                    val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
                     Surface(
                         color = if (action == "Open editor") Mint.copy(alpha = 0.18f) else Color(0xFF23262B),
                         shape = RoundedCornerShape(16.dp),
@@ -786,3 +803,11 @@ private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
     }
 }
+
+/**
+ * Safe fallback for clips whose audio source has not been decoded yet. A flat
+ * zero waveform honestly represents an unavailable waveform instead of fake peaks.
+ * Actual decoding belongs off the UI/audio thread and is not implemented here.
+ */
+private fun waveformPeaksForUnlinkedClip(sourceUri: String?): List<Float> =
+    List(48) { 0f }
