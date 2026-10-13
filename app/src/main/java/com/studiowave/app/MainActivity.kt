@@ -116,6 +116,7 @@ private fun StudioWaveApp() {
             undoHistory = (undoHistory + project).takeLast(100)
             redoHistory = emptyList()
             project = next
+            arrangementPlayback.updateMix(next)
         }
     }
     fun undoProject() {
@@ -124,6 +125,7 @@ private fun StudioWaveApp() {
         undoHistory = undoHistory.dropLast(1)
         project = previous
         bpm = previous.bpm
+        arrangementPlayback.updateMix(previous)
     }
     fun redoProject() {
         val next = redoHistory.lastOrNull() ?: return
@@ -131,6 +133,7 @@ private fun StudioWaveApp() {
         redoHistory = redoHistory.dropLast(1)
         project = next
         bpm = next.bpm
+        arrangementPlayback.updateMix(next)
     }
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
