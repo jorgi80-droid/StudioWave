@@ -489,7 +489,8 @@ private fun ArrangementWorkspace(
     isPlaying: Boolean = false,
     onSeekTick: (Long) -> Unit = {}
 ) {
-    val densityScale = androidx.compose.ui.platform.LocalDensity.current.density
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val densityScale = density.density
     val trackIds = project.tracks.map { it.id }
     val trackRowLayout = remember(trackIds, trackHeights.toMap()) {
         var top = 0f
@@ -671,7 +672,7 @@ private fun ArrangementWorkspace(
                                     val from = project.tracks.indexOfFirst { it.id == track.id }
                                     val fromRow = trackRowLayout.getOrNull(from)
                                     if (from >= 0 && fromRow != null && project.tracks.size > 1 && deltaPx.isFinite()) {
-                                        val rowStepPx = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                        val rowStepPx = with(density) {
                                             (fromRow.heightDp * verticalZoom).dp.toPx()
                                         }.coerceAtLeast(1f)
                                         val steps = kotlin.math.round(deltaPx / rowStepPx).toInt()
