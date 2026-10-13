@@ -282,8 +282,12 @@ private fun ArrangementWorkspace(
                 scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it },
                 onOpenEditor = { clipId ->
-                    val track = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
-                    onOpenEditor(when (track?.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track?.id)
+                    if (clipId == null) {
+                        onOpenEditor("BROWSER", null)
+                    } else {
+                        val track = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
+                        onOpenEditor(when (track?.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track?.id)
+                    }
                 },
                 onClipLongPress = { clipMenu = it },
                 onTimelineLongPress = { showTimelineMenu = true }
