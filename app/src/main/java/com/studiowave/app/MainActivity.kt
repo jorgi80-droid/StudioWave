@@ -1642,6 +1642,9 @@ private fun decodeWaveformPeaks(
                             val pcm = buffer.slice().order(ByteOrder.nativeOrder())
                             val frames = (info.size / bytesPerSample) / channels
                             for (frame in 0 until frames) {
+                                // A single decoded buffer can contain many frames. Check cancellation
+                                // periodically so switching clips never leaves a long PCM scan running.
+                                if ((frame and 0x0FFF) == 0) ensureActive()
                                 var peak = 0f
                                 val firstSample = frame * channels
                                 for (channel in 0 until channels) {
