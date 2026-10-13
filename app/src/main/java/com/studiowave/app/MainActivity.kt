@@ -6,6 +6,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -99,7 +103,7 @@ private fun StudioWaveApp() {
                         "MIXER" -> MixerWorkspace(project.tracks)
                         "PIANO ROLL" -> PianoRollWorkspace()
                         "BROWSER" -> BrowserWorkspace()
-                        else -> ArrangementWorkspace(project, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) })
+                        else -> ArrangementWorkspace(project, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { selectedWorkspace = it })
                     }
                 }
                 if (showDock) {
@@ -169,8 +173,12 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 }
 
 @Composable
-private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit, verticalZoom: Float, onVerticalZoom: (Float) -> Unit, scrollTracks: Float, onScrollTracks: (Float) -> Unit) {
+private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit, verticalZoom: Float, onVerticalZoom: (Float) -> Unit, scrollTracks: Float, onScrollTracks: (Float) -> Unit, onOpenEditor: (String) -> Unit) {
     var selectedClip by remember { mutableStateOf<String?>(null) }
+    var clipMenu by remember { mutableStateOf<String?>(null) }
+    var showTimelineMenu by remember { mutableStateOf(false) }
+    var snapEnabled by remember { mutableStateOf(true) }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
         Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
@@ -184,7 +192,7 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
                 Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
                 }
-                Box(Modifier.fillMaxWidth().weight(1f)) {
+                Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                     project.tracks.forEachIndexed { index, track -> TrackHeader(track, index, verticalZoom, scrollTracks) }
                 }
             }
@@ -200,8 +208,38 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
                 scrollTracks = scrollTracks,
                 onScrollTracks = onScrollTracks,
                 selectedClip = selectedClip,
-                onSelectClip = { selectedClip = it }
+                onSelectClip = { selectedClip = it },
+                onOpenEditor = { onOpenEditor("PIANO ROLL") },
+                onClipLongPress = { clipMenu = it },
+                onTimelineLongPress = { showTimelineMenu = true }
             )
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
+                if (statusMessage != null) {
+                    Surface(color = Raised, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(8.dp)) {
+                        Text(statusMessage!!, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(10.dp))
+                    }
+                }
+                if (showTimelineMenu) {
+                    Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(8.dp)) {
+                        Column(Modifier.width(150.dp).padding(5.dp)) {
+                            Text("TIMELINE ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                            listOf("Add track", "Create clip", "Paste", "Import audio").forEach { action ->
+                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { statusMessage = when(action) { "Add track" -> "Add track: track creation hook needed"; "Create clip" -> "Choose a track to create a clip"; "Paste" -> "Nothing copied yet"; else -> "Open Browser to import audio" }; if(action == "Import audio") onOpenEditor("BROWSER"); showTimelineMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
+                            }
+                        }
+                    }
+                }
+                if (clipMenu != null) {
+                    Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(8.dp)) {
+                        Column(Modifier.width(150.dp).padding(5.dp)) {
+                            Text("CLIP ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                            listOf("Open editor", "Cut", "Copy", "Snap: " + if (snapEnabled) "On" else "Off").forEach { action ->
+                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { when { action == "Open editor" -> onOpenEditor("PIANO ROLL"); action == "Cut" -> statusMessage = "Cut selected clip"; action == "Copy" -> statusMessage = "Clip copied"; else -> snapEnabled = !snapEnabled }; clipMenu = null }.padding(horizontal = 9.dp, vertical = 8.dp))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -242,7 +280,10 @@ private fun TimelineGrid(
     scrollTracks: Float,
     onScrollTracks: (Float) -> Unit,
     selectedClip: String?,
-    onSelectClip: (String) -> Unit
+    onSelectClip: (String) -> Unit,
+    onOpenEditor: () -> Unit,
+    onClipLongPress: (String) -> Unit,
+    onTimelineLongPress: () -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
@@ -262,6 +303,8 @@ private fun TimelineGrid(
     Box(
         modifier
             .background(Color(0xFF17191C))
+            .clipToBounds()
+            .pointerInput(Unit) { detectTapGestures(onLongPress = { onTimelineLongPress() }) }
             .pointerInput(baseBarWidthPx) {
                 detectTransformGestures(panZoomLock = true) { centroid, pan, gestureZoom, _ ->
                     val oldZoom = currentZoom.coerceIn(0.55f, 2.8f)
@@ -361,7 +404,11 @@ private fun TimelineGrid(
                                     accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f),
                                     RoundedCornerShape(4.dp)
                                 )
-                                .clickable { onSelectClip(clip.id) }
+                                .combinedClickable(
+                                    onClick = { onSelectClip(clip.id) },
+                                    onDoubleClick = { onSelectClip(clip.id); onOpenEditor() },
+                                    onLongClick = { onSelectClip(clip.id); onClipLongPress(clip.id) }
+                                )
                                 .padding(4.dp)
                         ) {
                             Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
