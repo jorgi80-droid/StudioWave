@@ -1356,14 +1356,17 @@ private fun TimelineGrid(
                 val currentX = currentViewport.timeToViewportX(playheadTick)
                 val leftGuard = timelineWidthPx * 0.08f
                 val rightGuard = timelineWidthPx * 0.82f
-                if (currentX < leftGuard || currentX > rightGuard) {
-                    // Keep the playhead in a comfortable forward-looking position.
-                    val targetX = timelineWidthPx * 0.70f
-                    val nextScroll = (playheadTick.toDouble() -
-                        targetX.toDouble() / barWidthPx * timebase.ticksPerBar.toDouble())
-                        .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
-                    if (kotlin.math.abs(nextScroll - scrollTicks) > 1f) currentOnScroll(nextScroll)
+                // Re-anchor at the guard line that was crossed, not back at 70% of
+                // the viewport. This prevents the visible ruler/playhead "jump".
+                val targetX = when {
+                    currentX < leftGuard -> leftGuard
+                    currentX > rightGuard -> rightGuard
+                    else -> return@LaunchedEffect
                 }
+                val ticksPerPixel = timebase.ticksPerBar.toDouble() / barWidthPx
+                val nextScroll = (playheadTick.toDouble() - targetX.toDouble() * ticksPerPixel)
+                    .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
+                if (kotlin.math.abs(nextScroll - scrollTicks) > 0.5f) currentOnScroll(nextScroll)
             }
         }
         // Keep long-press handling on the background layer so it cannot steal a
