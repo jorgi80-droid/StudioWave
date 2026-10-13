@@ -104,7 +104,7 @@ private fun StudioWaveApp() {
                         "MIXER" -> MixerWorkspace(project.tracks)
                         "PIANO ROLL" -> PianoRollWorkspace(onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "BROWSER" -> BrowserWorkspace()
-                        "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { project = it }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         else -> ArrangementWorkspace(project, { project = it }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace })
                     }
@@ -366,8 +366,9 @@ private fun ArrangementWorkspace(
 }
 
 @Composable
-private fun DrumSequencerWorkspace(track: StudioTrack?, onBack: () -> Unit) {
-    var steps by remember(track?.id) { mutableStateOf(track?.clips?.firstOrNull()?.drumSteps?.let { it + List((16 - it.size).coerceAtLeast(0)) { false } } ?: List(16) { false }) }
+private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (StudioProject) -> Unit, project: StudioProject, onBack: () -> Unit) {
+    val clip = track?.clips?.firstOrNull()
+    val steps = clip?.drumSteps?.let { it.take(16) + List((16 - it.size).coerceAtLeast(0)) { false } } ?: List(16) { false }
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("‹ BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
@@ -381,13 +382,19 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onBack: () -> Unit) {
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.fillMaxWidth().height(70.dp)
                         .background(if (steps[step]) Mint else if (step % 4 == 0) Color(0xFF343A43) else Raised, RoundedCornerShape(4.dp))
-                        .clickable { steps = steps.toMutableList().also { it[step] = !it[step] } }
-                        .padding(2.dp))
+                        .clickable {
+                            if (track != null && clip != null) {
+                                val updated = steps.toMutableList().also { it[step] = !it[step] }
+                                onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = updated) else c }) else item
+                                }))
+                            }
+                        }.padding(2.dp))
                     Text((step + 1).toString(), color = MutedText, fontSize = 8.sp)
                 }
             }
         }
-        Text("Tap a step to toggle trigger", color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 12.dp))
+        Text("Tap a step to toggle trigger • autosave follows project state", color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 12.dp))
     }
 }
 
