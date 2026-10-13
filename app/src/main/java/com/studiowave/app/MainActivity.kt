@@ -252,7 +252,7 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
                         Column(Modifier.width(150.dp).padding(5.dp)) {
                             Text("TIMELINE ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                             listOf("Add track", "Create clip", "Paste", "Import audio").forEach { action ->
-                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { statusMessage = when(action) { "Add track" -> "Add track: track creation hook needed"; "Create clip" -> "Choose a track to create a clip"; "Paste" -> "Nothing copied yet"; else -> "Open Browser to import audio" }; if(action == "Import audio") onOpenEditor("BROWSER"); showTimelineMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
+                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { statusMessage = when(action) { "Add track" -> "Add track: track creation hook needed"; "Create clip" -> "Choose a track to create a clip"; "Paste" -> "Nothing copied yet"; else -> "Open Browser to import audio" }; if(action == "Import audio") onOpenEditor("BROWSER", null); showTimelineMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
                             }
                         }
                     }
@@ -262,7 +262,7 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
                         Column(Modifier.width(150.dp).padding(5.dp)) {
                             Text("CLIP ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                             listOf("Open editor", "Cut", "Copy", "Snap: " + if (snapEnabled) "On" else "Off").forEach { action ->
-                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { when { action == "Open editor" -> onOpenEditor("PIANO ROLL"); action == "Cut" -> statusMessage = "Cut selected clip"; action == "Copy" -> statusMessage = "Clip copied"; else -> snapEnabled = !snapEnabled }; clipMenu = null }.padding(horizontal = 9.dp, vertical = 8.dp))
+                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { when { action == "Open editor" -> onOpenEditor("PIANO ROLL", null); action == "Cut" -> statusMessage = "Cut selected clip"; action == "Copy" -> statusMessage = "Clip copied"; else -> snapEnabled = !snapEnabled }; clipMenu = null }.padding(horizontal = 9.dp, vertical = 8.dp))
                             }
                         }
                     }
