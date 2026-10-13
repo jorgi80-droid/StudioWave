@@ -1015,6 +1015,7 @@ private fun TimelineGrid(
                 }
             }
         }
+        }
         val menuTrack = project.tracks.firstOrNull { t -> t.clips.any { it.id == clipMenuClipId } }
         val menuClip = menuTrack?.clips?.firstOrNull { it.id == clipMenuClipId }
         if (menuTrack != null && menuClip != null && clipMenuClipId != null) {
