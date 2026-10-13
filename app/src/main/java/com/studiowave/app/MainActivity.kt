@@ -1097,36 +1097,14 @@ private fun TimelineGrid(
                                     )
                                 }
                                 .combinedClickable(
-                                    onClick = { onSelectClip(clip.id) },
+                                    onClick = { onSelectClip(clip.id); onClipLongPress(clip.id) },
                                     onDoubleClick = { onSelectClip(clip.id); onOpenEditor(clip.id) },
                                     onLongClick = { onSelectClip(clip.id); onClipLongPress(clip.id) }
                                 )
                                 .padding(4.dp)
                         ) {
-                            var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
-                            Row(Modifier.fillMaxWidth().height(18.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    Modifier.width(32.dp).fillMaxHeight()
-                                        .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(5.dp))
-                                        .pointerInput(clip.id, zoom, clip.lengthTicks) {
-                                            detectDragGestures(
-                                                onDragStart = { resizeDeltaPx = 0f },
-                                                onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
-                                                onDragEnd = {
-                                                    val deltaTicks = (resizeDeltaPx / (baseBarWidthPx * zoom).coerceAtLeast(1f) * 3840f).toLong()
-                                                    val rawLength = (clip.lengthTicks + deltaTicks).coerceAtLeast(240L)
-                                                    val newLength = if (snapToGrid) (((rawLength + 120L) / 240L) * 240L).coerceAtLeast(240L) else rawLength
-                                                    onResizeClip(clip.id, newLength)
-                                                    resizeDeltaPx = 0f
-                                                },
-                                                onDragCancel = { resizeDeltaPx = 0f }
-                                            )
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("↔", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
+                            Box(Modifier.fillMaxSize()) {
+                                Column(Modifier.fillMaxSize().padding(4.dp)) {
                             Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
                             if (track.kind == "drum") {
                                 Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
@@ -1152,9 +1130,33 @@ private fun TimelineGrid(
                             } else if (track.kind == "audio") {
                                 AudioClipWaveform(clip.sourceUri, accent)
                             }
+                                }
+                                var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
+                                Box(
+                                    Modifier.align(Alignment.CenterEnd)
+                                        .width(27.dp).height(28.dp)
+                                        .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
+                                        .pointerInput(clip.id, zoom, clip.lengthTicks) {
+                                            detectDragGestures(
+                                                onDragStart = { resizeDeltaPx = 0f },
+                                                onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
+                                                onDragEnd = {
+                                                    val deltaTicks = (resizeDeltaPx / (baseBarWidthPx * zoom).coerceAtLeast(1f) * 3840f).toLong()
+                                                    val rawLength = (clip.lengthTicks + deltaTicks).coerceAtLeast(240L)
+                                                    val newLength = if (snapToGrid) (((rawLength + 120L) / 240L) * 240L).coerceAtLeast(240L) else rawLength
+                                                    onResizeClip(clip.id, newLength)
+                                                    resizeDeltaPx = 0f
+                                                },
+                                                onDragCancel = { resizeDeltaPx = 0f }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("↔", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                         }
-                    }
                     }
                 }
             }
