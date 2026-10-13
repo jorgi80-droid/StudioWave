@@ -20,7 +20,9 @@ data class WaveClip(
     val sourceUri: String? = null,
     val midiNotes: List<MidiNote> = emptyList(),
     val drumSteps: List<Boolean> = emptyList(),
-    val colorArgb: Long? = null
+    val colorArgb: Long? = null,
+    /** Source-relative trim offset for audio clips, measured in musical ticks. */
+    val sourceOffsetTicks: Long = 0L
 )
 
 data class StudioTrack(
@@ -86,6 +88,7 @@ data class StudioProject(
                                 put("id", clip.id); put("name", clip.name)
                                 put("startTick", clip.startTick); put("lengthTicks", clip.lengthTicks)
                                 put("sourceUri", clip.sourceUri)
+                                put("sourceOffsetTicks", clip.sourceOffsetTicks.coerceAtLeast(0L))
                                 clip.colorArgb?.let { put("colorArgb", it) }
                                 put("drumSteps", JSONArray().apply { clip.drumSteps.forEach { put(it) } })
                                 put("midiNotes", JSONArray().apply {
@@ -154,7 +157,8 @@ data class StudioProject(
                                 sourceUri = c.optString("sourceUri").takeUnless { it == "null" || it.isBlank() },
                                 midiNotes = notes,
                                 drumSteps = drumSteps,
-                                colorArgb = if (c.has("colorArgb")) c.optLong("colorArgb") else null
+                                colorArgb = if (c.has("colorArgb")) c.optLong("colorArgb") else null,
+                                sourceOffsetTicks = c.optLong("sourceOffsetTicks", 0L).coerceAtLeast(0L)
                             ))
                         }
                     }
