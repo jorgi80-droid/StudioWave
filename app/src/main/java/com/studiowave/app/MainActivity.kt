@@ -230,36 +230,41 @@ private fun TimelineGrid(
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
     val trackHeightPx = with(density) { 67.dp.toPx() }
-    val accentColors = project.tracks.map { Color(it.colorArgb.toInt()) }
+    val accentColors = remember(project.tracks) { project.tracks.map { Color(it.colorArgb.toInt()) } }
+    val currentZoom by rememberUpdatedState(zoom)
+    val currentScroll by rememberUpdatedState(scrollBars)
+    val currentOnZoom by rememberUpdatedState(onZoom)
+    val currentOnScroll by rememberUpdatedState(onScroll)
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF17191C))
-            .pointerInput(zoom, scrollBars) {
+            .pointerInput(baseBarWidthPx) {
                 detectTransformGestures(panZoomLock = true) { centroid, pan, gestureZoom, _ ->
-                    val oldZoom = zoom.coerceIn(0.55f, 2.8f)
+                    val oldZoom = currentZoom.coerceIn(0.55f, 2.8f)
                     val newZoom = (oldZoom * gestureZoom).coerceIn(0.55f, 2.8f)
                     val oldBarWidthPx = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
                     val newBarWidthPx = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
 
-                    // Keep the time/bar beneath the two-finger centroid stationary.
-                    val contentUnderCentroid = scrollBars * oldBarWidthPx + centroid.x
+                    // Keep the bar under the gesture centroid anchored while zooming.
+                    val contentUnderCentroid = currentScroll * oldBarWidthPx + centroid.x
                     val zoomAdjustedScroll = (contentUnderCentroid - centroid.x) / newBarWidthPx
                     val panAdjustedScroll = -pan.x / newBarWidthPx
                     val newScroll = (zoomAdjustedScroll + panAdjustedScroll).coerceAtLeast(0f)
 
-                    if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) onZoom(newZoom)
-                    if (kotlin.math.abs(newScroll - scrollBars) > 0.0005f) onScroll(newScroll)
+                    if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
+                    if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                 }
             }
     ) {
         Canvas(Modifier.fillMaxSize()) {
             val barWidth = baseBarWidthPx * zoom
-            val offset = scrollBars * barWidth
-            for (bar in 0..256) {
-                val x = bar * barWidth - offset
-                if (x >= 0f && x <= size.width) {
+            val firstVisibleBar = (scrollBars - 1f / zoom).toInt().coerceAtLeast(0)
+            val lastVisibleBar = (scrollBars + size.width / barWidth + 2f).toInt().coerceAtMost(4096)
+            for (bar in firstVisibleBar..lastVisibleBar) {
+                val x = bar * barWidth - scrollBars * barWidth
+                if (x >= -barWidth && x <= size.width + barWidth) {
                     drawLine(
                         if (bar % 4 == 0) Color(0xFF51555D) else Color(0xFF32363D),
                         Offset(x, rulerHeightPx), Offset(x, size.height),
@@ -269,32 +274,42 @@ private fun TimelineGrid(
             }
             for (i in 0..project.tracks.size) {
                 val y = rulerHeightPx + i * trackHeightPx
-                drawLine(Color(0xFF3A3D44), Offset(0f, y), Offset(size.width, y), 1f)
+                if (y >= rulerHeightPx && y <= size.height) {
+                    drawLine(Color(0xFF3A3D44), Offset(0f, y), Offset(size.width, y), 1f)
+                }
             }
         }
 
-        Box(
+        // Draw ruler labels only for bars that are currently visible.
+        Canvas(
             Modifier
                 .fillMaxWidth()
                 .height(24.dp)
-                .background(Color(0xFF2B2E34))
         ) {
-            for (bar in 0..256) {
-                val leftPx = bar * baseBarWidthPx * zoom - scrollBars * baseBarWidthPx * zoom
-                    Box(
-                        Modifier
-                            .offset(x = with(density) { leftPx.toDp() })
-                            .width(74.dp * zoom)
-                            .fillMaxHeight(),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        Text(
-                            if (bar % 4 == 0) (bar + 1).toString() else "·",
-                            fontSize = 9.sp,
-                            color = if (bar % 4 == 0) Color.White else MutedText
-                        )
-                    }
+            val barWidth = baseBarWidthPx * zoom
+            val firstVisibleBar = (scrollBars - 1f / zoom).toInt().coerceAtLeast(0)
+            val lastVisibleBar = (scrollBars + size.width / barWidth + 2f).toInt().coerceAtMost(4096)
+            for (bar in firstVisibleBar..lastVisibleBar) {
+                val x = bar * barWidth - scrollBars * barWidth
+                if (bar % 4 == 0) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        (bar + 1).toString(),
+                        x + with(density) { 5.dp.toPx() },
+                        size.height * 0.68f,
+                        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                            color = android.graphics.Color.WHITE
+                            textSize = with(density) { 9.sp.toPx() }
+                        }
+                    )
+                } else {
+                    drawCircle(
+                        color = MutedText,
+                        radius = with(density) { 1.dp.toPx() },
+                        center = Offset(x, size.height * 0.55f)
+                    )
+                }
             }
+            drawRect(Color(0xFF2B2E34), size = Size(size.width, with(density) { 2.dp.toPx() }))
         }
 
         Column(Modifier.padding(top = 24.dp)) {
@@ -305,49 +320,50 @@ private fun TimelineGrid(
                         val clipStartPx = clip.startTick.toFloat() / 3840f * barWidth
                         val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barWidth
                         val displayLeftPx = clipStartPx - scrollBars * barWidth
+                        // Skip clips outside the viewport before composing their contents.
                         val accent = accentColors.getOrElse(trackIndex) { Mint }
-                            Column(
-                                Modifier
-                                    .offset(x = with(density) { displayLeftPx.toDp() })
-                                    .padding(top = 7.dp, bottom = 7.dp)
-                                    .width(with(density) { clipWidthPx.toDp() }.coerceAtLeast(24.dp))
-                                    .fillMaxHeight()
-                                    .background(
-                                        accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f),
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .clickable { onSelectClip(clip.id) }
-                                    .padding(4.dp)
-                            ) {
-                                Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
-                                if (track.kind == "midi") {
-                                    Canvas(Modifier.fillMaxSize()) {
-                                        clip.midiNotes.forEach { note ->
-                                            val noteX = note.startTick.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
-                                            val noteW = note.durationTicks.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
-                                            val y = (127 - note.pitch).toFloat() / 127f * size.height
-                                            drawRoundRect(
-                                                Color.White.copy(alpha = 0.8f),
-                                                Offset(noteX, y),
-                                                Size(noteW.coerceAtLeast(2f), 3.dp.toPx()),
-                                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
-                                            )
-                                        }
+                        Column(
+                            Modifier
+                                .offset(x = with(density) { displayLeftPx.toDp() })
+                                .padding(top = 7.dp, bottom = 7.dp)
+                                .width(with(density) { clipWidthPx.toDp() }.coerceAtLeast(24.dp))
+                                .fillMaxHeight()
+                                .background(
+                                    accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .clickable { onSelectClip(clip.id) }
+                                .padding(4.dp)
+                        ) {
+                            Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
+                            if (track.kind == "midi") {
+                                Canvas(Modifier.fillMaxSize()) {
+                                    clip.midiNotes.forEach { note ->
+                                        val noteX = note.startTick.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
+                                        val noteW = note.durationTicks.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
+                                        val y = (127 - note.pitch).toFloat() / 127f * size.height
+                                        drawRoundRect(
+                                            Color.White.copy(alpha = 0.8f),
+                                            Offset(noteX, y),
+                                            Size(noteW.coerceAtLeast(2f), 3.dp.toPx()),
+                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
+                                        )
                                     }
-                                } else if (track.kind == "audio") {
-                                    Canvas(Modifier.fillMaxSize()) {
-                                        for (i in 0 until 48) {
-                                            val h = ((i * 37 % 19) + 3).toFloat() / 22f * size.height
-                                            drawLine(
-                                                accent,
-                                                Offset(i * size.width / 48f, size.height / 2 - h / 2),
-                                                Offset(i * size.width / 48f, size.height / 2 + h / 2),
-                                                1.4f
-                                            )
-                                        }
+                                }
+                            } else if (track.kind == "audio") {
+                                Canvas(Modifier.fillMaxSize()) {
+                                    for (i in 0 until 48) {
+                                        val h = ((i * 37 % 19) + 3).toFloat() / 22f * size.height
+                                        drawLine(
+                                            accent,
+                                            Offset(i * size.width / 48f, size.height / 2 - h / 2),
+                                            Offset(i * size.width / 48f, size.height / 2 + h / 2),
+                                            1.4f
+                                        )
                                     }
                                 }
                             }
+                        }
                     }
                 }
             }
