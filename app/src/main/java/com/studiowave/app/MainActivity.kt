@@ -34,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -250,36 +251,72 @@ private fun StudioWaveApp() {
             }
         }
     }
+    val latestProject by rememberUpdatedState(project)
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching {
                 context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            val audioTrack = project.tracks.firstOrNull { it.kind == "audio" }
-            val target = audioTrack ?: StudioTrack(name = "AUDIO 1", colorArgb = 0xFF3B82F6L, kind = "audio")
-            when {
-                audioTrack == null && project.tracks.size >= StudioProject.MAX_TRACKS -> {
-                    audioError = "Track limit reached (${StudioProject.MAX_TRACKS}); remove a track before importing."
-                }
-                target.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK -> {
-                    audioError = "Clip limit reached for the audio track."
-                }
-                else -> {
-                    val clip = com.studiowave.app.data.WaveClip(
-                        name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
-                        startTick = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L,
-                        lengthTicks = 15360L,
-                        sourceUri = uri.toString()
-                    )
-                    val updatedTrack = target.copy(clips = target.clips + clip)
-                    changeProject(project.copy(tracks = if (audioTrack == null) project.tracks + updatedTrack else project.tracks.map { if (it.id == target.id) updatedTrack else it }))
-                    selectedWorkspace = "ARRANGEMENT"
-                    audioError = null
+            playbackScope.launch {
+                try {
+                    val durationMs = withContext(Dispatchers.IO) {
+                        val retriever = MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(context, uri)
+                            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                ?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                        } finally {
+                            runCatching { retriever.release() }
+                        }
+                    }
+                    val currentProject = latestProject
+                    val audioTrack = currentProject.tracks.firstOrNull { it.kind == "audio" }
+                    val target = audioTrack ?: StudioTrack(name = "AUDIO 1", colorArgb = 0xFF3B82F6L, kind = "audio")
+                    when {
+                        audioTrack == null && currentProject.tracks.size >= StudioProject.MAX_TRACKS -> {
+                            audioError = "Track limit reached (${StudioProject.MAX_TRACKS}); remove a track before importing."
+                        }
+                        target.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK -> {
+                            audioError = "Clip limit reached for the audio track."
+                        }
+                        durationMs > ArrangementPlaybackEngine.MAX_SOURCE_SECONDS * 1000L -> {
+                            audioError = "Audio is longer than the current 5-minute source limit. Trim it before importing."
+                        }
+                        else -> {
+                            val timebase = TimelineTimebase(
+                                currentProject.bpm, currentProject.numerator,
+                                currentProject.denominator, currentProject.ppq
+                            )
+                            val exactTicks = if (durationMs > 0L) {
+                                kotlin.math.ceil(durationMs.toDouble() * currentProject.bpm *
+                                    currentProject.ppq / 60_000.0).toLong().coerceAtLeast(1L)
+                            } else 15360L
+                            val snapStep = SnapDivision.QUARTER_BEAT.ticks(timebase)
+                            val lengthTicks = if (durationMs > 0L) {
+                                (((exactTicks + snapStep - 1L) / snapStep) * snapStep).coerceAtLeast(snapStep)
+                            } else 15360L
+                            val clip = com.studiowave.app.data.WaveClip(
+                                name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
+                                startTick = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L,
+                                lengthTicks = lengthTicks,
+                                sourceUri = uri.toString()
+                            )
+                            val updatedTrack = target.copy(clips = target.clips + clip)
+                            changeProject(currentProject.copy(tracks = if (audioTrack == null) {
+                                currentProject.tracks + updatedTrack
+                            } else currentProject.tracks.map { if (it.id == target.id) updatedTrack else it }))
+                            selectedWorkspace = "ARRANGEMENT"
+                            audioError = null
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    audioError = failure.message ?: "Could not inspect the audio file."
                 }
             }
         }
     }
-    val latestProject by rememberUpdatedState(project)
     val exportProjectLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri ->
@@ -559,7 +596,8 @@ private fun ArrangementWorkspace(
     var showTimelineMenu by remember { mutableStateOf(false) }
     var showAddTrack by remember { mutableStateOf(false) }
     var snapEnabled by remember { mutableStateOf(true) }
-    var snapDivision by remember { mutableStateOf(SnapDivision.SIXTEENTH_BEAT) }
+    // "1/16" means a sixteenth note: one quarter of a quarter-note beat in 4/4.
+    var snapDivision by remember { mutableStateOf(SnapDivision.QUARTER_BEAT) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var renameClipId by remember { mutableStateOf<String?>(null) }
     var renameText by remember { mutableStateOf("") }
