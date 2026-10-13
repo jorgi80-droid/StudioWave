@@ -855,7 +855,6 @@ private fun ArrangementWorkspace(
                 dismissButton = { TextButton(onClick = { renameClipId = null }) { Text("Cancel") } }
             )
         }
-        }
     }
 }
 
