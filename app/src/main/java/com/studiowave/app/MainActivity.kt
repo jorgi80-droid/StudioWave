@@ -37,6 +37,9 @@ import java.nio.ByteOrder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,8 +82,10 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun StudioWaveApp() {
-    val engine = remember { NativeAudioEngine() }
     val context = LocalContext.current
+    val engine = remember { NativeAudioEngine() }
+    val arrangementPlayback = remember(context) { com.studiowave.app.audio.ArrangementPlaybackEngine(context) }
+    val playbackScope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("studiowave_project", android.content.Context.MODE_PRIVATE) }
     var project by remember {
         mutableStateOf(
@@ -90,6 +95,8 @@ private fun StudioWaveApp() {
         )
     }
     var playing by remember { mutableStateOf(false) }
+    var playbackLoading by remember { mutableStateOf(false) }
+    var playbackJob by remember { mutableStateOf<Job?>(null) }
     var bpm by remember { mutableIntStateOf(project.bpm) }
     var audioError by remember { mutableStateOf<String?>(null) }
     var master by remember { mutableFloatStateOf(0.72f) }
@@ -143,7 +150,13 @@ private fun StudioWaveApp() {
         delay(350)
         runCatching { preferences.edit().putString("project_json", project.toJson().toString()).apply() }
     }
-    DisposableEffect(engine) { onDispose { engine.close() } }
+    DisposableEffect(engine, arrangementPlayback) {
+        onDispose {
+            playbackJob?.cancel()
+            arrangementPlayback.close()
+            engine.close()
+        }
+    }
 
     MaterialTheme(colorScheme = darkColorScheme(
         primary = Mint, secondary = Color(0xFFFF7644), background = Room,
@@ -157,21 +170,52 @@ private fun StudioWaveApp() {
                         Text(audioError!!, color = Color(0xFFFFD4D4), fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), maxLines = 2)
                     }
                 }
-                TransportBar(playing, bpm, master, { value ->
+                TransportBar(playing || playbackLoading, bpm, master, { value ->
                     bpm = value.coerceIn(40, 240)
                     changeProject(project.copy(bpm = bpm))
                 }, { master = it }, onUndo = { undoProject() }, onRedo = { redoProject() },
                     onPlay = {
-                        if (!playing) {
-                            runCatching { engine.setTone(55f, 0.025f, 1); engine.start() }
-                                .onSuccess { playing = true; audioError = null }
-                                .onFailure { playing = false; audioError = it.message ?: "Audio output unavailable" }
-                        } else {
+                        if (playing || playbackLoading) {
+                            playbackJob?.cancel()
+                            playbackJob = null
+                            arrangementPlayback.stop()
                             engine.stop()
                             playing = false
+                            playbackLoading = false
+                        } else {
+                            playbackLoading = true
+                            audioError = null
+                            playbackJob = playbackScope.launch {
+                                try {
+                                    arrangementPlayback.start(project, master) {
+                                        playbackScope.launch {
+                                            playing = false
+                                            playbackLoading = false
+                                            playbackJob = null
+                                        }
+                                    }
+                                    playing = true
+                                } catch (_: CancellationException) {
+                                    // A stop request cancelled media preparation.
+                                } catch (failure: Exception) {
+                                    playing = false
+                                    audioError = failure.message ?: "Arrangement playback failed"
+                                } finally {
+                                    playbackLoading = false
+                                    playbackJob = null
+                                }
+                            }
                         }
                     },
-                    onStop = { engine.stop(); playing = false; audioError = null })
+                    onStop = {
+                        playbackJob?.cancel()
+                        playbackJob = null
+                        arrangementPlayback.stop()
+                        engine.stop()
+                        playing = false
+                        playbackLoading = false
+                        audioError = null
+                    })
                 Spacer(Modifier.height(3.dp))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
