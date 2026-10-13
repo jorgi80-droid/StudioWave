@@ -361,7 +361,7 @@ private fun ArrangementWorkspace(
     var renameText by remember { mutableStateOf("") }
     var copiedClip by remember { mutableStateOf<Pair<StudioTrack, com.studiowave.app.data.WaveClip>?>(null) }
 
-    fun addTrack(kind: String) {
+    fun addTrack(kind: String, openEditor: Boolean = false) {
         if (project.tracks.size >= StudioProject.MAX_TRACKS) {
             statusMessage = "Track limit reached (${StudioProject.MAX_TRACKS})"
             showAddTrack = false
@@ -373,13 +373,28 @@ private fun ArrangementWorkspace(
         val color: Long
         when (kind) {
             "audio" -> { name = "AUDIO $number"; color = 0xFF3B82F6L }
-            "drum" -> { name = "DRUM RACK $number"; color = 0xFFFF7644L }
-            else -> { name = "INSTRUMENT $number"; color = 0xFF00D2B4L }
+            "drum" -> { name = "DRUM STEP $number"; color = 0xFFFF7644L }
+            else -> { name = "VIRTUAL INSTRUMENT $number"; color = 0xFF00D2B4L }
         }
-        onProjectChange(project.copy(tracks = project.tracks + StudioTrack(name = name, colorArgb = color, kind = kind)))
+        val starterClip = when (kind) {
+            "midi" -> com.studiowave.app.data.WaveClip(
+                name = "MIDI Pattern 1", startTick = 0L, lengthTicks = 15360L
+            )
+            "drum" -> com.studiowave.app.data.WaveClip(
+                name = "Drum Pattern 1", startTick = 0L, lengthTicks = 15360L,
+                drumSteps = List(16) { false }
+            )
+            else -> null
+        }
+        val newTrack = StudioTrack(
+            name = name, colorArgb = color, kind = kind,
+            clips = starterClip?.let { listOf(it) } ?: emptyList()
+        )
+        onProjectChange(project.copy(tracks = project.tracks + newTrack))
         statusMessage = "$name added"
         showAddTrack = false
         showTimelineMenu = false
+        if (openEditor) onOpenEditor(if (kind == "drum") "DRUM SEQUENCER" else "PIANO ROLL", newTrack.id)
     }
 
     fun handleClipAction(action: String, clipId: String) {
@@ -450,9 +465,9 @@ private fun ArrangementWorkspace(
         Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
             SmallAction("TRACK +") { showAddTrack = true }
-            SmallAction("MIDI") { addTrack("midi") }
-            SmallAction("INSTR") { addTrack("midi") }
-            SmallAction("DRUM") { addTrack("drum") }
+            SmallAction("MIDI") { addTrack("midi", openEditor = true) }
+            SmallAction("INSTR") { addTrack("midi", openEditor = true) }
+            SmallAction("DRUM STEP") { addTrack("drum", openEditor = true) }
             SmallAction("AUDIO") { addTrack("audio") }
             Spacer(Modifier.weight(1f))
             SmallAction("FIT") { onZoom(1f); onVerticalZoom(1f); onScroll(0f); onScrollTracks(0f) }
@@ -486,8 +501,8 @@ private fun ArrangementWorkspace(
                         Surface(color = Raised, shape = RoundedCornerShape(10.dp), shadowElevation = 8.dp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)) {
                             Column(Modifier.width(150.dp).padding(5.dp)) {
                                 Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                                listOf("Instrument / MIDI" to "midi", "Audio clip" to "audio", "Drum track" to "drum").forEach { pair ->
-                                    Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second); addTrackMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
+                                listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
+                                    Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second, openEditor = pair.second != "audio"); addTrackMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
                                 }
                             }
                         }
@@ -555,8 +570,8 @@ private fun ArrangementWorkspace(
             if (showAddTrack) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(155.dp).padding(5.dp)) {
                     Text("ADD TRACK", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                    listOf("Instrument / MIDI" to "midi", "Audio clip" to "audio", "Drum track" to "drum").forEach { pair ->
-                        Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second) }.padding(9.dp))
+                    listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
+                        Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second, openEditor = pair.second != "audio") }.padding(9.dp))
                     }
                 }
             }
