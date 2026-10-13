@@ -651,9 +651,8 @@ private fun ArrangementWorkspace(
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
                 .toFloat().coerceIn(0.55f, 2.8f)
         }
-        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
-        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF), maxLines = 1)
+        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(2.dp)) {
+        Row(Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             SmallAction("FIT") {
                 onZoom(fitZoom)
                 onVerticalZoom(1f)
@@ -809,7 +808,29 @@ private fun ArrangementWorkspace(
             )
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {
-            if (statusMessage != null) Surface(color = Raised, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(4.dp).clickable { statusMessage = null }) { Text(statusMessage!!, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(8.dp)) }
+            // Keep routine edit feedback out of the timeline; only validation errors appear inline.
+            if (statusMessage != null) {
+                val feedback = statusMessage!!
+                val isError = feedback.contains("must", ignoreCase = true) ||
+                    feedback.contains("limit", ignoreCase = true) ||
+                    feedback.contains("no longer", ignoreCase = true) ||
+                    feedback.contains("matching", ignoreCase = true) ||
+                    feedback.contains("Nothing copied", ignoreCase = true)
+                LaunchedEffect(feedback) {
+                    delay(if (isError) 1800 else 650)
+                    if (statusMessage == feedback) statusMessage = null
+                }
+                if (isError) {
+                    Surface(
+                        color = Color(0xFF3D2929).copy(alpha = 0.94f),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.padding(4.dp).clickable { statusMessage = null }
+                    ) {
+                        Text(feedback, color = Color(0xFFFFD4D4), fontSize = 9.sp,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp), maxLines = 2)
+                    }
+                }
+            }
             if (showTimelineMenu) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(150.dp).padding(5.dp)) {
                     Text("TIMELINE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
