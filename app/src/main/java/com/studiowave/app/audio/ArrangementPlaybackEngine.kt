@@ -138,8 +138,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val tracks = project.tracks
         val soloActive = tracks.any { it.solo && !it.muted }
         fun audible(track: StudioTrack) = !track.muted && (!soloActive || track.solo)
-        val maxTick = tracks.flatMap { it.clips }.maxOfOrNull { it.startTick.coerceAtLeast(0L) + it.lengthTicks.coerceAtLeast(1L) }
-            ?: (ppq.toLong() * project.numerator.coerceAtLeast(1) * 4L / project.denominator.coerceAtLeast(1))
+        val maxTick = tracks.flatMap { it.clips }.maxOfOrNull {
+            val start = it.startTick.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 2)
+            val length = it.lengthTicks.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / 2)
+            if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
+        } ?: (ppq.toLong() * project.numerator.coerceAtLeast(1) * 4L / project.denominator.coerceAtLeast(1))
         val totalFrames = ticksToFrames(maxTick).coerceIn(1L, sampleRate.toLong() * MAX_ARRANGEMENT_SECONDS)
 
         val requestedTicksByUri = linkedMapOf<String, Long>()
@@ -166,10 +169,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val notes = ArrayList<NoteEvent>()
         val drums = ArrayList<DrumEvent>()
         tracks.filter(::audible).forEach { track ->
-            track.clips.forEach { clip ->
+            track.clips.forEach clipLoop@{ clip ->
                 val clipStart = ticksToFrames(clip.startTick)
-                val clipEnd = min(totalFrames, clipStart + ticksToFrames(clip.lengthTicks))
-                if (clipEnd <= clipStart) return@forEach
+                val clipLength = ticksToFrames(clip.lengthTicks.coerceAtLeast(1L))
+                val clipEnd = min(totalFrames, if (clipStart > Long.MAX_VALUE - clipLength) Long.MAX_VALUE else clipStart + clipLength)
+                if (clipEnd <= clipStart) return@clipLoop
                 when (track.kind) {
                     "audio" -> {
                         val source = clip.sourceUri ?: return@clipLoop
