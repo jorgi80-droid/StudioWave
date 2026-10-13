@@ -95,18 +95,26 @@ data class TimelineViewport(
     /** Change scale without changing the musical tick under the screen anchor. */
     fun zoomKeepingAnchor(newPixelsPerBar: Float, anchorScreenX: Float): TimelineViewport {
         val anchorTick = screenXToTime(anchorScreenX).toDouble()
-        val newScale = (newPixelsPerBar.coerceAtLeast(1f).toDouble() / timebase.ticksPerBar)
-            .coerceAtLeast(0.000001)
+        val clampedScale = newPixelsPerBar.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
+        val newScale = clampedScale.toDouble() / timebase.ticksPerBar.toDouble()
+        // scrollTimeTicks is the tick at the left edge of the timeline pane, not
+        // the left edge of the whole arrangement including the track header.
         val newScroll = (anchorTick - (anchorScreenX - trackHeaderWidthPx) / newScale)
-            .coerceAtLeast(0.0)
-        return copy(pixelsPerBar = newPixelsPerBar.coerceAtLeast(1f), scrollTimeTicks = newScroll)
+            .coerceIn(0.0, Long.MAX_VALUE.toDouble())
+        return copy(pixelsPerBar = clampedScale, scrollTimeTicks = newScroll)
     }
 
     fun panByScreenPixels(deltaX: Float): TimelineViewport =
-        copy(scrollTimeTicks = (scrollTimeTicks - deltaX.toDouble() / pixelsPerTick).coerceAtLeast(0.0))
+        copy(scrollTimeTicks = (scrollTimeTicks - deltaX.toDouble() / pixelsPerTick)
+            .coerceIn(0.0, Long.MAX_VALUE.toDouble()))
 
     fun snapTick(tick: Long, division: SnapDivision, enabled: Boolean = true): Long =
         if (enabled) timebase.snap(tick, division) else tick.coerceAtLeast(0L)
+
+    companion object {
+        const val MIN_PIXELS_PER_BAR = 20f
+        const val MAX_PIXELS_PER_BAR = 1200f
+    }
 
     fun visibleSubdivisionTicks(pixelsPerTickThreshold: Double = 0.35): Long {
         val candidates = listOf(
