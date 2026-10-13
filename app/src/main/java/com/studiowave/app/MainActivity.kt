@@ -502,7 +502,7 @@ private fun TransportBar(
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     Row(
-        Modifier.fillMaxWidth().height(38.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
+        Modifier.fillMaxWidth().height(44.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -521,21 +521,22 @@ private fun TransportBar(
         SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
         Spacer(Modifier.weight(1f))
         Text("MST", color = MutedText, fontSize = 7.sp)
-        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(46.dp).height(22.dp), valueRange = 0f..1f)
-        Column(Modifier.width(122.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text("M ${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(76.dp).height(30.dp), valueRange = 0f..1f)
+        Column(Modifier.width(166.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("M ${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            Canvas(Modifier.fillMaxWidth().height(9.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(11.dp)) {
                 drawLine(Color(0xFF343A40), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
                 peakHistory.forEachIndexed { index, level ->
                     val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
                     val x = index * size.width / peakHistory.size.coerceAtLeast(1)
-                    drawLine(Mint.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar), (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
+                    drawLine(Mint.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
+                        (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
                 }
             }
-            Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 6.sp, maxLines = 1)
+            Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 8.sp, maxLines = 1)
         }
     }
 }
@@ -737,18 +738,7 @@ private fun ArrangementWorkspace(
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
                 .toFloat().coerceIn(0.55f, 2.8f)
         }
-        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(2.dp)) {
-        Row(Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            SmallAction("FIT") {
-                onZoom(fitZoom)
-                onVerticalZoom(1f)
-                onScroll(0f)
-                onScrollTracks(0f)
-            }
-            SmallAction(if (snapEnabled) "SNAP" else "SNAP OFF") { snapEnabled = !snapEnabled }
-            SmallAction(snapDivision.label) { snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it } }
-            Spacer(Modifier.weight(1f))
-        }
+        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.width(104.dp)) {
                 Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
@@ -935,6 +925,29 @@ private fun ArrangementWorkspace(
                     }
                 }
             )
+        }
+        // Floating controls remain outside the ruler/clip canvas to preserve timeline space.
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
+            Row(
+                Modifier.padding(end = 8.dp, bottom = 8.dp)
+                    .background(Raised.copy(alpha = 0.94f), RoundedCornerShape(28.dp))
+                    .padding(horizontal = 5.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FloatingTimelineControl("FIT", "Fit clips to view") {
+                    onZoom(fitZoom)
+                    onVerticalZoom(1f)
+                    onScroll(0f)
+                    onScrollTracks(0f)
+                }
+                FloatingTimelineControl(if (snapEnabled) "SN" else "SN×", if (snapEnabled) "Snap on" else "Snap off") {
+                    snapEnabled = !snapEnabled
+                }
+                FloatingTimelineControl(snapDivision.label, "Change snap division") {
+                    snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it }
+                }
+            }
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {
             // Keep routine edit feedback out of the timeline; only validation errors appear inline.
@@ -1953,6 +1966,22 @@ private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float)
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
+    Surface(
+        color = Color(0xFF353A42),
+        contentColor = Color(0xFFE4E8EF),
+        shape = RoundedCornerShape(50),
+        modifier = Modifier.sizeIn(minWidth = 34.dp, minHeight = 34.dp)
+            .defaultMinSize(minWidth = 34.dp, minHeight = 34.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
+            Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
