@@ -201,7 +201,7 @@ private fun StudioWaveApp() {
                 TransportBar(playing || playbackLoading, bpm, master, { value ->
                     bpm = value.coerceIn(40, 240)
                     changeProject(project.copy(bpm = bpm))
-                }, { master = it }, onUndo = { undoProject() }, onRedo = { redoProject() },
+                }, { value -> master = value; arrangementPlayback.setMasterGain(value) }, onUndo = { undoProject() }, onRedo = { redoProject() },
                     onPlay = {
                         if (playing || playbackLoading) {
                             playbackJob?.cancel()
