@@ -1694,7 +1694,6 @@ private fun TimelineGrid(
                                                 onDragEnd = {
                                                     val barWidthPx = viewport.effectivePixelsPerBar
                                                      val resizeViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), viewportWidthPx, trackHeaderWidthPx)
-                                                     val originalEndX = resizeViewport.timeToViewportX(clip.startTick + clip.lengthTicks)
                                                      val rawEndTick = (clip.startTick + clip.lengthTicks.coerceAtLeast(1L) +
                                                          resizeViewport.pixelsToTickDelta(resizeDeltaPx)).coerceAtLeast(clip.startTick + 1L)
                                                      val snapStep = snapDivision.ticks(timebase)
