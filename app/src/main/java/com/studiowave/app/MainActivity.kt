@@ -594,15 +594,19 @@ private fun TimelineGrid(
                                 )
                                 .padding(4.dp)
                         ) {
-                            Box(Modifier.fillMaxWidth().height(5.dp).pointerInput(clip.id, zoom, clip.lengthTicks) {
+                            var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
+                            Box(Modifier.fillMaxWidth().height(7.dp).pointerInput(clip.id, zoom) {
                                 detectDragGestures(
-                                    onDrag = { change, amount ->
-                                        change.consume()
-                                        val deltaTicks = (amount.x / (baseBarWidthPx * zoom) * 3840f).toLong()
+                                    onDragStart = { resizeDeltaPx = 0f },
+                                    onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
+                                    onDragEnd = {
+                                        val deltaTicks = (resizeDeltaPx / (baseBarWidthPx * zoom) * 3840f).toLong()
                                         onResizeClip(clip.id, (clip.lengthTicks + deltaTicks).coerceAtLeast(240L))
-                                    }
+                                        resizeDeltaPx = 0f
+                                    },
+                                    onDragCancel = { resizeDeltaPx = 0f }
                                 )
-                            }.background(Color.White.copy(alpha = 0.55f), RoundedCornerShape(3.dp)))
+                            }.background(Color.White.copy(alpha = 0.65f), RoundedCornerShape(3.dp)))
                             Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
                             if (track.kind == "drum") {
                                 Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
