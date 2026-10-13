@@ -367,22 +367,27 @@ private fun ArrangementWorkspace(
 
 @Composable
 private fun DrumSequencerWorkspace(track: StudioTrack?, onBack: () -> Unit) {
-
+    var steps by remember(track?.id) { mutableStateOf(track?.clips?.firstOrNull()?.drumSteps?.let { it + List((16 - it.size).coerceAtLeast(0)) { false } } ?: List(16) { false }) }
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("‹  BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
+            Text("‹ BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
             Text((track?.name ?: "DRUM").uppercase() + " • STEP SEQUENCER", color = Color.White, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text("16 STEPS", color = MutedText, fontSize = 9.sp)
         }
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             (0..15).forEach { step ->
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.fillMaxWidth().height(70.dp).background(if (step % 4 == 0) Mint.copy(alpha = 0.65f) else Raised, RoundedCornerShape(4.dp)).clickable { }.padding(2.dp))
+                    Box(Modifier.fillMaxWidth().height(70.dp)
+                        .background(if (steps[step]) Mint else if (step % 4 == 0) Color(0xFF343A43) else Raised, RoundedCornerShape(4.dp))
+                        .clickable { steps = steps.toMutableList().also { it[step] = !it[step] } }
+                        .padding(2.dp))
                     Text((step + 1).toString(), color = MutedText, fontSize = 8.sp)
                 }
             }
         }
-        Text("Drum steps editor • per-step editing integration pending", color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 12.dp))
+        Text("Tap a step to toggle trigger", color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 12.dp))
     }
 }
 
