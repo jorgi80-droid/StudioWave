@@ -175,13 +175,74 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 }
 
 @Composable
-private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (StudioProject) -> Unit, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit, verticalZoom: Float, onVerticalZoom: (Float) -> Unit, scrollTracks: Float, onScrollTracks: (Float) -> Unit, onOpenEditor: (String, String?) -> Unit) {
+private fun ArrangementWorkspace(
+    project: StudioProject,
+    onProjectChange: (StudioProject) -> Unit,
+    zoom: Float, onZoom: (Float) -> Unit,
+    scrollBars: Float, onScroll: (Float) -> Unit,
+    verticalZoom: Float, onVerticalZoom: (Float) -> Unit,
+    scrollTracks: Float, onScrollTracks: (Float) -> Unit,
+    onOpenEditor: (String, String?) -> Unit
+) {
     var selectedClip by remember { mutableStateOf<String?>(null) }
-    var showAddTrack by remember { mutableStateOf(false) }
     var clipMenu by remember { mutableStateOf<String?>(null) }
     var showTimelineMenu by remember { mutableStateOf(false) }
+    var showAddTrack by remember { mutableStateOf(false) }
     var snapEnabled by remember { mutableStateOf(true) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var copiedClip by remember { mutableStateOf<Pair<StudioTrack, com.studiowave.app.data.WaveClip>?>(null) }
+
+    fun addTrack(kind: String) {
+        val number = project.tracks.count { it.kind == kind } + 1
+        val name: String
+        val color: Long
+        when (kind) {
+            "audio" -> { name = "AUDIO $number"; color = 0xFF3B82F6L }
+            "drum" -> { name = "DRUM RACK $number"; color = 0xFFFF7644L }
+            else -> { name = "INSTRUMENT $number"; color = 0xFF00D2B4L }
+        }
+        onProjectChange(project.copy(tracks = project.tracks + StudioTrack(name = name, colorArgb = color, kind = kind)))
+        statusMessage = "$name added"
+        showAddTrack = false
+        showTimelineMenu = false
+    }
+
+    fun handleClipAction(action: String, clipId: String) {
+        val trackIndex = project.tracks.indexOfFirst { track -> track.clips.any { it.id == clipId } }
+        if (trackIndex < 0) { clipMenu = null; return }
+        val track = project.tracks[trackIndex]
+        val clip = track.clips.first { it.id == clipId }
+        when (action) {
+            "Open editor" -> onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id)
+            "Cut" -> {
+                copiedClip = track to clip
+                onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item -> if (index == trackIndex) item.copy(clips = item.clips.filterNot { it.id == clipId }) else item }))
+                statusMessage = "Clip cut"
+            }
+            "Copy" -> { copiedClip = track to clip; statusMessage = "Clip copied" }
+            "Snap" -> { snapEnabled = !snapEnabled; statusMessage = if (snapEnabled) "Snap on" else "Snap off" }
+            "Delete" -> {
+                onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item -> if (index == trackIndex) item.copy(clips = item.clips.filterNot { it.id == clipId }) else item }))
+                statusMessage = "Clip deleted"
+            }
+        }
+        clipMenu = null
+    }
+
+    fun pasteClip() {
+        val copied = copiedClip
+        if (copied == null) { statusMessage = "Nothing copied yet"; showTimelineMenu = false; return }
+        val targetIndex = project.tracks.indexOfFirst { it.id == copied.first.id }.let { if (it >= 0) it else project.tracks.indexOfFirst { track -> track.kind == copied.first.kind } }
+        if (targetIndex < 0) { statusMessage = "Add a matching track first"; showTimelineMenu = false; return }
+        val target = project.tracks[targetIndex]
+        val source = copied.second
+        val nextStart = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L
+        val pasted = source.copy(id = java.util.UUID.randomUUID().toString(), name = source.name + " copy", startTick = nextStart)
+        onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item -> if (index == targetIndex) item.copy(clips = item.clips + pasted) else item }))
+        statusMessage = "Clip pasted"
+        showTimelineMenu = false
+    }
+
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
         Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
@@ -197,7 +258,9 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
                 }
                 var addTrackMenu by remember { mutableStateOf(false) }
                 Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
-                    project.tracks.forEachIndexed { index, track -> TrackHeader(track, index, verticalZoom, scrollTracks) { onOpenEditor(if (track.kind == "drum") "DRUM SEQUENCER" else if (track.kind == "audio") "AUDIO EDITOR" else "PIANO ROLL", track.id) } }
+                    project.tracks.forEachIndexed { index, track ->
+                        TrackHeader(track, index, verticalZoom, scrollTracks) { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) }
+                    }
                     Surface(color = Mint, shape = RoundedCornerShape(9.dp), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 5.dp).size(30.dp).clickable { addTrackMenu = !addTrackMenu }) {
                         Box(contentAlignment = Alignment.Center) { Text("+", color = Room, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
                     }
@@ -205,16 +268,8 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
                         Surface(color = Raised, shape = RoundedCornerShape(10.dp), shadowElevation = 8.dp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp)) {
                             Column(Modifier.width(150.dp).padding(5.dp)) {
                                 Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                                listOf("Instrument / MIDI", "Audio clip", "Drum track").forEach { choice ->
-                                    Text(choice, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
-                                        val newTrack = when (choice) {
-                                            "Audio clip" -> StudioTrack(name = "AUDIO", colorArgb = 0xFF3B82F6, kind = "audio")
-                                            "Drum track" -> StudioTrack(name = "DRUM RACK", colorArgb = 0xFFFF7644, kind = "drum")
-                                            else -> StudioTrack(name = "INSTRUMENT", colorArgb = 0xFF00D2B4, kind = "midi")
-                                        }
-                                        onProjectChange(project.copy(tracks = project.tracks + newTrack))
-                                        addTrackMenu = false
-                                    }.padding(horizontal = 9.dp, vertical = 8.dp))
+                                listOf("Instrument / MIDI" to "midi", "Audio clip" to "audio", "Drum track" to "drum").forEach { pair ->
+                                    Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second); addTrackMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
                                 }
                             }
                         }
@@ -222,49 +277,41 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
                 }
             }
             TimelineGrid(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                project = project,
-                zoom = zoom,
-                onZoom = onZoom,
-                scrollBars = scrollBars,
-                onScroll = onScroll,
-                verticalZoom = verticalZoom,
-                onVerticalZoom = onVerticalZoom,
-                scrollTracks = scrollTracks,
-                onScrollTracks = onScrollTracks,
-                selectedClip = selectedClip,
+                modifier = Modifier.weight(1f).fillMaxHeight(), project = project, zoom = zoom, onZoom = onZoom,
+                scrollBars = scrollBars, onScroll = onScroll, verticalZoom = verticalZoom, onVerticalZoom = onVerticalZoom,
+                scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it },
                 onOpenEditor = { clipId ->
-                    val track = project.tracks.firstOrNull { t -> t.clips.any { it.id == clipId } }
+                    val track = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
                     onOpenEditor(when (track?.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track?.id)
                 },
                 onClipLongPress = { clipMenu = it },
                 onTimelineLongPress = { showTimelineMenu = true }
             )
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
-                if (statusMessage != null) {
-                    Surface(color = Raised, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(8.dp)) {
-                        Text(statusMessage!!, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(10.dp))
+        }
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {
+            if (statusMessage != null) Surface(color = Raised, shape = RoundedCornerShape(8.dp), modifier = Modifier.padding(4.dp).clickable { statusMessage = null }) { Text(statusMessage!!, color = Color.White, fontSize = 10.sp, modifier = Modifier.padding(8.dp)) }
+            if (showTimelineMenu) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+                Column(Modifier.width(150.dp).padding(5.dp)) {
+                    Text("TIMELINE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                    Text("Add track", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { showAddTrack = true; showTimelineMenu = false }.padding(9.dp))
+                    Text("Paste clip", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { pasteClip() }.padding(9.dp))
+                    Text("Import audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { onOpenEditor("BROWSER", null); showTimelineMenu = false }.padding(9.dp))
+                }
+            }
+            if (showAddTrack) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+                Column(Modifier.width(155.dp).padding(5.dp)) {
+                    Text("ADD TRACK", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                    listOf("Instrument / MIDI" to "midi", "Audio clip" to "audio", "Drum track" to "drum").forEach { pair ->
+                        Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second) }.padding(9.dp))
                     }
                 }
-                if (showTimelineMenu) {
-                    Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(8.dp)) {
-                        Column(Modifier.width(150.dp).padding(5.dp)) {
-                            Text("TIMELINE ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                            listOf("Add track", "Create clip", "Paste", "Import audio").forEach { action ->
-                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { statusMessage = when(action) { "Add track" -> "Add track: track creation hook needed"; "Create clip" -> "Choose a track to create a clip"; "Paste" -> "Nothing copied yet"; else -> "Open Browser to import audio" }; if(action == "Import audio") onOpenEditor("BROWSER", null); showTimelineMenu = false }.padding(horizontal = 9.dp, vertical = 8.dp))
-                            }
-                        }
-                    }
-                }
-                if (clipMenu != null) {
-                    Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(8.dp)) {
-                        Column(Modifier.width(150.dp).padding(5.dp)) {
-                            Text("CLIP ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                            listOf("Open editor", "Cut", "Copy", "Snap: " + if (snapEnabled) "On" else "Off").forEach { action ->
-                                Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { when { action == "Open editor" -> onOpenEditor("PIANO ROLL", null); action == "Cut" -> statusMessage = "Cut selected clip"; action == "Copy" -> statusMessage = "Clip copied"; else -> snapEnabled = !snapEnabled }; clipMenu = null }.padding(horizontal = 9.dp, vertical = 8.dp))
-                            }
-                        }
+            }
+            if (clipMenu != null) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+                Column(Modifier.width(150.dp).padding(5.dp)) {
+                    Text("CLIP ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                    listOf("Open editor", "Cut", "Copy", "Snap", "Delete").forEach { action ->
+                        Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { clipMenu?.let { handleClipAction(action, it) } }.padding(horizontal = 9.dp, vertical = 8.dp))
                     }
                 }
             }
@@ -274,6 +321,7 @@ private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (Studi
 
 @Composable
 private fun DrumSequencerWorkspace(track: StudioTrack?, onBack: () -> Unit) {
+
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("‹  BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
