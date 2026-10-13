@@ -31,8 +31,10 @@ jobs:
           set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.2.12479018" "cmake;3.22.1"
-          test -x "$ANDROID_HOME/cmake/3.22.1/bin/cmake"
+          # Install only packages required by the current build. The project has
+          # no externalNativeBuild configuration, so downloading an NDK/CMake
+          # archive here adds failure modes without being used by Gradle.
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
