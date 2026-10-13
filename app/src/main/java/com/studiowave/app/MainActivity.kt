@@ -91,6 +91,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun musicalPositionLabel(tick: Long, ppq: Int, numerator: Int, denominator: Int): String {
+    val safePpq = ppq.coerceIn(24, 3840)
+    val safeNumerator = numerator.coerceIn(1, 32)
+    val safeDenominator = denominator.coerceIn(1, 32)
+    val ticksPerBeat = (safePpq.toLong() * 4L / safeDenominator).coerceAtLeast(1L)
+    val ticksPerBar = (ticksPerBeat * safeNumerator).coerceAtLeast(1L)
+    val safeTick = tick.coerceAtLeast(0L)
+    val bar = safeTick / ticksPerBar + 1L
+    val beat = safeTick % ticksPerBar / ticksPerBeat + 1L
+    return "BAR ${bar.toString().padStart(3, '0')}:${beat.toString().padStart(2, '0')}"
+}
+
 private fun suggestedSdawFileName(projectName: String): String {
     val safeName = projectName.trim()
         .replace(Regex("[^A-Za-z0-9 _.-]"), "")
@@ -118,6 +130,8 @@ private fun StudioWaveApp() {
     var playing by remember { mutableStateOf(false) }
     var playbackLoading by remember { mutableStateOf(false) }
     var playbackJob by remember { mutableStateOf<Job?>(null) }
+    var playheadTick by remember { mutableLongStateOf(0L) }
+    var playbackSession by remember { mutableLongStateOf(0L) }
     var bpm by remember { mutableIntStateOf(project.bpm) }
     var audioError by remember { mutableStateOf<String?>(null) }
     var master by remember { mutableFloatStateOf(0.72f) }
@@ -156,6 +170,81 @@ private fun StudioWaveApp() {
         project = next
         bpm = next.bpm
         arrangementPlayback.updateMix(next)
+    }
+    fun stopPlayback() {
+        playbackSession += 1L
+        playbackJob?.cancel()
+        playbackJob = null
+        arrangementPlayback.stop()
+        engine.stop()
+        playing = false
+        playbackLoading = false
+        audioError = null
+    }
+    fun seekToTick(tick: Long) {
+        val target = tick.coerceAtLeast(0L)
+        if (playing || playbackLoading) stopPlayback()
+        playheadTick = target
+    }
+    fun startPlaybackAt(tick: Long) {
+        val session = playbackSession + 1L
+        playbackSession = session
+        val snapshot = project
+        val gain = master.coerceIn(0f, 1f)
+        val startTick = tick.coerceAtLeast(0L)
+        playheadTick = startTick
+        playbackLoading = true
+        audioError = null
+        playbackJob = playbackScope.launch {
+            try {
+                arrangementPlayback.start(
+                    snapshot,
+                    gain,
+                    onCompleted = {
+                        playbackScope.launch {
+                            if (session == playbackSession) {
+                                playing = false
+                                playbackLoading = false
+                                playbackJob = null
+                            }
+                        }
+                    },
+                    onError = { message ->
+                        playbackScope.launch {
+                            if (session == playbackSession) {
+                                playing = false
+                                playbackLoading = false
+                                playbackJob = null
+                                audioError = message
+                            }
+                        }
+                    },
+                    startAtTick = startTick,
+                    onProgress = { positionTicks ->
+                        playbackScope.launch {
+                            if (session == playbackSession) playheadTick = positionTicks.coerceAtLeast(0L)
+                        }
+                    }
+                )
+                if (session == playbackSession) playing = true
+            } catch (_: CancellationException) {
+                if (session == playbackSession) {
+                    playing = false
+                    playbackLoading = false
+                    playbackJob = null
+                }
+            } catch (failure: Exception) {
+                if (session == playbackSession) {
+                    playing = false
+                    audioError = failure.message ?: "Arrangement playback failed"
+                }
+            } finally {
+                if (session == playbackSession) {
+                    playbackLoading = false
+                    playbackJob = null
+                }
+            }
+        }
     }
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -280,7 +369,13 @@ private fun StudioWaveApp() {
                         Text(audioError!!, color = Color(0xFFFFD4D4), fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), maxLines = 2)
                     }
                 }
-                TransportBar(playing || playbackLoading, bpm, master, { value ->
+                TransportBar(
+                    playing || playbackLoading,
+                    bpm,
+                    master,
+                    musicalPositionLabel(playheadTick, project.ppq, project.numerator, project.denominator),
+                    "${project.numerator}/${project.denominator}",
+                    { value ->
                     bpm = value.coerceIn(40, 240)
                     changeProject(project.copy(bpm = bpm))
                 }, { value -> master = value; arrangementPlayback.setMasterGain(value) }, onUndo = { undoProject() }, onRedo = { redoProject() },
@@ -290,59 +385,9 @@ private fun StudioWaveApp() {
                     },
                     onOpenProject = { importProjectLauncher.launch(arrayOf("*/*")) },
                     onPlay = {
-                        if (playing || playbackLoading) {
-                            playbackJob?.cancel()
-                            playbackJob = null
-                            arrangementPlayback.stop()
-                            engine.stop()
-                            playing = false
-                            playbackLoading = false
-                        } else {
-                            playbackLoading = true
-                            audioError = null
-                            playbackJob = playbackScope.launch {
-                                try {
-                                    arrangementPlayback.start(
-                                        project,
-                                        master,
-                                        onCompleted = {
-                                            playbackScope.launch {
-                                                playing = false
-                                                playbackLoading = false
-                                                playbackJob = null
-                                            }
-                                        },
-                                        onError = { message ->
-                                            playbackScope.launch {
-                                                playing = false
-                                                playbackLoading = false
-                                                playbackJob = null
-                                                audioError = message
-                                            }
-                                        }
-                                    )
-                                    playing = true
-                                } catch (_: CancellationException) {
-                                    // A stop request cancelled media preparation.
-                                } catch (failure: Exception) {
-                                    playing = false
-                                    audioError = failure.message ?: "Arrangement playback failed"
-                                } finally {
-                                    playbackLoading = false
-                                    playbackJob = null
-                                }
-                            }
-                        }
+                        if (playing || playbackLoading) stopPlayback() else startPlaybackAt(playheadTick)
                     },
-                    onStop = {
-                        playbackJob?.cancel()
-                        playbackJob = null
-                        arrangementPlayback.stop()
-                        engine.stop()
-                        playing = false
-                        playbackLoading = false
-                        audioError = null
-                    })
+                    onStop = { stopPlayback() })
                 Spacer(Modifier.height(3.dp))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
@@ -355,7 +400,10 @@ private fun StudioWaveApp() {
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
                             trackHeights = trackHeightsDp,
-                            onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) })
+                            onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) },
+                            playheadTick = playheadTick,
+                            isPlaying = playing,
+                            onSeekTick = { tick -> seekToTick(tick) })
                     }
                 }
                 if (showDock) {
@@ -372,6 +420,7 @@ private fun StudioWaveApp() {
 @Composable
 private fun TransportBar(
     playing: Boolean, bpm: Int, master: Float,
+    positionLabel: String, timeSignatureLabel: String,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
     onUndo: () -> Unit, onRedo: () -> Unit,
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
@@ -387,8 +436,8 @@ private fun TransportBar(
         SmallAction("−") { onBpm(bpm - 1) }
         Text(bpm.toString(), fontSize = 12.sp, fontWeight = FontWeight.Bold)
         SmallAction("+") { onBpm(bpm + 1) }
-        Text("4/4", fontSize = 10.sp, color = MutedText)
-        Text("BAR 001:01", fontSize = 9.sp, color = Color(0xFFDADEE5), maxLines = 1)
+        Text(timeSignatureLabel, fontSize = 10.sp, color = MutedText)
+        Text(positionLabel, fontSize = 9.sp, color = Color(0xFFDADEE5), maxLines = 1)
         SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
         SmallIconButton(Icons.Default.Stop, MutedText, onStop)
         SmallIconButton(Icons.Default.Mic, Red) { }
@@ -438,7 +487,10 @@ private fun ArrangementWorkspace(
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
-    onScratchTrack: (String, Float) -> Unit = { _, _ -> }
+    onScratchTrack: (String, Float) -> Unit = { _, _ -> },
+    playheadTick: Long = 0L,
+    isPlaying: Boolean = false,
+    onSeekTick: (Long) -> Unit = {}
 ) {
     val densityScale = androidx.compose.ui.platform.LocalDensity.current.density
     val trackIds = project.tracks.map { it.id }
@@ -663,7 +715,12 @@ private fun ArrangementWorkspace(
                 }
             }
             TimelineGrid(
-                modifier = Modifier.weight(1f).fillMaxHeight(), project = project, zoom = zoom, onZoom = onZoom,
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                project = project,
+                playheadTick = playheadTick,
+                isPlaying = isPlaying,
+                onSeekTick = onSeekTick,
+                zoom = zoom, onZoom = onZoom,
                 scrollTicks = scrollTicks, onScroll = onScroll, verticalZoom = verticalZoom, onVerticalZoom = onVerticalZoom,
                 snapDivision = snapDivision, scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, trackRowLayout = trackRowLayout, snapEnabled = snapEnabled, selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it },
@@ -935,6 +992,9 @@ private fun TrackHeader(
 private fun TimelineGrid(
     modifier: Modifier = Modifier,
     project: StudioProject,
+    playheadTick: Long,
+    isPlaying: Boolean,
+    onSeekTick: (Long) -> Unit,
     zoom: Float,
     onZoom: (Float) -> Unit,
     scrollTicks: Float,
@@ -982,6 +1042,7 @@ private fun TimelineGrid(
     val currentOnScrollTracks by rememberUpdatedState(onScrollTracks)
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
+    val currentOnSeekTick by rememberUpdatedState(onSeekTick)
     val currentTrackRows by rememberUpdatedState(trackRowLayout)
     var draggingClip by remember { mutableStateOf<String?>(null) }
     var dragFromTrack by remember { mutableIntStateOf(-1) }
@@ -1082,6 +1143,26 @@ private fun TimelineGrid(
                 }
             }
     ) {
+        val timelineWidthPx = with(density) { maxWidth.toPx() }
+        LaunchedEffect(isPlaying, playheadTick, zoom, scrollTicks, timelineWidthPx, timebase) {
+            if (isPlaying && timelineWidthPx > 0f) {
+                val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
+                val currentViewport = TimelineViewport(
+                    timebase, barWidthPx, scrollTicks.toDouble(), timelineWidthPx, trackHeaderWidthPx
+                )
+                val currentX = currentViewport.timeToViewportX(playheadTick)
+                val leftGuard = timelineWidthPx * 0.08f
+                val rightGuard = timelineWidthPx * 0.82f
+                if (currentX < leftGuard || currentX > rightGuard) {
+                    // Keep the playhead in a comfortable forward-looking position.
+                    val targetX = timelineWidthPx * 0.70f
+                    val nextScroll = (playheadTick.toDouble() -
+                        targetX.toDouble() / barWidthPx * timebase.ticksPerBar.toDouble())
+                        .coerceAtLeast(0.0).toFloat()
+                    if (kotlin.math.abs(nextScroll - scrollTicks) > 1f) currentOnScroll(nextScroll)
+                }
+            }
+        }
         // Keep long-press handling on the background layer so it cannot steal a
         // drag that starts on a clip or its resize handle.
         Canvas(Modifier.fillMaxSize().pointerInput(Unit) {
@@ -1130,6 +1211,11 @@ private fun TimelineGrid(
             Modifier
                 .fillMaxWidth()
                 .height(24.dp)
+                .pointerInput(scrollTicks, zoom, timebase) {
+                    detectTapGestures(onTap = { offset ->
+                        currentOnSeekTick(viewport.viewportXToTime(offset.x))
+                    })
+                }
         ) {
             val rulerViewport = viewport.copy(viewportWidthPx = size.width)
              val barWidth = baseBarWidthPx * zoom
@@ -1151,6 +1237,12 @@ private fun TimelineGrid(
                  }
             }
             drawRect(Color(0xFF2B2E34), size = Size(size.width, with(density) { 2.dp.toPx() }))
+            val playheadX = rulerViewport.timeToViewportX(playheadTick)
+            if (playheadX >= 0f && playheadX <= size.width) {
+                val markerRadius = with(density) { 3.dp.toPx() }
+                drawLine(Color(0xFFFF4F64), Offset(playheadX, 0f), Offset(playheadX, size.height), 1.6f)
+                drawCircle(Color(0xFFFF4F64), markerRadius, Offset(playheadX, markerRadius))
+            }
         }
 
         BoxWithConstraints(Modifier.fillMaxSize().padding(top = 24.dp)) {
@@ -1312,6 +1404,16 @@ private fun TimelineGrid(
             }
         }
         }
+        }
+        // Overlay the cursor after clips so it stays visible over audio, MIDI and drum patterns.
+        Canvas(Modifier.fillMaxSize().padding(top = 24.dp).clipToBounds()) {
+            val playheadViewport = TimelineViewport(
+                timebase, baseBarWidthPx * zoom, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
+            )
+            val x = playheadViewport.timeToViewportX(playheadTick)
+            if (x >= 0f && x <= size.width) {
+                drawLine(Color(0xFFFF4F64), Offset(x, 0f), Offset(x, size.height), 1.5f)
+            }
         }
         val menuTrack = project.tracks.firstOrNull { t -> t.clips.any { it.id == clipMenuClipId } }
         val menuClip = menuTrack?.clips?.firstOrNull { it.id == clipMenuClipId }

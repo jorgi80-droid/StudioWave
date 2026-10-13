@@ -22,6 +22,22 @@ internal object ArrangementTiming {
         else frames.toLong().coerceAtLeast(0L)
     }
 
+    fun framesToTicks(
+        frames: Long,
+        bpm: Int,
+        ppq: Int,
+        sampleRate: Int = DEFAULT_SAMPLE_RATE
+    ): Long {
+        val safeFrames = frames.coerceAtLeast(0L)
+        val safeBpm = bpm.coerceIn(40, 240)
+        val safePpq = ppq.coerceIn(24, 3840)
+        val safeRate = sampleRate.coerceIn(8000, 192000)
+        val ticks = safeFrames.toDouble() * safeBpm.toDouble() * safePpq.toDouble() /
+            (60.0 * safeRate.toDouble())
+        return if (!ticks.isFinite() || ticks >= Long.MAX_VALUE.toDouble()) Long.MAX_VALUE
+        else ticks.toLong().coerceAtLeast(0L)
+    }
+
     fun trackIsAudible(trackMuted: Boolean, trackSolo: Boolean, anySoloActive: Boolean): Boolean =
         !trackMuted && (!anySoloActive || trackSolo)
 }

@@ -7,11 +7,13 @@
 - Arrangement playback path that decodes source-linked audio off the real-time thread and schedules audio clips, synthesized MIDI notes and drum steps.
 - Per-track volume, pan, mute/solo and master gain state in the arrangement mixer.
 - Audio-source PCM waveform preview decoding with cancellation and caching.
+- Arrangement ruler seeking that resumes playback from the selected musical tick.
+- Playhead position from the AudioTrack playback head, ruler/track cursor rendering and horizontal follow-scroll during playback.
 - CI workflow that builds the debug APK and runs local unit tests.
 
 ## Remaining gaps (not implied to be complete by a successful build)
 - Audio recording and recording permissions/workflow.
-- Loop/selection regions, seekable playhead, reliable playback autoscroll, split/trim/time-stretch and clip looping.
+- Loop/selection regions, split/trim/time-stretch and clip looping.
 - Production instrument/plugin hosting and production DSP effect chains.
 - Low-latency Oboe backend (current output still uses AudioTrack), measured underrun/latency tests and Eco/Standard performance profiles.
 - Project bundle with copied/embedded source media; .sdaw currently stores JSON and source URI references only.

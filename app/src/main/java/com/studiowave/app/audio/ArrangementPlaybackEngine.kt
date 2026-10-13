@@ -75,6 +75,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     private data class Plan(
         val sampleRate: Int,
+        val bpm: Int,
+        val ppq: Int,
         val totalFrames: Long,
         val audio: List<AudioEvent>,
         val notes: List<NoteEvent>,
@@ -97,7 +99,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         project: StudioProject,
         masterGain: Float = 0.72f,
         onCompleted: () -> Unit = {},
-        onError: (String) -> Unit = {}
+        onError: (String) -> Unit = {},
+        startAtTick: Long = 0L,
+        onProgress: (Long) -> Unit = {}
     ) {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
@@ -108,6 +112,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
         check(!closed.get()) { "Playback engine is closed" }
         check(generation.get() == token) { "Playback start was cancelled" }
+        val startFrame = ArrangementTiming.ticksToFrames(
+            startAtTick.coerceAtLeast(0L), plan.bpm, plan.ppq, plan.sampleRate
+        ).coerceIn(0L, plan.totalFrames)
+        runCatching {
+            onProgress(ArrangementTiming.framesToTicks(startFrame, plan.bpm, plan.ppq, plan.sampleRate))
+        }
         val minBuffer = AudioTrack.getMinBufferSize(
             plan.sampleRate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT
         )
@@ -136,7 +146,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 track.play()
                 worker = Thread({
                     Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-                    renderPlan(track, plan, token, onCompleted, onError)
+                    renderPlan(track, plan, token, startFrame, onProgress, onCompleted, onError)
                 }, "StudioWave-Arrangement").also { it.start() }
             } catch (failure: Throwable) {
                 running.set(false)
@@ -233,6 +243,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
         return Plan(
             sampleRate,
+            bpm,
+            ppq,
             totalFrames,
             audioEvents.sortedBy { it.startFrame },
             notes.sortedBy { it.startFrame },
@@ -375,6 +387,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         track: AudioTrack,
         plan: Plan,
         token: Long,
+        startFrame: Long,
+        onProgress: (Long) -> Unit,
         onCompleted: () -> Unit,
         onError: (String) -> Unit
     ) {
@@ -390,7 +404,36 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         var audioCursor = 0
         var noteCursor = 0
         var drumCursor = 0
-        var position = 0L
+        var position = startFrame.coerceIn(0L, plan.totalFrames)
+
+        // When seeking into an active clip/note/drum hit, start with that event
+        // already active so its source/envelope offset remains musically correct.
+        while (audioCursor < scheduledAudio.size && scheduledAudio[audioCursor].startFrame < position) {
+            val event = scheduledAudio[audioCursor++]
+            if (event.endFrame > position) playingAudio.add(event)
+        }
+        while (noteCursor < scheduledNotes.size && scheduledNotes[noteCursor].startFrame < position) {
+            val event = scheduledNotes[noteCursor++]
+            if (event.endFrame > position) playingNotes.add(event)
+        }
+        while (drumCursor < scheduledDrums.size && scheduledDrums[drumCursor].startFrame < position) {
+            val event = scheduledDrums[drumCursor++]
+            if (event.startFrame + DRUM_DURATION_FRAMES > position) playingDrums.add(event)
+        }
+
+        var lastReportedFrame = -1L
+        fun reportPlaybackPosition(force: Boolean = false) {
+            // The playback head tracks audible output, unlike the mixer's submitted
+            // frame cursor which runs ahead by the AudioTrack buffer latency.
+            val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+            val absoluteFrame = (startFrame + playedFrames).coerceAtMost(plan.totalFrames)
+            val reportInterval = (sampleRate / 30).toLong().coerceAtLeast(1L)
+            if (force || lastReportedFrame < 0L || absoluteFrame - lastReportedFrame >= reportInterval) {
+                lastReportedFrame = absoluteFrame
+                val tick = ArrangementTiming.framesToTicks(absoluteFrame, plan.bpm, plan.ppq, sampleRate)
+                runCatching { onProgress(tick) }
+            }
+        }
         try {
             while (running.get() && generation.get() == token && position < plan.totalFrames) {
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
@@ -489,8 +532,32 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     if (written == 0) Thread.yield() else offset += written
                 }
                 position = blockEnd
+                reportPlaybackPosition()
             }
-            if (position >= plan.totalFrames && generation.get() == token && running.compareAndSet(true, false)) onCompleted()
+            if (position >= plan.totalFrames && generation.get() == token && running.get()) {
+                val expectedPlayedFrames = (plan.totalFrames - startFrame).coerceAtLeast(0L)
+                val drainDeadlineNanos = System.nanoTime() + 5_000_000_000L
+                // Do not tear down AudioTrack immediately after the last write: queued
+                // samples must reach the output before playback is declared complete.
+                while (running.get() && generation.get() == token) {
+                    reportPlaybackPosition()
+                    val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+                    if (playedFrames >= expectedPlayedFrames) break
+                    if (System.nanoTime() >= drainDeadlineNanos) {
+                        error("Audio output did not drain before timeout")
+                    }
+                    Thread.sleep(4L)
+                }
+                val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+                if (running.get() && generation.get() == token &&
+                    playedFrames >= expectedPlayedFrames && running.compareAndSet(true, false)
+                ) {
+                    runCatching {
+                        onProgress(ArrangementTiming.framesToTicks(plan.totalFrames, plan.bpm, plan.ppq, sampleRate))
+                    }
+                    runCatching { onCompleted() }
+                }
+            }
         } catch (_: InterruptedException) {
             running.set(false)
             Thread.currentThread().interrupt()
