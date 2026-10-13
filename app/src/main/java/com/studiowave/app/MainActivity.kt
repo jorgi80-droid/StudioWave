@@ -76,7 +76,8 @@ private fun StudioWaveApp() {
     var scrollBars by remember { mutableFloatStateOf(0f) }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
-    val project = remember { StudioProject() }
+    var project by remember { mutableStateOf(StudioProject()) }
+    var editorTrackId by remember { mutableStateOf<String?>(null) }
     DisposableEffect(engine) { onDispose { engine.close() } }
 
     MaterialTheme(colorScheme = darkColorScheme(
@@ -102,7 +103,9 @@ private fun StudioWaveApp() {
                         "MIXER" -> MixerWorkspace(project.tracks)
                         "PIANO ROLL" -> PianoRollWorkspace()
                         "BROWSER" -> BrowserWorkspace()
-                        else -> ArrangementWorkspace(project, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { selectedWorkspace = it })
+                        "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        else -> ArrangementWorkspace(project, { project = it }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace })
                     }
                 }
                 if (showDock) {
@@ -172,8 +175,9 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 }
 
 @Composable
-private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit, verticalZoom: Float, onVerticalZoom: (Float) -> Unit, scrollTracks: Float, onScrollTracks: (Float) -> Unit, onOpenEditor: (String) -> Unit) {
+private fun ArrangementWorkspace(project: StudioProject, onProjectChange: (StudioProject) -> Unit, zoom: Float, onZoom: (Float) -> Unit, scrollBars: Float, onScroll: (Float) -> Unit, verticalZoom: Float, onVerticalZoom: (Float) -> Unit, scrollTracks: Float, onScrollTracks: (Float) -> Unit, onOpenEditor: (String, String?) -> Unit) {
     var selectedClip by remember { mutableStateOf<String?>(null) }
+    var showAddTrack by remember { mutableStateOf(false) }
     var clipMenu by remember { mutableStateOf<String?>(null) }
     var showTimelineMenu by remember { mutableStateOf(false) }
     var snapEnabled by remember { mutableStateOf(true) }
@@ -208,7 +212,10 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
                 onScrollTracks = onScrollTracks,
                 selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it },
-                onOpenEditor = { onOpenEditor("PIANO ROLL") },
+                onOpenEditor = { clipId ->
+                    val track = project.tracks.firstOrNull { t -> t.clips.any { it.id == clipId } }
+                    onOpenEditor(when (track?.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track?.id)
+                },
                 onClipLongPress = { clipMenu = it },
                 onTimelineLongPress = { showTimelineMenu = true }
             )
@@ -244,7 +251,7 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
 }
 
 @Composable
-private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float) {
+private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit) {
     val accent = Color(track.colorArgb.toInt())
     Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -280,7 +287,7 @@ private fun TimelineGrid(
     onScrollTracks: (Float) -> Unit,
     selectedClip: String?,
     onSelectClip: (String) -> Unit,
-    onOpenEditor: () -> Unit,
+    onOpenEditor: (String) -> Unit,
     onClipLongPress: (String) -> Unit,
     onTimelineLongPress: () -> Unit
 ) {
@@ -405,7 +412,7 @@ private fun TimelineGrid(
                                 )
                                 .combinedClickable(
                                     onClick = { onSelectClip(clip.id) },
-                                    onDoubleClick = { onSelectClip(clip.id); onOpenEditor() },
+                                    onDoubleClick = { onSelectClip(clip.id); onOpenEditor(clip.id) },
                                     onLongClick = { onSelectClip(clip.id); onClipLongPress(clip.id) }
                                 )
                                 .padding(4.dp)
