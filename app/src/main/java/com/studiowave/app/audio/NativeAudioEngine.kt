@@ -8,6 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class NativeAudioEngine : AutoCloseable {
     private val running = AtomicBoolean(false)
+    private val closed = AtomicBoolean(false)
     @Volatile private var worker: Thread? = null
     @Volatile private var track: AudioTrack? = null
 
@@ -23,6 +24,8 @@ class NativeAudioEngine : AutoCloseable {
 
     @Synchronized
     fun start(sampleRate: Int = 44100) {
+        check(!closed.get()) { "Audio engine is closed" }
+        require(sampleRate in 8000..192000) { "Unsupported sample rate: $sampleRate" }
         if (running.get()) return
         stop()
         val minBytes = AudioTrack.getMinBufferSize(
@@ -80,7 +83,9 @@ class NativeAudioEngine : AutoCloseable {
     }
 
     fun setTone(frequencyHz: Float, gain: Float = 0.08f, waveform: Int = 0) {
-        nativeSetTone(frequencyHz, gain, waveform)
+        check(!closed.get()) { "Audio engine is closed" }
+        require(frequencyHz.isFinite() && gain.isFinite()) { "Tone parameters must be finite" }
+        nativeSetTone(frequencyHz, gain, waveform.coerceIn(0, 3))
     }
 
     @Synchronized
@@ -99,5 +104,7 @@ class NativeAudioEngine : AutoCloseable {
         track = null
     }
 
-    override fun close() = stop()
+    override fun close() {
+        if (closed.compareAndSet(false, true)) stop()
+    }
 }
