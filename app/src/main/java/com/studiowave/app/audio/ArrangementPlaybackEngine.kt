@@ -36,6 +36,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
+    private val audioAssetCache = object : android.util.LruCache<String, AudioAsset>(MAX_ASSET_CACHE_KIB) {
+        override fun sizeOf(key: String, value: AudioAsset): Int =
+            (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+    }
     @Volatile private var worker: Thread? = null
     @Volatile private var output: AudioTrack? = null
 
@@ -140,7 +144,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val soloActive = tracks.any { it.solo && !it.muted }
         fun audible(track: StudioTrack) =
             ArrangementTiming.trackIsAudible(track.muted, track.solo, soloActive)
-        val maxTick = tracks.flatMap { it.clips }.maxOfOrNull {
+        val maxTick = tracks.asSequence().flatMap { it.clips.asSequence() }.maxOfOrNull {
             val start = it.startTick.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 2)
             val length = it.lengthTicks.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / 2)
             if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
@@ -165,7 +169,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
                 "Arrangement audio cache exceeds the safe memory budget; shorten clips or reduce the number of source files"
             }
-            assets[uriString] = decodeAudioAsset(Uri.parse(uriString), seconds, token)
+            val requestedFrames = ceil(seconds * sampleRate).toInt().coerceIn(1, sampleRate * MAX_SOURCE_SECONDS)
+            val cacheKey = "$uriString|$sampleRate|$requestedFrames"
+            val cached = audioAssetCache.get(cacheKey)
+            assets[uriString] = cached ?: decodeAudioAsset(Uri.parse(uriString), seconds, token).also { decoded ->
+                ensureCurrent()
+                audioAssetCache.put(cacheKey, decoded)
+            }
         }
 
         val audioEvents = ArrayList<AudioEvent>()
@@ -511,7 +521,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     }
 
     override fun close() {
-        if (closed.compareAndSet(false, true)) stop()
+        if (closed.compareAndSet(false, true)) {
+            try {
+                stop()
+            } finally {
+                audioAssetCache.evictAll()
+            }
+        }
     }
 
     companion object {
@@ -521,5 +537,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         const val MAX_SOURCE_SECONDS = 60
         const val MAX_ARRANGEMENT_SECONDS = 60 * 15
         const val MAX_TOTAL_PCM_BYTES = 64L * 1024L * 1024L
+        const val MAX_ASSET_CACHE_KIB = 16 * 1024
     }
 }
