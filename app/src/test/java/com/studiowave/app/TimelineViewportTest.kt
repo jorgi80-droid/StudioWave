@@ -46,7 +46,7 @@ class TimelineViewportTest {
 
         val viewport = TimelineViewport(timebase, 74f, 0.0, 800f)
         assertTrue(viewport.snapTick(347L, SnapDivision.SIXTEENTH_BEAT, enabled = false) == 347L)
-        assertEquals(480L, viewport.snapTick(470L, SnapDivision.SIXTEENTH_BEAT))
+        assertEquals(480L, viewport.snapTick(470L, SnapDivision.SIXTEENTH_BEAT, enabled = true))
     }
 
     @Test fun viewportPanMovesTheSameTickByExpectedPixels() {
