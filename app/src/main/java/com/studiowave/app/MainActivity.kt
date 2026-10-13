@@ -258,7 +258,14 @@ private fun ArrangementWorkspace(
                 var addTrackMenu by remember { mutableStateOf(false) }
                 Box(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                     project.tracks.forEachIndexed { index, track ->
-                        TrackHeader(track, index, verticalZoom, scrollTracks) { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) }
+                        TrackHeader(track, index, verticalZoom, scrollTracks,
+                        onDoubleTap = { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) },
+                        onColorTap = {
+                            val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEE)
+                            val current = palette.indexOf(track.colorArgb)
+                            val next = palette[((current + 1).coerceAtLeast(0)) % palette.size]
+                            onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(colorArgb = next) else it }))
+                        })
                     }
                     val showBottomAddTrack = project.tracks.size > 4 && scrollTracks + (4f / verticalZoom) >= project.tracks.size - 0.75f
                     if (showBottomAddTrack) {
@@ -296,6 +303,11 @@ private fun ArrangementWorkspace(
                 clipMenuClipId = clipMenu,
                 onClipAction = { action, clipId -> handleClipAction(action, clipId) },
                 onDismissClipMenu = { clipMenu = null },
+                onResizeClip = { clipId, lengthTicks ->
+                    onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                        track.copy(clips = track.clips.map { clip -> if (clip.id == clipId) clip.copy(lengthTicks = lengthTicks) else clip })
+                    }))
+                },
                 onMoveClip = { clipId, targetTrackId, startTick ->
                     val source = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
                     val target = project.tracks.firstOrNull { it.id == targetTrackId }
@@ -380,11 +392,11 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
 }
 
 @Composable
-private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit) {
+private fun TrackHeader(track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float, onDoubleTap: () -> Unit, onColorTap: () -> Unit) {
     val accent = Color(track.colorArgb.toInt())
     Row(Modifier.fillMaxWidth().offset(y = ((index - scrollTracks) * 67f * verticalZoom).dp).height((67f * verticalZoom).dp).padding(bottom = 2.dp).background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = {}),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-        Box(Modifier.width(4.dp).height(47.dp).background(accent, RoundedCornerShape(2.dp)))
+        Box(Modifier.width(7.dp).height(47.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
         Column(Modifier.weight(1f)) {
             Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
@@ -422,6 +434,7 @@ private fun TimelineGrid(
     clipMenuClipId: String?,
     onClipAction: (String, String) -> Unit,
     onDismissClipMenu: () -> Unit,
+    onResizeClip: (String, Long) -> Unit,
     onMoveClip: (String, String, Long) -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -581,8 +594,24 @@ private fun TimelineGrid(
                                 )
                                 .padding(4.dp)
                         ) {
+                            Box(Modifier.fillMaxWidth().height(5.dp).pointerInput(clip.id, zoom, clip.lengthTicks) {
+                                detectDragGestures(
+                                    onDrag = { change, amount ->
+                                        change.consume()
+                                        val deltaTicks = (amount.x / (baseBarWidthPx * zoom) * 3840f).toLong()
+                                        onResizeClip(clip.id, (clip.lengthTicks + deltaTicks).coerceAtLeast(240L))
+                                    }
+                                )
+                            }.background(Color.White.copy(alpha = 0.55f), RoundedCornerShape(3.dp)))
                             Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
-                            if (track.kind == "midi") {
+                            if (track.kind == "drum") {
+                                Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
+                                    (0 until 16).forEach { step ->
+                                        val active = when (step % 8) { 0, 4 -> true; 2, 6 -> track.name.contains("808", true); else -> false }
+                                        Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.88f else 0.24f).background(if (active) accent.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.16f), RoundedCornerShape(1.dp)))
+                                    }
+                                }
+                            } else if (track.kind == "midi") {
                                 Canvas(Modifier.fillMaxSize()) {
                                     clip.midiNotes.forEach { note ->
                                         val noteX = note.startTick.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
