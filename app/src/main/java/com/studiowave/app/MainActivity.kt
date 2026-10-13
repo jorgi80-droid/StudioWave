@@ -10,6 +10,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -247,8 +248,6 @@ private fun ArrangementWorkspace(
         Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
             Spacer(Modifier.weight(1f))
-            Text("PINCH TO ZOOM • DRAG TO SCROLL", color = MutedText, fontSize = 8.sp, maxLines = 1)
-            Text("${(zoom * 100).toInt()}%", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             SmallAction("FIT") { onZoom(1f); onVerticalZoom(1f); onScroll(0f); onScrollTracks(0f) }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
@@ -293,7 +292,20 @@ private fun ArrangementWorkspace(
                     }
                 },
                 onClipLongPress = { clipMenu = it },
-                onTimelineLongPress = { showTimelineMenu = true }
+                onTimelineLongPress = { showTimelineMenu = true },
+                onMoveClip = { clipId, targetTrackId, startTick ->
+                    val source = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
+                    val target = project.tracks.firstOrNull { it.id == targetTrackId }
+                    if (source != null && target != null && source.kind == target.kind) {
+                        val moving = source.clips.first { it.id == clipId }.copy(startTick = startTick)
+                        onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                            if (source.id == target.id) item.copy(clips = item.clips.filterNot { it.id == clipId } + moving)
+                            else if (item.id == source.id) item.copy(clips = item.clips.filterNot { it.id == clipId })
+                            else if (item.id == target.id) item.copy(clips = item.clips + moving)
+                            else item
+                        }))
+                    } else statusMessage = "Clip must stay on a matching track type"
+                }
             )
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomEnd) {
@@ -314,11 +326,18 @@ private fun ArrangementWorkspace(
                     }
                 }
             }
-            if (clipMenu != null) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
-                Column(Modifier.width(150.dp).padding(5.dp)) {
-                    Text("CLIP ACTIONS", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                    listOf("Open editor", "Cut", "Copy", "Snap", "Delete").forEach { action ->
-                        Text(action, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { clipMenu?.let { handleClipAction(action, it) } }.padding(horizontal = 9.dp, vertical = 8.dp))
+            if (clipMenu != null) {
+                Row(Modifier.align(Alignment.CenterEnd).padding(end = 8.dp).background(Color(0xFF30343A), RoundedCornerShape(20.dp)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    listOf("EDIT", "CUT", "COPY", "SNAP", "DEL", "×").forEach { action ->
+                        Surface(color = if (action == "EDIT") Mint.copy(alpha = 0.18f) else Color(0xFF23262B), shape = RoundedCornerShape(16.dp), modifier = Modifier.height(29.dp).clickable {
+                            val selected = clipMenu
+                            if (action == "×") clipMenu = null
+                            else if (selected != null) handleClipAction(when (action) { "EDIT" -> "Open editor"; "CUT" -> "Cut"; "COPY" -> "Copy"; "SNAP" -> "Snap"; else -> "Delete" }, selected)
+                        }) {
+                            Box(Modifier.padding(horizontal = 9.dp), contentAlignment = Alignment.Center) {
+                                Text(when (action) { "EDIT" -> "Edit"; "DEL" -> "Del"; else -> action }, color = if (action == "EDIT") Mint else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -411,7 +430,8 @@ private fun TimelineGrid(
     onSelectClip: (String) -> Unit,
     onOpenEditor: (String) -> Unit,
     onClipLongPress: (String) -> Unit,
-    onTimelineLongPress: () -> Unit
+    onTimelineLongPress: () -> Unit,
+    onMoveClip: (String, String, Long) -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
@@ -427,6 +447,11 @@ private fun TimelineGrid(
     val currentOnScrollTracks by rememberUpdatedState(onScrollTracks)
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
+    var draggingClip by remember { mutableStateOf<String?>(null) }
+    var dragFromTrack by remember { mutableIntStateOf(-1) }
+    var dragOriginalTick by remember { mutableLongStateOf(0L) }
+    var dragDx by remember { mutableFloatStateOf(0f) }
+    var dragDy by remember { mutableFloatStateOf(0f) }
 
     Box(
         modifier
@@ -522,16 +547,41 @@ private fun TimelineGrid(
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = accentColors.getOrElse(trackIndex) { Mint }
+                        val drawingLeft = displayLeftPx + if (draggingClip == clip.id) dragDx else 0f
+                        val drawingTop = if (draggingClip == clip.id) dragDy else 0f
                         Column(
                             Modifier
-                                .offset(x = with(density) { displayLeftPx.toDp() })
+                                .offset(x = with(density) { drawingLeft.toDp() }, y = with(density) { drawingTop.toDp() })
                                 .padding(top = 7.dp, bottom = 7.dp)
                                 .width(with(density) { clipWidthPx.toDp() }.coerceAtLeast(24.dp))
                                 .fillMaxHeight()
-                                .background(
-                                    accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f),
-                                    RoundedCornerShape(4.dp)
-                                )
+                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
+                                .pointerInput(clip.id, trackIndex, zoom) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            draggingClip = clip.id
+                                            dragFromTrack = trackIndex
+                                            dragOriginalTick = clip.startTick
+                                            dragDx = 0f
+                                            dragDy = 0f
+                                            onSelectClip(clip.id)
+                                        },
+                                        onDrag = { change, amount -> change.consume(); dragDx += amount.x; dragDy += amount.y },
+                                        onDragEnd = {
+                                            val source = project.tracks.getOrNull(dragFromTrack)
+                                            val targetIndex = (dragFromTrack + (dragDy / trackHeightPx).toInt()).coerceIn(0, project.tracks.lastIndex.coerceAtLeast(0))
+                                            val target = project.tracks.getOrNull(targetIndex)
+                                            val movedBars = (dragDx / (baseBarWidthPx * zoom)).toLong()
+                                            val newTick = (dragOriginalTick + movedBars * 3840L).coerceAtLeast(0L)
+                                            if (source != null && target != null && source.kind == target.kind) onMoveClip(clip.id, target.id, newTick)
+                                            draggingClip = null
+                                            dragFromTrack = -1
+                                            dragDx = 0f
+                                            dragDy = 0f
+                                        },
+                                        onDragCancel = { draggingClip = null; dragFromTrack = -1; dragDx = 0f; dragDy = 0f }
+                                    )
+                                }
                                 .combinedClickable(
                                     onClick = { onSelectClip(clip.id) },
                                     onDoubleClick = { onSelectClip(clip.id); onOpenEditor(clip.id) },
