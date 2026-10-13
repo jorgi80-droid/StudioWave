@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -745,6 +746,7 @@ private fun TimelineGrid(
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
+    val latestProject by rememberUpdatedState(project)
     val moveCommit by rememberUpdatedState(onMoveClip)
     val trackCount = project.tracks.size
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
@@ -878,17 +880,19 @@ private fun TimelineGrid(
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
-                        val drawingLeft = displayLeftPx + if (draggingClip == clip.id) dragDx else 0f
-                        val drawingTop = if (draggingClip == clip.id) dragDy else 0f
                         Column(
                             Modifier
-                                .offset(x = with(density) { drawingLeft.toDp() }, y = with(density) { drawingTop.toDp() })
+                                .offset(x = with(density) { displayLeftPx.toDp() }, y = 0.dp)
+                                .graphicsLayer {
+                                    translationX = if (draggingClip == clip.id) dragDx else 0f
+                                    translationY = if (draggingClip == clip.id) dragDy else 0f
+                                }
                                 .padding(top = 7.dp, bottom = 7.dp)
                                 .width(with(density) { clipWidthPx.toDp() }.coerceAtLeast(24.dp))
                                 .fillMaxHeight()
                                 .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
-                                .pointerInput(clip.id, trackIndex, zoom, scrollBars, scrollTracks, verticalZoom) {
+                                .pointerInput(clip.id, trackIndex, zoom, trackHeightPx) {
                                     detectDragGestures(
                                         onDragStart = {
                                             draggingClip = clip.id
