@@ -344,6 +344,12 @@ private fun ArrangementWorkspace(
     var copiedClip by remember { mutableStateOf<Pair<StudioTrack, com.studiowave.app.data.WaveClip>?>(null) }
 
     fun addTrack(kind: String) {
+        if (project.tracks.size >= StudioProject.MAX_TRACKS) {
+            statusMessage = "Track limit reached (${StudioProject.MAX_TRACKS})"
+            showAddTrack = false
+            showTimelineMenu = false
+            return
+        }
         val number = project.tracks.count { it.kind == kind } + 1
         val name: String
         val color: Long
@@ -372,9 +378,13 @@ private fun ArrangementWorkspace(
             }
             "Copy" -> { copiedClip = track to clip; statusMessage = "Clip copied" }
             "Duplicate" -> {
-                val duplicate = clip.copy(id = java.util.UUID.randomUUID().toString(), name = clip.name + " copy", startTick = clip.startTick + clip.lengthTicks)
-                onProjectChange(project.copy(tracks = project.tracks.map { item -> if (item.id == track.id) item.copy(clips = item.clips + duplicate) else item }))
-                statusMessage = "Clip duplicated"
+                if (track.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK) {
+                    statusMessage = "Clip limit reached for this track"
+                } else {
+                    val duplicate = clip.copy(id = java.util.UUID.randomUUID().toString(), name = clip.name + " copy", startTick = clip.startTick + clip.lengthTicks)
+                    onProjectChange(project.copy(tracks = project.tracks.map { item -> if (item.id == track.id) item.copy(clips = item.clips + duplicate) else item }))
+                    statusMessage = "Clip duplicated"
+                }
             }
             "Color" -> {
                 val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEEL)
@@ -405,6 +415,11 @@ private fun ArrangementWorkspace(
         val targetIndex = project.tracks.indexOfFirst { it.id == copied.first.id }.let { if (it >= 0) it else project.tracks.indexOfFirst { track -> track.kind == copied.first.kind } }
         if (targetIndex < 0) { statusMessage = "Add a matching track first"; showTimelineMenu = false; return }
         val target = project.tracks[targetIndex]
+        if (target.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK) {
+            statusMessage = "Clip limit reached for this track"
+            showTimelineMenu = false
+            return
+        }
         val source = copied.second
         val nextStart = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L
         val pasted = source.copy(id = java.util.UUID.randomUUID().toString(), name = source.name + " copy", startTick = nextStart)
