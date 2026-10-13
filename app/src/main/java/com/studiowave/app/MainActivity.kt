@@ -779,7 +779,8 @@ private fun TimelineGrid(
             .pointerInput(Unit) { detectTapGestures(onLongPress = { onTimelineLongPress() }) }
             .pointerInput(baseBarWidthPx) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val firstDown = awaitFirstDown(requireUnconsumed = false)
+                    var previousSinglePosition = firstDown.position
                     var previousCentroid = Offset.Zero
                     var previousSpan = 0f
                     var initialized = false
@@ -800,8 +801,8 @@ private fun TimelineGrid(
                                 val newBarWidth = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
                                 val panX = centroid.x - previousCentroid.x
                                 val panY = centroid.y - previousCentroid.y
-                                val anchorTickInBars = currentScroll + previousCentroid.x / oldBarWidth
-                                val newScroll = (anchorTickInBars - centroid.x / newBarWidth - panX / newBarWidth).coerceAtLeast(0f)
+                                val anchorBars = currentScroll + previousCentroid.x / oldBarWidth
+                                val newScroll = (anchorBars - centroid.x / newBarWidth - panX / newBarWidth).coerceAtLeast(0f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
                                 val rowHeight = with(density) { 67.dp.toPx() } * newVerticalZoom
@@ -818,6 +819,22 @@ private fun TimelineGrid(
                         } else {
                             initialized = false
                             previousSpan = 0f
+                            val pointer = pointers.firstOrNull()
+                            if (pointer != null) {
+                                val delta = pointer.position - previousSinglePosition
+                                // Clip drag handlers consume their own changes. Only unconsumed
+                                // one-finger motion pans the empty timeline background.
+                                if (!pointer.isConsumed && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
+                                    val barWidth = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
+                                    val newScroll = (currentScroll - delta.x / barWidth).coerceAtLeast(0f)
+                                    val rowHeight = with(density) { 67.dp.toPx() } * currentVerticalZoom
+                                    val newTrackScroll = (currentScrollTracks - delta.y / rowHeight).coerceAtLeast(0f)
+                                    if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
+                                    if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
+                                    pointer.consume()
+                                }
+                                previousSinglePosition = pointer.position
+                            }
                         }
                     } while (event.changes.any { it.pressed })
                 }
