@@ -139,7 +139,8 @@ private fun StudioWaveApp() {
     var masterMomentaryLufs by remember { mutableFloatStateOf(-120f) }
     var masterPeakHistory by remember { mutableStateOf(List(48) { 0f }) }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
-    var showDock by remember { mutableStateOf(true) }
+    // Start with the device drawer collapsed so Arrangement gets the full vertical workspace.
+    var showDock by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var scrollTicks by remember { mutableFloatStateOf(0f) }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
