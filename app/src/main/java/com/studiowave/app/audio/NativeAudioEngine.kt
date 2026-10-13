@@ -40,27 +40,43 @@ class NativeAudioEngine : AutoCloseable {
             .setTransferMode(AudioTrack.MODE_STREAM)
             .setBufferSizeInBytes(maxOf(minBytes, 4096))
             .build()
-        check(output.state == AudioTrack.STATE_INITIALIZED) { "AudioTrack initialization failed" }
+        if (output.state != AudioTrack.STATE_INITIALIZED) {
+            output.release()
+            error("AudioTrack initialization failed")
+        }
 
-        nativeConfigure(sampleRate)
-        track = output
-        running.set(true)
-        nativeStart()
-        output.play()
-        worker = Thread({
-            Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-            val frames = 256
-            val pcm = ShortArray(frames * 2)
-            while (running.get()) {
-                nativeRender(pcm, frames)
-                var offset = 0
-                while (offset < pcm.size && running.get()) {
-                    val written = output.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
-                    if (written < 0) { running.set(false); break }
-                    if (written == 0) Thread.yield() else offset += written
+        try {
+            nativeConfigure(sampleRate)
+            track = output
+            running.set(true)
+            nativeStart()
+            output.play()
+            worker = Thread({
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+                val pcm = ShortArray(512)
+                try {
+                    while (running.get()) {
+                        nativeRender(pcm, 256)
+                        var offset = 0
+                        while (offset < pcm.size && running.get()) {
+                            val written = output.write(pcm, offset, pcm.size - offset, AudioTrack.WRITE_BLOCKING)
+                            if (written < 0) { running.set(false); break }
+                            if (written == 0) Thread.yield() else offset += written
+                        }
+                    }
+                } catch (_: IllegalStateException) {
+                    running.set(false)
+                } finally {
+                    running.set(false)
                 }
-            }
-        }, "StudioWave-AudioTrack").also { it.start() }
+            }, "StudioWave-AudioTrack").also { it.start() }
+        } catch (failure: Throwable) {
+            running.set(false)
+            nativeStop()
+            track = null
+            runCatching { output.release() }
+            throw failure
+        }
     }
 
     fun setTone(frequencyHz: Float, gain: Float = 0.08f, waveform: Int = 0) {
