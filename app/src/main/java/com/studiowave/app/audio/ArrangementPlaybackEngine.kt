@@ -36,6 +36,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
+    @Volatile private var liveMasterGain = 0.72f
     private val audioAssetCache = object : android.util.LruCache<String, AudioAsset>(MAX_ASSET_CACHE_KIB) {
         override fun sizeOf(key: String, value: AudioAsset): Int =
             (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
@@ -73,7 +74,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private data class Plan(
         val sampleRate: Int,
         val totalFrames: Long,
-        val masterGain: Float,
         val audio: List<AudioEvent>,
         val notes: List<NoteEvent>,
         val drums: List<DrumEvent>
@@ -88,7 +88,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
         stopOutputOnly()
-        val plan = withContext(Dispatchers.IO) { buildPlan(project, masterGain.coerceIn(0f, 1f), token) }
+        liveMasterGain = masterGain.coerceIn(0f, 1f)
+        val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
         check(!closed.get()) { "Playback engine is closed" }
         check(generation.get() == token) { "Playback start was cancelled" }
         val minBuffer = AudioTrack.getMinBufferSize(
@@ -130,7 +131,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
 
-    private fun buildPlan(project: StudioProject, masterGain: Float, token: Long): Plan {
+    private fun buildPlan(project: StudioProject, token: Long): Plan {
         fun ensureCurrent() {
             check(!closed.get() && generation.get() == token) { "Playback preparation cancelled" }
         }
@@ -220,7 +221,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         return Plan(
             sampleRate,
             totalFrames,
-            masterGain,
             audioEvents.sortedBy { it.startFrame },
             notes.sortedBy { it.startFrame },
             drums.sortedBy { it.startFrame }
@@ -401,7 +401,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 for (event in playingAudio) {
                     val from = max(position, event.startFrame)
                     val to = min(blockEnd, event.endFrame)
-                    val trackGain = event.track.volume.coerceIn(0f, 1.5f) * plan.masterGain
+                    val trackGain = event.track.volume.coerceIn(0f, 1.5f) * liveMasterGain
                     val pan = event.track.pan.coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
@@ -483,6 +483,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 worker = null
             }
         }
+    }
+
+    fun setMasterGain(gain: Float) {
+        require(gain.isFinite()) { "Master gain must be finite" }
+        liveMasterGain = gain.coerceIn(0f, 1f)
     }
 
     fun stop() {
