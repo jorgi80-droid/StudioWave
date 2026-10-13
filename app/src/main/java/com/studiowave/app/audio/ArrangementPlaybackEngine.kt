@@ -197,7 +197,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
             }
         }
-        return Plan(sampleRate, totalFrames, masterGain, audioEvents, notes, drums)
+        return Plan(
+            sampleRate,
+            totalFrames,
+            masterGain,
+            audioEvents.sortedBy { it.startFrame },
+            notes.sortedBy { it.startFrame },
+            drums.sortedBy { it.startFrame }
+        )
     }
 
     private fun decodeAudioAsset(uri: Uri, durationSeconds: Double): AudioAsset {
@@ -346,8 +353,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
                 val blockEnd = position + frames
 
-                activeAudio.forEach { event ->
-                    if (event.endFrame <= position || event.startFrame >= blockEnd) return@forEach
+                activeAudio.asSequence()
+                    .takeWhile { it.startFrame < blockEnd }
+                    .filter { it.endFrame > position }
+                    .forEach { event ->
                     val from = max(position, event.startFrame)
                     val to = min(blockEnd, event.endFrame)
                     val trackGain = event.track.volume.coerceIn(0f, 1.5f) * plan.masterGain
@@ -365,8 +374,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
-                activeNotes.forEach { note ->
-                    if (note.endFrame <= position || note.startFrame >= blockEnd) return@forEach
+                activeNotes.asSequence()
+                    .takeWhile { it.startFrame < blockEnd }
+                    .filter { it.endFrame > position }
+                    .forEach { note ->
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
@@ -387,9 +398,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
-                activeDrums.forEach drumLoop@{ drum ->
+                activeDrums.asSequence()
+                    .takeWhile { it.startFrame < blockEnd }
+                    .filter { it.startFrame + (sampleRate * 0.20).toLong() > position }
+                    .forEach { drum ->
                     val hitEnd = drum.startFrame + (sampleRate * 0.20).toLong()
-                    if (drum.startFrame >= blockEnd || hitEnd <= position) return@drumLoop
                     val from = max(position, drum.startFrame)
                     val to = min(blockEnd, hitEnd)
                     val gain = drum.track.volume.coerceIn(0f, 1.5f) * plan.masterGain * 0.38f
