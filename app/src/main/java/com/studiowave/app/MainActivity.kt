@@ -445,8 +445,13 @@ private fun ArrangementWorkspace(
     }
 
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(4.dp)) {
-        Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("ARRANGEMENT", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+            SmallAction("TRACK +") { showAddTrack = true }
+            SmallAction("MIDI") { addTrack("midi") }
+            SmallAction("INSTR") { addTrack("midi") }
+            SmallAction("DRUM") { addTrack("drum") }
+            SmallAction("AUDIO") { addTrack("audio") }
             Spacer(Modifier.weight(1f))
             SmallAction("FIT") { onZoom(1f); onVerticalZoom(1f); onScroll(0f); onScrollTracks(0f) }
         }
