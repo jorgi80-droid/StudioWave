@@ -227,52 +227,35 @@ private fun TimelineGrid(
     onSelectClip: (String) -> Unit
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
-    val pxPerBar = with(density) { 74.dp.toPx() } * zoom
+    val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
     val trackHeightPx = with(density) { 67.dp.toPx() }
     val accentColors = project.tracks.map { Color(it.colorArgb.toInt()) }
-
-    // Keep one authoritative horizontal viewport. Zoom preserves the timeline
-    // coordinate beneath the pinch centroid; pan uses incremental deltas only.
-    var gestureZoom by remember { mutableFloatStateOf(zoom) }
-    var gestureScroll by remember { mutableFloatStateOf(scrollBars) }
-    LaunchedEffect(zoom) { gestureZoom = zoom }
-    LaunchedEffect(scrollBars) { gestureScroll = scrollBars }
 
     Box(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF17191C))
-            .pointerInput(project, zoom, scrollBars, pxPerBar, rulerHeightPx, trackHeightPx) {
-                detectTransformGestures(
-                    panZoomLock = true
-                ) { centroid, pan, gestureScale, _ ->
-                    val oldZoom = gestureZoom.coerceIn(0.55f, 2.8f)
-                    val newZoom = (oldZoom * gestureScale).coerceIn(0.55f, 2.8f)
-                    val baseBarPx = with(density) { 74.dp.toPx() }
-                    val oldBarPx = (baseBarPx * oldZoom).coerceAtLeast(1f)
-                    val newBarPx = (baseBarPx * newZoom).coerceAtLeast(1f)
+            .pointerInput(zoom, scrollBars) {
+                detectTransformGestures(panZoomLock = true) { centroid, pan, gestureZoom, _ ->
+                    val oldZoom = zoom.coerceIn(0.55f, 2.8f)
+                    val newZoom = (oldZoom * gestureZoom).coerceIn(0.55f, 2.8f)
+                    val oldBarWidthPx = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
+                    val newBarWidthPx = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
 
-                    // Convert screen focal point to content-space before scaling.
-                    // This keeps the bar under the fingers stationary while zooming.
-                    val focusContentX = gestureScroll * oldBarPx + centroid.x
-                    val zoomedScroll = (focusContentX - centroid.x) / newBarPx
-                    val panScroll = -pan.x / newBarPx
-                    val nextScroll = (zoomedScroll + panScroll).coerceAtLeast(0f)
+                    // Keep the time/bar beneath the two-finger centroid stationary.
+                    val contentUnderCentroid = scrollBars * oldBarWidthPx + centroid.x
+                    val zoomAdjustedScroll = (contentUnderCentroid - centroid.x) / newBarWidthPx
+                    val panAdjustedScroll = -pan.x / newBarWidthPx
+                    val newScroll = (zoomAdjustedScroll + panAdjustedScroll).coerceAtLeast(0f)
 
-                    if (newZoom != oldZoom) {
-                        gestureZoom = newZoom
-                        onZoom(newZoom)
-                    }
-                    if (nextScroll != gestureScroll) {
-                        gestureScroll = nextScroll
-                        onScroll(nextScroll)
-                    }
+                    if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) onZoom(newZoom)
+                    if (kotlin.math.abs(newScroll - scrollBars) > 0.0005f) onScroll(newScroll)
                 }
             }
     ) {
         Canvas(Modifier.fillMaxSize()) {
-            val barWidth = 74.dp.toPx() * zoom
+            val barWidth = baseBarWidthPx * zoom
             val offset = scrollBars * barWidth
             for (bar in 0..256) {
                 val x = bar * barWidth - offset
@@ -290,26 +273,15 @@ private fun TimelineGrid(
             }
         }
 
-        // Ruler and clips are offset in the same pixel coordinate system as the grid.
         Box(
             Modifier
                 .fillMaxWidth()
                 .height(24.dp)
                 .background(Color(0xFF2B2E34))
-                .pointerInput(project, zoom, scrollBars) {
-                    detectTapGestures { tap ->
-                        val contentX = tap.x + scrollBars * (74.dp.toPx() * zoom)
-                        val barIndex = (contentX / (74.dp.toPx() * zoom)).toInt().coerceAtLeast(0)
-                        if (barIndex >= 0) {
-                            // Ruler taps are intentionally non-destructive; this detector
-                            // exists only so taps never get mistaken for a pan.
-                        }
-                    }
-                }
         ) {
             for (bar in 0..256) {
-                val leftPx = bar * (74.dp.toPx() * zoom) - scrollBars * (74.dp.toPx() * zoom)
-                if (leftPx <= size.width && leftPx + (74.dp.toPx() * zoom) >= 0f) {
+                val leftPx = bar * baseBarWidthPx * zoom - scrollBars * baseBarWidthPx * zoom
+                if (leftPx <= size.width && leftPx + baseBarWidthPx * zoom >= 0f) {
                     Box(
                         Modifier
                             .offset(x = with(density) { leftPx.toDp() })
@@ -331,16 +303,15 @@ private fun TimelineGrid(
             project.tracks.forEachIndexed { trackIndex, track ->
                 Box(Modifier.fillMaxWidth().height(67.dp)) {
                     track.clips.forEach { clip ->
-                        val barPx = 74.dp.toPx() * zoom
-                        val clipLeftPx = clip.startTick.toFloat() / 3840f * barPx
-                        val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barPx
-                        val translatedLeftPx = clipLeftPx - scrollBars * barPx
+                        val barWidth = baseBarWidthPx * zoom
+                        val clipStartPx = clip.startTick.toFloat() / 3840f * barWidth
+                        val clipWidthPx = clip.lengthTicks.toFloat() / 3840f * barWidth
+                        val displayLeftPx = clipStartPx - scrollBars * barWidth
                         val accent = accentColors.getOrElse(trackIndex) { Mint }
-
-                        if (translatedLeftPx + clipWidthPx >= 0f && translatedLeftPx <= size.width) {
+                        if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= size.width) {
                             Column(
                                 Modifier
-                                    .offset(x = with(density) { translatedLeftPx.toDp() })
+                                    .offset(x = with(density) { displayLeftPx.toDp() })
                                     .padding(top = 7.dp, bottom = 7.dp)
                                     .width(with(density) { clipWidthPx.toDp() }.coerceAtLeast(24.dp))
                                     .fillMaxHeight()
