@@ -84,22 +84,30 @@ data class StudioProject(
 
     companion object {
         const val CURRENT_SCHEMA_VERSION = 1
+        const val MAX_TRACKS = 256
+        const val MAX_CLIPS_PER_TRACK = 4096
+        const val MAX_NOTES_PER_CLIP = 16384
+        const val MAX_DRUM_STEPS_PER_CLIP = 4096
 
         fun fromJson(json: JSONObject): StudioProject {
             val version = json.optInt("schemaVersion", 0)
             require(version in 1..CURRENT_SCHEMA_VERSION) { "Unsupported project schema version: $version" }
             val time = json.optJSONObject("timeSignature") ?: JSONObject()
             val tracksJson = json.optJSONArray("tracks") ?: JSONArray()
+            require(tracksJson.length() <= MAX_TRACKS) { "Project contains too many tracks" }
             val loadedTracks = buildList {
                 for (i in 0 until tracksJson.length()) {
                     val t = tracksJson.getJSONObject(i)
                     val clipsJson = t.optJSONArray("clips") ?: JSONArray()
+                    require(clipsJson.length() <= MAX_CLIPS_PER_TRACK) { "Track contains too many clips" }
                     val clips = buildList {
                         for (j in 0 until clipsJson.length()) {
                             val c = clipsJson.getJSONObject(j)
                             val stepsJson = c.optJSONArray("drumSteps") ?: JSONArray()
                             val drumSteps = buildList { for (stepIndex in 0 until stepsJson.length()) add(stepsJson.optBoolean(stepIndex)) }
                             val notesJson = c.optJSONArray("midiNotes") ?: JSONArray()
+                            require(notesJson.length() <= MAX_NOTES_PER_CLIP) { "Clip contains too many MIDI notes" }
+                            require(stepsJson.length() <= MAX_DRUM_STEPS_PER_CLIP) { "Clip contains too many drum steps" }
                             val notes = buildList {
                                 for (k in 0 until notesJson.length()) {
                                     val n = notesJson.getJSONObject(k)
