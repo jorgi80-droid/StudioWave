@@ -862,6 +862,7 @@ private fun TimelineGrid(
     val currentOnScrollTracks by rememberUpdatedState(onScrollTracks)
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
+    val currentTrackRows by rememberUpdatedState(trackRowLayout)
     var draggingClip by remember { mutableStateOf<String?>(null) }
     var dragFromTrack by remember { mutableIntStateOf(-1) }
     var dragOriginalTick by remember { mutableLongStateOf(0L) }
@@ -1027,10 +1028,20 @@ private fun TimelineGrid(
                                                 ?.takeIf { track -> track.clips.any { it.id == clip.id } }
                                                 ?.let { dragFromTrack }
                                                 ?: currentTracks.indexOfFirst { track -> track.clips.any { it.id == clip.id } }
-                                            val rowHeightPx = trackHeightPx.coerceAtLeast(1f)
-                                            val rowsMoved = kotlin.math.round(dragDy / rowHeightPx).toInt()
-                                            val targetIndex = (startIndex + rowsMoved).coerceIn(0, currentTracks.lastIndex.coerceAtLeast(0))
                                             val source = currentTracks.getOrNull(startIndex)
+                                            val rowLayout = currentTrackRows
+                                            val startRow = rowLayout.getOrNull(startIndex)
+                                            val desiredCenter = if (startRow == null) 0f else
+                                                startRow.topDp + startRow.heightDp / 2f +
+                                                    dragDy / (density.density * currentVerticalZoom.coerceAtLeast(0.1f))
+                                            val targetIndex = if (startRow == null || rowLayout.isEmpty()) {
+                                                (startIndex + kotlin.math.round(dragDy / trackHeightPx.coerceAtLeast(1f)).toInt())
+                                                    .coerceIn(0, currentTracks.lastIndex.coerceAtLeast(0))
+                                            } else {
+                                                rowLayout.indices.minByOrNull { index ->
+                                                    kotlin.math.abs(rowLayout[index].topDp + rowLayout[index].heightDp / 2f - desiredCenter)
+                                                } ?: startIndex
+                                            }
                                             val target = currentTracks.getOrNull(targetIndex)
                                             val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
                                             val rawDeltaTicks = (dragDx / barWidthPx * 3840f).toLong()
