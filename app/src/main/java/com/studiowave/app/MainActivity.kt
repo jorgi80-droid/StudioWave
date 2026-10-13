@@ -618,7 +618,6 @@ private fun TimelineGrid(
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
-    val accentColors = remember(project.tracks) { project.tracks.map { Color(it.colorArgb.toInt()) } }
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
     val currentScroll by rememberUpdatedState(scrollBars)
