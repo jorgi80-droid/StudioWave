@@ -421,10 +421,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
+                    // Read the atomic scrub offset once per audio event/block, not per sample.
+                    val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
+                    val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
                     for (absolute in from until to) {
                         val relative = absolute - event.startFrame
-                        val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
-                        val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
                         val sourceFrame = (relative.toDouble() * event.asset.sampleRate / sampleRate).toLong()
                             .plus(scratchFrames).coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt()
                         if (sourceFrame !in 0 until event.asset.frames) continue
