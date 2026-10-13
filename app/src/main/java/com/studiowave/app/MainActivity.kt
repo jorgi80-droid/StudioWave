@@ -206,10 +206,10 @@ private fun StudioWaveApp() {
         if (playing || playbackLoading) stopPlayback()
         playheadTick = target
     }
-    fun startPlaybackAt(tick: Long) {
+    fun startPlaybackAt(tick: Long, projectSnapshot: StudioProject = project) {
         val session = playbackSession + 1L
         playbackSession = session
-        val snapshot = project
+        val snapshot = projectSnapshot
         val gain = master.coerceIn(0f, 1f)
         val startTick = tick.coerceAtLeast(0L)
         playheadTick = startTick
@@ -477,7 +477,11 @@ private fun StudioWaveApp() {
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.25f, 4f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
-                            onPlaybackRestart = { if (playing || playbackLoading) startPlaybackAt(playheadTick) },
+                            onPlaybackRestart = { updatedProject ->
+                                if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
+                            },
+                            showDevices = showDock,
+                            onToggleDevices = { showDock = !showDock },
                             trackHeights = trackHeightsDp,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) },
                             playheadTick = playheadTick,
@@ -494,13 +498,6 @@ private fun StudioWaveApp() {
                             modifier = Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 5.dp)
                                 .size(24.dp).clickable { showDock = false }
                         ) { Box(contentAlignment = Alignment.Center) { Text("×", color = MutedText, fontSize = 16.sp) } }
-                    }
-                } else {
-                    Box(Modifier.fillMaxWidth().height(25.dp), contentAlignment = Alignment.CenterEnd) {
-                        Surface(
-                            color = Raised, shape = RoundedCornerShape(50),
-                            modifier = Modifier.size(24.dp).clickable { showDock = true }
-                        ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Tune, contentDescription = "Show devices", tint = Mint, modifier = Modifier.size(15.dp)) } }
                     }
                 }
             }
@@ -593,10 +590,12 @@ private fun ArrangementWorkspace(
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
-    onPlaybackRestart: () -> Unit = {},
+    onPlaybackRestart: (StudioProject) -> Unit = {},
     onScratchTrack: (String, Float) -> Unit = { _, _ -> },
     playheadTick: Long = 0L,
     isPlaying: Boolean = false,
+    showDevices: Boolean = false,
+    onToggleDevices: () -> Unit = {},
     onSeekTick: (Long) -> Unit = {}
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
@@ -813,14 +812,14 @@ private fun ArrangementWorkspace(
                         (it.topDp + it.heightDp - scrollTracks) * verticalZoom
                     } ?: 8f
                     val showBottomAddTrack = if (lastTrackRow == null) true else
-                        addAnchorY >= 0f && addAnchorY <= headerViewportHeightDp
+                        addAnchorY >= 0f && addAnchorY + 44f <= headerViewportHeightDp
                     if (showBottomAddTrack) {
                         Surface(
                             color = Mint,
                             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp),
                             shadowElevation = 5.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
-                                .offset(y = (addAnchorY - 17.dp.value).coerceAtLeast(0f).dp)
+                                .offset(y = (addAnchorY + 8f).coerceAtLeast(0f).dp)
                                 .padding(end = 5.dp)
                                 .size(34.dp).clickable { addTrackMenu = !addTrackMenu }
                         ) {
@@ -928,7 +927,7 @@ private fun ArrangementWorkspace(
                     onProjectChange(resizedProject)
                     // Playback uses a prepared arrangement snapshot. Rebuild it at the current
                     // playhead after an edge-resize commit so the new clip end is honored.
-                    if (isPlaying) onPlaybackRestart()
+                    onPlaybackRestart(resizedProject)
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
                     val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
@@ -968,6 +967,9 @@ private fun ArrangementWorkspace(
                 }
                 FloatingTimelineControl(snapDivision.label, "Change snap division") {
                     snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it }
+                }
+                FloatingTimelineControl(if (showDevices) "FX×" else "FX", if (showDevices) "Hide devices" else "Show devices") {
+                    onToggleDevices()
                 }
             }
         }
@@ -1309,7 +1311,7 @@ private fun TimelineGrid(
                         hitTrack?.clips?.any { clip ->
                             val hitViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
                              val left = hitViewport.timeToViewportX(clip.startTick)
-                            val width = (clip.lengthTicks.toFloat() / timebase.ticksPerBar.toFloat() * barWidthPx)
+                            val width = hitViewport.tickDeltaToPixels(clip.lengthTicks)
                                 .coerceAtLeast(with(density) { 24.dp.toPx() })
                             val right = left + width
                             val pointerX = firstDown.position.x
@@ -1660,9 +1662,8 @@ private fun TimelineGrid(
                                                     val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
                                                     val earliestStart = (clip.startTick - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
                                                     val latestStart = (originalEnd - minimumLength).coerceAtLeast(earliestStart)
-                                                    val rawStart = resizeViewport.viewportXToTime(
-                                                        resizeViewport.timeToViewportX(clip.startTick) + leftResizeDeltaPx
-                                                    )
+                                                    val rawStart = (clip.startTick + resizeViewport.pixelsToTickDelta(leftResizeDeltaPx))
+                                                        .coerceAtLeast(0L)
                                                     val snappedStart = if (snapToGrid && snapStep > 0L) timebase.snap(rawStart, snapDivision) else rawStart
                                                     val newStart = snappedStart.coerceIn(earliestStart, latestStart)
                                                     val newLength = (originalEnd - newStart).coerceAtLeast(minimumLength)
