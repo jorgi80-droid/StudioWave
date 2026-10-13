@@ -21,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
@@ -393,7 +392,15 @@ private fun StudioWaveApp() {
                     WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
-                        "MIXER" -> MixerWorkspace(project, master, onMasterChange = { master = it }, onProjectChange = { changeProject(it) })
+                        "MIXER" -> MixerWorkspace(
+                            project,
+                            master,
+                            onMasterChange = { value ->
+                                master = value.coerceIn(0f, 1f)
+                                arrangementPlayback.setMasterGain(master)
+                            },
+                            onProjectChange = { changeProject(it) }
+                        )
                         "PIANO ROLL" -> PianoRollWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
@@ -443,7 +450,7 @@ private fun TransportBar(
         SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
         SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
         SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
-        Text("M", color = MutedText, fontSize = 8.sp)
+        Text("MST", color = MutedText, fontSize = 7.sp)
         Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(54.dp).height(22.dp), valueRange = 0f..1f)
     }
 }
@@ -955,7 +962,7 @@ private fun TrackHeader(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
-        Column(Modifier.weight(1f).combinedClickable(onClick = onDoubleTap, onDoubleClick = onDoubleTap, onLongClick = {})) {
+        Column(Modifier.weight(1f).combinedClickable(onClick = onDoubleTap, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
             Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1685,9 +1692,9 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
 private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float) -> Unit) {
     Column(Modifier.fillMaxWidth().height(105.dp).background(Raised, RoundedCornerShape(8.dp)).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICE CHAIN", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+            Text("OSCILLATOR TEST", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
             Spacer(Modifier.weight(1f))
-            Text(if (isPlaying) "AUDIO ACTIVE" else "READY", fontSize = 8.sp, color = if (isPlaying) Green else MutedText)
+            Text(if (isPlaying) "PLAYBACK ACTIVE" else "READY", fontSize = 8.sp, color = if (isPlaying) Green else MutedText)
             SmallAction("HIDE") { onToggle() }
         }
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
