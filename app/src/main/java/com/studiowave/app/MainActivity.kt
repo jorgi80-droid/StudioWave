@@ -746,7 +746,6 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
 }
 
 @Composable
-@Composable
 private fun TrackHeader(
     track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float,
     rowTopDp: Float = index * 67f, rowHeightDp: Float = 67f,
