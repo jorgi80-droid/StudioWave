@@ -815,7 +815,7 @@ private fun TimelineGrid(
                             previousCentroid = centroid
                             previousSpan = span
                             initialized = true
-                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                            event.changes.forEach { change -> if (change.position != change.previousPosition) change.consume() }
                         } else {
                             initialized = false
                             previousSpan = 0f
