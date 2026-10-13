@@ -1994,20 +1994,6 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
     }
 }
 
-@Composable
-private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
-    Surface(
-        color = Color(0xFF353A42),
-        contentColor = Color(0xFFE4E8EF),
-        shape = RoundedCornerShape(50),
-        modifier = Modifier.sizeIn(minWidth = 34.dp, minHeight = 34.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Box(Modifier.padding(horizontal = 8.dp, vertical = 7.dp), contentAlignment = Alignment.Center) {
-            Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        }
-    }
-}
 
 @Composable
 private fun SmallAction(label: String, onClick: () -> Unit) {
