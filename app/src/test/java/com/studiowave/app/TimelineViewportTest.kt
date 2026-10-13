@@ -167,4 +167,23 @@ class TimelineViewportTest {
         }
     }
 
+    @Test fun clipGeometryUsesExactMusicalExtentAtAllZoomLevels() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val clipStart = timebase.ticksPerBar * 8L + timebase.ticksPerBeat / 2L
+        val clipLength = timebase.ticksPerBar * 3L + timebase.ticksPerBeat / 4L
+        listOf(20f, 37f, 74f, 180f, 560f, 1200f).forEach { scale ->
+            val viewport = TimelineViewport(timebase, scale, 0.0, 1200f, 104f)
+            val left = viewport.timeToViewportX(clipStart)
+            val right = viewport.timeToViewportX(clipStart + clipLength)
+            val width = viewport.tickDeltaToPixels(clipLength)
+            assertEquals("scale=$scale", right - left, width, 0.01f)
+            assertTrue("clip start at scale=$scale",
+                kotlin.math.abs(viewport.viewportXToTime(left) - clipStart) <= 1L)
+            assertTrue("clip end at scale=$scale",
+                kotlin.math.abs(viewport.viewportXToTime(right) - (clipStart + clipLength)) <= 1L)
+            assertTrue("resize delta at scale=$scale",
+                kotlin.math.abs(viewport.pixelsToTickDelta(width) - clipLength) <= 1L)
+        }
+    }
+
 }

@@ -7,6 +7,7 @@ import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Process
 import com.studiowave.app.data.MidiNote
@@ -221,17 +222,21 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         var estimatedBytes = 0L
         requestedTicksByUri.forEach { (uriString, ticks) ->
             ensureCurrent()
-            val seconds = (ticks.toDouble() * 60.0 / (bpm.toDouble() * ppq))
+            // Prefer the actual media duration. Clip length may be shorter after trimming
+            // or longer when looped; neither should change cached source PCM.
+            val requiredSeconds = (ticks.toDouble() * 60.0 / (bpm.toDouble() * ppq))
                 .coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
-            val estimated = ceil(seconds * sampleRate).toLong() * 4L
-            estimatedBytes += estimated
+            val sourceSeconds = readSourceDurationSeconds(Uri.parse(uriString))
+                ?.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble()) ?: requiredSeconds
+            val requestedFrames = ceil(sourceSeconds * sampleRate).toLong()
+                .coerceIn(1L, sampleRate.toLong() * MAX_SOURCE_SECONDS).toInt()
+            val cacheKey = "$uriString|$sampleRate|$requestedFrames"
+            val cached = audioAssetCache.get(cacheKey)
+            estimatedBytes += requestedFrames.toLong() * 4L
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
                 "Arrangement audio cache exceeds the safe memory budget; shorten clips or reduce the number of source files"
             }
-            val requestedFrames = ceil(seconds * sampleRate).toInt().coerceIn(1, sampleRate * MAX_SOURCE_SECONDS)
-            val cacheKey = "$uriString|$sampleRate|$requestedFrames"
-            val cached = audioAssetCache.get(cacheKey)
-            assets[uriString] = cached ?: decodeAudioAsset(Uri.parse(uriString), seconds, token).also { decoded ->
+            assets[uriString] = cached ?: decodeAudioAsset(Uri.parse(uriString), sourceSeconds, token).also { decoded ->
                 ensureCurrent()
                 audioAssetCache.put(cacheKey, decoded)
             }
@@ -288,6 +293,22 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             notes.sortedBy { it.startFrame },
             drums.sortedBy { it.startFrame }
         )
+    }
+
+    /** Reads original media duration on the IO preparation dispatcher, never the render thread. */
+    private fun readSourceDurationSeconds(uri: Uri): Double? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(appContext, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                ?.toLongOrNull()
+                ?.takeIf { it > 0L }
+                ?.div(1000.0)
+        } catch (_: Exception) {
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     private fun decodeAudioAsset(uri: Uri, durationSeconds: Double, token: Long): AudioAsset {
@@ -718,6 +739,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         const val MAX_SOURCE_SECONDS = 300
         const val MAX_ARRANGEMENT_SECONDS = 60 * 15
         const val MAX_TOTAL_PCM_BYTES = 64L * 1024L * 1024L
-        const val MAX_ASSET_CACHE_KIB = 16 * 1024
+        // 64 MiB accommodates one five-minute stereo PCM source (~50.5 MiB), avoiding
+        // cache eviction and expensive source decoding every time a long clip is resized.
+        const val MAX_ASSET_CACHE_KIB = 64 * 1024
     }
 }
