@@ -113,6 +113,7 @@ private fun StudioWaveApp() {
     var scrollBars by remember { mutableFloatStateOf(0f) }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
+    val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
     var editorTrackId by remember { mutableStateOf<String?>(null) }
     var scratchOffset by remember { mutableFloatStateOf(0f) }
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
@@ -276,6 +277,7 @@ private fun StudioWaveApp() {
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.55f, 2.8f) }, scrollBars, { scrollBars = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                            trackHeights = trackHeightsDp,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) })
                     }
                 }
@@ -355,10 +357,10 @@ private fun ArrangementWorkspace(
     verticalZoom: Float, onVerticalZoom: (Float) -> Unit,
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
+    trackHeights: MutableMap<String, Float>,
     onScratchTrack: (String, Float) -> Unit = { _, _ -> }
 ) {
     val densityScale = androidx.compose.ui.platform.LocalDensity.current.density
-    val trackHeights = remember { mutableStateMapOf<String, Float>() }
     val trackIds = project.tracks.map { it.id }
     val trackRowLayout = remember(trackIds, trackHeights.toMap()) {
         var top = 0f
