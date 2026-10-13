@@ -1453,7 +1453,7 @@ private fun TimelineGrid(
             )
             val clipLeft = with(density) { menuViewport.timeToViewportX(menuClip.startTick).toDp() }
             val menuWidth = 258.dp
-            val menuHeight = 4 * 29.dp + 3 * 3.dp + 8.dp
+            val menuHeight = 29.dp * 4f + 3.dp * 3f + 8.dp
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
             val menuRow = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
