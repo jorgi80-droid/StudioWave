@@ -1124,12 +1124,14 @@ private fun TimelineGrid(
                                 val oldBarWidth = (baseBarWidthPx * oldZoom).coerceAtLeast(1f)
                                 val newBarWidth = (baseBarWidthPx * newZoom).coerceAtLeast(1f)
                                 val pinchViewport = TimelineViewport(
-                                    timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx
+                                    timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat()
+                                )
+                                val anchoredViewport = pinchViewport.zoomKeepingAnchor(
+                                    newBarWidth, previousCentroid.x
                                 )
                                 val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x).toDouble()
-                                // Convert the global point to the timeline-pane-local x before calculating scroll.
-                                val newScroll = (anchorTick -
-                                    (centroid.x - trackHeaderWidthPx).toDouble() *
+                                val newScroll = (anchoredViewport.scrollTimeTicks +
+                                    (previousCentroid.x - centroid.x).toDouble() *
                                     timebase.ticksPerBar.toDouble() / newBarWidth.toDouble()
                                 ).coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
                                  val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
@@ -1237,7 +1239,7 @@ private fun TimelineGrid(
                 .height(24.dp)
                 .pointerInput(scrollTicks, zoom, timebase) {
                     detectTapGestures(onTap = { offset ->
-                        currentOnSeekTick(viewport.viewportXToTime(offset.x))
+                        currentOnSeekTick(viewport.copy(viewportWidthPx = size.width).viewportXToTime(offset.x))
                     })
                 }
         ) {
@@ -1396,7 +1398,7 @@ private fun TimelineGrid(
                                 var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
                                 Box(
                                     Modifier.align(Alignment.CenterEnd)
-                                        .width(with(density) { (clipWidthPx.toDp().value / 2f).coerceIn(10f, 27f).dp }).height(28.dp)
+                                        .width(with(density) { (clipWidthPx.toDp().value / 2f).coerceIn(10f, 20f).dp }).height(28.dp)
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
                                         .pointerInput(clip.id, zoom, clip.lengthTicks) {
                                             detectDragGestures(
@@ -1449,7 +1451,7 @@ private fun TimelineGrid(
                 with(density) { 104.dp.toPx() }
             )
             val clipLeft = with(density) { menuViewport.timeToViewportX(menuClip.startTick).toDp() }
-            val menuWidth = 282.dp
+            val menuWidth = 284.dp
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
             val menuRow = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
