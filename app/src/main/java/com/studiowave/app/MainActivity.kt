@@ -1089,9 +1089,7 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
                         }
                         val totalSamples = info.size / bytesPerSample
                         val frames = totalSamples / currentChannels
-                        val bytes = ByteArray(info.size)
-                        buffer.get(bytes)
-                        val pcm = ByteBuffer.wrap(bytes).order(ByteOrder.nativeOrder())
+                        val pcm = buffer.slice().order(ByteOrder.nativeOrder())
                         for (frame in 0 until frames) {
                             val sampleOffset = frame * currentChannels
                             var peak = 0f
@@ -1099,12 +1097,12 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
                                 val sampleIndex = sampleOffset + channel
                                 val value = when (outputEncoding) {
                                     android.media.AudioFormat.ENCODING_PCM_FLOAT -> pcm.getFloat(sampleIndex * 4)
-                                    android.media.AudioFormat.ENCODING_PCM_8BIT -> ((bytes[sampleIndex].toInt() and 0xFF) - 128) / 128f
+                                    android.media.AudioFormat.ENCODING_PCM_8BIT -> ((pcm.get(sampleIndex).toInt() and 0xFF) - 128) / 128f
                                     android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED -> {
                                         val offset = sampleIndex * 3
-                                        var v = (bytes[offset].toInt() and 0xFF) or
-                                            ((bytes[offset + 1].toInt() and 0xFF) shl 8) or
-                                            ((bytes[offset + 2].toInt()) shl 16)
+                                        var v = (pcm.get(offset).toInt() and 0xFF) or
+                                            ((pcm.get(offset + 1).toInt() and 0xFF) shl 8) or
+                                            ((pcm.get(offset + 2).toInt()) shl 16)
                                         if (v and 0x800000 != 0) v = v or -0x1000000
                                         v / 8388608f
                                     }
