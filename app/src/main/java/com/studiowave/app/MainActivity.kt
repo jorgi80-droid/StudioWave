@@ -1008,11 +1008,16 @@ private fun TimelineGrid(
                         }
                         val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
                         val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
+                        val row = rowIndex?.let { currentTrackRows.getOrNull(it) }
                         hitTrack?.clips?.any { clip ->
                             val left = clip.startTick.toFloat() / 3840f * barWidthPx - currentScroll * barWidthPx
                             val width = (clip.lengthTicks.toFloat() / 3840f * barWidthPx)
                                 .coerceAtLeast(with(density) { 24.dp.toPx() })
-                            firstDown.position.x >= left && firstDown.position.x <= left + width
+                            val right = left + width
+                            val pointerX = firstDown.position.x
+                            // A pointer to the right of the final clip is empty canvas.
+                            // This is what lets the user begin viewport panning after clips.
+                            pointerX >= left && pointerX <= right
                         } == true
                     }
                     var previousSinglePosition = firstDown.position
@@ -1060,7 +1065,9 @@ private fun TimelineGrid(
                                 val delta = pointer.position - previousSinglePosition
                                 if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val barWidthPx = (baseBarWidthPx * currentZoom).coerceAtLeast(1f)
-                                    val newScroll = (currentScroll - delta.x / barWidthPx).coerceAtLeast(0f)
+                                    val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
+                                    val ticksPerPixel = timebaseNow.ticksPerBar.toDouble() / barWidthPx
+                                    val newScroll = (currentScroll - delta.x * ticksPerPixel.toFloat()).coerceAtLeast(0f)
                                     val rowHeightPx = with(density) { 67.dp.toPx() } * currentVerticalZoom
                                     val newTrackScroll = (currentScrollTracks - delta.y / rowHeightPx.coerceAtLeast(1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
