@@ -921,7 +921,6 @@ private fun ArrangementWorkspace(
                 dismissButton = { TextButton(onClick = { renameClipId = null }) { Text("Cancel") } }
             )
         }
-        }
     }
 }
 
@@ -1099,7 +1098,6 @@ private fun TrackHeader(
                     },
                 contentAlignment = Alignment.Center
             ) { Text("↕", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
-        }
         }
     }
 }
