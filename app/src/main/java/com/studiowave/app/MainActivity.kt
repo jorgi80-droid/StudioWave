@@ -1219,9 +1219,13 @@ private fun TimelineGrid(
                                             }
                                             val target = currentTracks.getOrNull(targetIndex)
                                             val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
-                                            val rawDeltaTicks = (dragDx / barWidthPx * timebase.ticksPerBar.toFloat()).toLong()
-                                            val rawStartTick = (dragOriginalTick + rawDeltaTicks).coerceAtLeast(0L)
-                                            val newTick = viewport.snapTick(rawStartTick, snapDivision, snapToGrid)
+                                            val dragViewport = TimelineViewport(
+                                                timebase, barWidthPx, currentScroll.toDouble(),
+                                                size.width.toFloat(), trackHeaderWidthPx
+                                            )
+                                            val dragStartX = dragViewport.timeToViewportX(dragOriginalTick)
+                                            val rawStartTick = dragViewport.viewportXToTime(dragStartX + dragDx)
+                                            val newTick = dragViewport.snapTick(rawStartTick, snapDivision, snapToGrid)
                                             if (startIndex >= 0 && source != null && target != null && source.kind == target.kind) {
                                                 moveCommit(clip.id, target.id, newTick)
                                             }
@@ -1283,8 +1287,10 @@ private fun TimelineGrid(
                                                 onDragStart = { resizeDeltaPx = 0f },
                                                 onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
                                                 onDragEnd = {
-                                                    val deltaTicks = (resizeDeltaPx.toDouble() / (baseBarWidthPx * zoom).coerceAtLeast(1f).toDouble() * timebase.ticksPerBar.toDouble()).toLong()
-                                                     val rawEndTick = (clip.startTick + clip.lengthTicks + deltaTicks).coerceAtLeast(clip.startTick + 1L)
+                                                    val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
+                                                     val resizeViewport = TimelineViewport(timebase, barWidthPx, scrollTicks.toDouble(), viewportWidthPx, trackHeaderWidthPx)
+                                                     val originalEndX = resizeViewport.timeToViewportX(clip.startTick + clip.lengthTicks)
+                                                     val rawEndTick = resizeViewport.viewportXToTime(originalEndX + resizeDeltaPx).coerceAtLeast(clip.startTick + 1L)
                                                      val snapStep = snapDivision.ticks(timebase)
                                                      val snappedEndTick = if (snapToGrid && snapStep > 0L) timebase.snap(rawEndTick, snapDivision) else rawEndTick
                                                      val newLength = (snappedEndTick - clip.startTick).coerceAtLeast(if (snapToGrid && snapStep > 0L) snapStep else 1L)
@@ -1312,7 +1318,11 @@ private fun TimelineGrid(
         if (menuTrack != null && menuClip != null && clipMenuClipId != null) {
             val trackIndex = project.tracks.indexOfFirst { it.id == menuTrack.id }
             val barWidth = baseBarWidthPx * zoom
-            val clipLeft = with(density) { (((menuClip.startTick.toDouble() - scrollTicks.toDouble()) / timebase.ticksPerBar.toDouble()) * barWidth).toFloat().toDp() }
+            val menuViewport = TimelineViewport(
+                timebase, barWidth, scrollTicks.toDouble(), with(density) { maxWidth.toPx() },
+                with(density) { 104.dp.toPx() }
+            )
+            val clipLeft = with(density) { menuViewport.timeToViewportX(menuClip.startTick).toDp() }
             val menuWidth = 220.dp
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
