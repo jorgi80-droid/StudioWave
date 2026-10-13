@@ -517,7 +517,7 @@ private fun ArrangementWorkspace(
             TimelineGrid(
                 modifier = Modifier.weight(1f).fillMaxHeight(), project = project, zoom = zoom, onZoom = onZoom,
                 scrollBars = scrollBars, onScroll = onScroll, verticalZoom = verticalZoom, onVerticalZoom = onVerticalZoom,
-                scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, selectedClip = selectedClip,
+                scrollTracks = scrollTracks, onScrollTracks = onScrollTracks, snapEnabled = snapEnabled, selectedClip = selectedClip,
                 onSelectClip = { selectedClip = it },
                 onOpenEditor = { clipId ->
                     if (clipId == null) {
@@ -742,6 +742,7 @@ private fun TimelineGrid(
     onScroll: (Float) -> Unit,
     verticalZoom: Float,
     onVerticalZoom: (Float) -> Unit,
+    snapEnabled: Boolean,
     scrollTracks: Float,
     onScrollTracks: (Float) -> Unit,
     selectedClip: String?,
@@ -761,6 +762,7 @@ private fun TimelineGrid(
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
     val moveCommit by rememberUpdatedState(onMoveClip)
+    val snapToGrid by rememberUpdatedState(snapEnabled)
     val trackCount = project.tracks.size
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
@@ -953,9 +955,12 @@ private fun TimelineGrid(
                                             val targetIndex = (startIndex + rowsMoved).coerceIn(0, currentTracks.lastIndex.coerceAtLeast(0))
                                             val source = currentTracks.getOrNull(startIndex)
                                             val target = currentTracks.getOrNull(targetIndex)
-                                            val sixteenthWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f) / 16f
-                                            val movedSixteenths = kotlin.math.round(dragDx / sixteenthWidthPx).toLong()
-                                            val newTick = (dragOriginalTick + movedSixteenths * 240L).coerceAtLeast(0L)
+                                            val barWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f)
+                                            val rawDeltaTicks = (dragDx / barWidthPx * 3840f).toLong()
+                                            val rawStartTick = (dragOriginalTick + rawDeltaTicks).coerceAtLeast(0L)
+                                            val newTick = if (snapToGrid) {
+                                                (((rawStartTick + 120L) / 240L) * 240L).coerceAtLeast(0L)
+                                            } else rawStartTick
                                             if (startIndex >= 0 && source != null && target != null && source.kind == target.kind) {
                                                 moveCommit(clip.id, target.id, newTick)
                                             }
@@ -986,7 +991,11 @@ private fun TimelineGrid(
                                     onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
                                     onDragEnd = {
                                         val deltaTicks = (resizeDeltaPx / (baseBarWidthPx * zoom) * 3840f).toLong()
-                                        onResizeClip(clip.id, (clip.lengthTicks + deltaTicks).coerceAtLeast(240L))
+                                        val rawLength = (clip.lengthTicks + deltaTicks).coerceAtLeast(240L)
+                                        val newLength = if (snapToGrid) {
+                                            (((rawLength + 120L) / 240L) * 240L).coerceAtLeast(240L)
+                                        } else rawLength
+                                        onResizeClip(clip.id, newLength)
                                         resizeDeltaPx = 0f
                                     },
                                     onDragCancel = { resizeDeltaPx = 0f }
