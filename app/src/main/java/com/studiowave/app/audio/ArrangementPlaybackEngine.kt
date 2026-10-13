@@ -75,34 +75,23 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     suspend fun start(
         project: StudioProject,
         masterGain: Float = 0.72f,
-        onCompleted: () -> Unit = {}
+        onCompleted: () -> Unit = {},
+        onError: (String) -> Unit = {}
     ) {
         check(!closed.get()) { "Playback engine is closed" }
         stop()
-        val plan = withContext(Dispatchers.IO) {
-            buildPlan(project, masterGain.coerceIn(0f, 1f))
-        }
+        val plan = withContext(Dispatchers.IO) { buildPlan(project, masterGain.coerceIn(0f, 1f)) }
         check(!closed.get()) { "Playback engine is closed" }
         val minBuffer = AudioTrack.getMinBufferSize(
-            plan.sampleRate,
-            AudioFormat.CHANNEL_OUT_STEREO,
-            AudioFormat.ENCODING_PCM_16BIT
+            plan.sampleRate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT
         )
         require(minBuffer > 0) { "Audio output buffer query failed: $minBuffer" }
         val track = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setSampleRate(plan.sampleRate)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .build()
-            )
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            .setAudioFormat(AudioFormat.Builder().setSampleRate(plan.sampleRate)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
             .setTransferMode(AudioTrack.MODE_STREAM)
             .setBufferSizeInBytes(maxOf(minBuffer, BLOCK_FRAMES * 4 * 4))
             .build()
@@ -110,20 +99,22 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             track.release()
             error("AudioTrack initialization failed")
         }
-
-        try {
+        synchronized(this) {
+            check(!closed.get()) { track.release(); "Playback engine is closed" }
             output = track
             running.set(true)
-            track.play()
-            worker = Thread({
-                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-                renderPlan(track, plan, onCompleted)
-            }, "StudioWave-Arrangement").also { it.start() }
-        } catch (failure: Throwable) {
-            running.set(false)
-            output = null
-            runCatching { track.release() }
-            throw failure
+            try {
+                track.play()
+                worker = Thread({
+                    Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+                    renderPlan(track, plan, onCompleted, onError)
+                }, "StudioWave-Arrangement").also { it.start() }
+            } catch (failure: Throwable) {
+                running.set(false)
+                output = null
+                runCatching { track.release() }
+                throw failure
+            }
         }
     }
 
