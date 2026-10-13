@@ -37,6 +37,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val closed = AtomicBoolean(false)
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
     @Volatile private var liveMasterGain = 0.72f
+    @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
     private val audioAssetCache = object : android.util.LruCache<String, AudioAsset>(MAX_ASSET_CACHE_KIB) {
         override fun sizeOf(key: String, value: AudioAsset): Int =
             (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
@@ -79,6 +80,18 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val drums: List<DrumEvent>
     )
 
+    private data class TrackMix(
+        val volume: Float,
+        val pan: Float,
+        val muted: Boolean,
+        val solo: Boolean
+    )
+
+    private data class MixSnapshot(
+        val tracks: Map<String, TrackMix>,
+        val soloActive: Boolean
+    )
+
     suspend fun start(
         project: StudioProject,
         masterGain: Float = 0.72f,
@@ -89,6 +102,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val token = generation.incrementAndGet()
         stopOutputOnly()
         liveMasterGain = masterGain.coerceIn(0f, 1f)
+        updateMix(project)
         val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
         check(!closed.get()) { "Playback engine is closed" }
         check(generation.get() == token) { "Playback start was cancelled" }
@@ -142,9 +156,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             ArrangementTiming.ticksToFrames(ticks, bpm, ppq, sampleRate)
 
         val tracks = project.tracks
-        val soloActive = tracks.any { it.solo && !it.muted }
-        fun audible(track: StudioTrack) =
-            ArrangementTiming.trackIsAudible(track.muted, track.solo, soloActive)
         val maxTick = tracks.asSequence().flatMap { it.clips.asSequence() }.maxOfOrNull {
             val start = it.startTick.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 2)
             val length = it.lengthTicks.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / 2)
@@ -153,7 +164,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val totalFrames = ticksToFrames(maxTick).coerceIn(1L, sampleRate.toLong() * MAX_ARRANGEMENT_SECONDS)
 
         val requestedTicksByUri = linkedMapOf<String, Long>()
-        tracks.filter(::audible).filter { it.kind == "audio" }.forEach { track ->
+        tracks.filter { it.kind == "audio" }.forEach { track ->
             track.clips.forEach clipLoop@{ clip ->
                 val uri = clip.sourceUri?.takeIf { it.isNotBlank() } ?: return@clipLoop
                 requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, clip.lengthTicks.coerceAtLeast(1L))
@@ -182,7 +193,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val audioEvents = ArrayList<AudioEvent>()
         val notes = ArrayList<NoteEvent>()
         val drums = ArrayList<DrumEvent>()
-        tracks.filter(::audible).forEach { track ->
+        tracks.forEach { track ->
             ensureCurrent()
             track.clips.forEach clipLoop@{ clip ->
                 ensureCurrent()
@@ -384,6 +395,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val sampleCount = frames * 2
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
                 val blockEnd = position + frames
+                val mixState = liveMix
 
                 playingAudio.removeAll { it.endFrame <= position }
                 while (audioCursor < scheduledAudio.size && scheduledAudio[audioCursor].startFrame < blockEnd) {
@@ -399,10 +411,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
 
                 for (event in playingAudio) {
+                    val channelMix = mixState.tracks[event.track.id] ?: TrackMix(event.track.volume, event.track.pan, event.track.muted, event.track.solo)
+                    if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, event.startFrame)
                     val to = min(blockEnd, event.endFrame)
-                    val trackGain = event.track.volume.coerceIn(0f, 1.5f) * liveMasterGain
-                    val pan = event.track.pan.coerceIn(-1f, 1f)
+                    val trackGain = channelMix.volume * liveMasterGain
+                    val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     for (absolute in from until to) {
@@ -483,6 +497,21 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 worker = null
             }
         }
+    }
+
+    fun updateMix(project: StudioProject) {
+        val trackValues = project.tracks.map { track ->
+            TrackMix(
+                volume = track.volume.coerceIn(0f, 1.5f),
+                pan = track.pan.coerceIn(-1f, 1f),
+                muted = track.muted,
+                solo = track.solo
+            )
+        }
+        liveMix = MixSnapshot(
+            tracks = trackValues.mapIndexed { index, mix -> project.tracks[index].id to mix }.toMap(),
+            soloActive = trackValues.any { it.solo && !it.muted }
+        )
     }
 
     fun setMasterGain(gain: Float) {
