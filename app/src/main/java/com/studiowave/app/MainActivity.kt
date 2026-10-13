@@ -170,9 +170,10 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
         Row(Modifier.fillMaxWidth().height(25.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("ARRANGEMENT", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
             Spacer(Modifier.weight(1f))
-            Text("ZOOM ${(zoom * 100).toInt()}%", color = MutedText, fontSize = 9.sp)
-            SmallAction("−") { onZoom(zoom / 1.12f) }
-            SmallAction("+") { onZoom(zoom * 1.12f) }
+            Text("${(zoom * 100).toInt()}%", color = MutedText, fontSize = 10.sp)
+            SmallAction("−") { onZoom(zoom / 1.15f) }
+            SmallAction("+") { onZoom(zoom * 1.15f) }
+            SmallAction("FIT") { onZoom(1f) }
         }
         Row(Modifier.fillMaxWidth().weight(1f)) {
             Column(Modifier.width(128.dp)) {
@@ -182,6 +183,7 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
                 project.tracks.forEachIndexed { index, track -> TrackHeader(track, index) }
             }
             TimelineGrid(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 project = project,
                 zoom = zoom,
                 onZoom = onZoom,
@@ -219,6 +221,7 @@ private fun TrackHeader(track: StudioTrack, index: Int) {
 
 @Composable
 private fun TimelineGrid(
+    modifier: Modifier = Modifier,
     project: StudioProject,
     zoom: Float,
     onZoom: (Float) -> Unit,
@@ -239,8 +242,7 @@ private fun TimelineGrid(
     val currentOnScroll by rememberUpdatedState(onScroll)
 
     Box(
-        Modifier
-            .fillMaxSize()
+        modifier
             .background(Color(0xFF17191C))
             .pointerInput(baseBarWidthPx) {
                 detectTransformGestures(panZoomLock = true) { centroid, pan, gestureZoom, _ ->
