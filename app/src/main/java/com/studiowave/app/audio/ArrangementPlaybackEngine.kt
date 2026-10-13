@@ -144,8 +144,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
         val requestedTicksByUri = linkedMapOf<String, Long>()
         tracks.filter(::audible).filter { it.kind == "audio" }.forEach { track ->
-            track.clips.forEach { clip ->
-                val uri = clip.sourceUri?.takeIf { it.isNotBlank() } ?: return@forEach
+            track.clips.forEach clipLoop@{ clip ->
+                val uri = clip.sourceUri?.takeIf { it.isNotBlank() } ?: return@clipLoop
                 requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, clip.lengthTicks.coerceAtLeast(1L))
             }
         }
@@ -172,11 +172,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 if (clipEnd <= clipStart) return@forEach
                 when (track.kind) {
                     "audio" -> {
-                        val source = clip.sourceUri ?: return@forEach
-                        val asset = assets[source] ?: return@forEach
+                        val source = clip.sourceUri ?: return@clipLoop
+                        val asset = assets[source] ?: return@clipLoop
                         audioEvents.add(AudioEvent(clipStart, clipEnd, track, clip, asset))
                     }
-                    "midi" -> clip.midiNotes.forEach { note ->
+                    "midi" -> clip.midiNotes.forEach noteLoop@{ note ->
                         val noteStart = clipStart + ticksToFrames(note.startTick)
                         val noteEnd = min(clipEnd, noteStart + ticksToFrames(note.durationTicks.coerceAtLeast(1L)))
                         if (noteEnd > noteStart) {
