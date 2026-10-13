@@ -4,6 +4,7 @@ import com.studiowave.app.data.StudioProject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.fail
 import org.json.JSONObject
 import org.junit.Test
 
@@ -60,4 +61,36 @@ class ProjectModelTest {
             assertTrue(it.durationTicks > 0)
         }
     }
+
+    @Test fun projectLoaderRejectsExcessiveTrackCount() {
+        val json = StudioProject().toJson()
+        val tracks = json.getJSONArray("tracks")
+        val source = tracks.getJSONObject(0)
+        val many = org.json.JSONArray()
+        repeat(StudioProject.MAX_TRACKS + 1) { many.put(source) }
+        json.put("tracks", many)
+        try {
+            StudioProject.fromJson(json)
+            fail("oversized projects must be rejected")
+        } catch (expected: IllegalArgumentException) {
+            assertTrue(expected.message!!.contains("too many tracks"))
+        }
+    }
+
+    @Test fun projectLoaderClampsInvalidTempoAndNoteValues() {
+        val json = StudioProject().toJson().put("bpm", 900)
+        val tracks = json.getJSONArray("tracks")
+        val midi = (0 until tracks.length()).map { tracks.getJSONObject(it) }
+            .first { it.getString("kind") == "midi" }
+        val note = midi.getJSONArray("clips").getJSONObject(0).getJSONArray("midiNotes").getJSONObject(0)
+        note.put("pitch", 999).put("velocity", -5).put("durationTicks", 0).put("startTick", -10)
+        val restored = StudioProject.fromJson(json)
+        assertEquals(240, restored.bpm)
+        val restoredNote = restored.tracks.first { it.id == midi.getString("id") }.clips.first().midiNotes.first()
+        assertEquals(127, restoredNote.pitch)
+        assertEquals(1, restoredNote.velocity)
+        assertEquals(1L, restoredNote.durationTicks)
+        assertEquals(0L, restoredNote.startTick)
+    }
+
 }
