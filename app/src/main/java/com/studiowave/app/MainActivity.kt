@@ -175,8 +175,8 @@ private fun StudioWaveApp() {
         playbackSession += 1L
         playbackJob?.cancel()
         playbackJob = null
-        arrangementPlayback.stop()
-        engine.stop()
+        runCatching { arrangementPlayback.stop() }
+        runCatching { engine.stop() }
         playing = false
         playbackLoading = false
         audioError = null
@@ -757,8 +757,11 @@ private fun ArrangementWorkspace(
                 onClipAction = { action, clipId -> handleClipAction(action, clipId) },
                 onDismissClipMenu = { clipMenu = null },
                 onResizeClip = { clipId, lengthTicks ->
+                    val safeLength = lengthTicks.coerceIn(1L, Long.MAX_VALUE / 2L)
                     onProjectChange(project.copy(tracks = project.tracks.map { track ->
-                        track.copy(clips = track.clips.map { clip -> if (clip.id == clipId) clip.copy(lengthTicks = lengthTicks) else clip })
+                        track.copy(clips = track.clips.map { clip ->
+                            if (clip.id == clipId) clip.copy(lengthTicks = safeLength) else clip
+                        })
                     }))
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
@@ -1446,7 +1449,7 @@ private fun TimelineGrid(
                 with(density) { 104.dp.toPx() }
             )
             val clipLeft = with(density) { menuViewport.timeToViewportX(menuClip.startTick).toDp() }
-            val menuWidth = 220.dp
+            val menuWidth = 282.dp
             val maxX = (maxWidth - menuWidth - 4.dp).coerceAtLeast(0.dp)
             val x = clipLeft.coerceIn(0.dp, maxX)
             val menuRow = trackRowLayout.getOrNull(trackIndex) ?: TrackRowLayout(trackIndex * 67f, 67f)
@@ -1454,8 +1457,8 @@ private fun TimelineGrid(
             Row(
                 Modifier.offset(x = x, y = y)
                     .background(Color(0xFF30343A), RoundedCornerShape(20.dp))
-                    .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    .padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 listOf("Open editor", "Cut", "Copy", "Duplicate", "Color", "Rename", "Snap", "Delete", "×").forEach { action ->
@@ -1668,9 +1671,17 @@ private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float)
                 Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF202328), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
                     Text(name, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = if (index == 0) Mint else Color(0xFFD5D9E0))
-                    var amount by remember { mutableFloatStateOf(0.3f + index * 0.1f) }
-                    Slider(value = amount, onValueChange = { amount = it; if (index == 0) onTone(110f + it * 880f) },
-                        valueRange = 0f..1f, modifier = Modifier.height(20.dp))
+                    if (index == 0) {
+                        var amount by remember { mutableFloatStateOf(0.3f) }
+                        Slider(
+                            value = amount,
+                            onValueChange = { amount = it; onTone(110f + it * 880f) },
+                            valueRange = 0f..1f,
+                            modifier = Modifier.height(20.dp)
+                        )
+                    } else {
+                        Text("NOT ACTIVE", color = MutedText, fontSize = 6.sp, maxLines = 1)
+                    }
                 }
             }
         }
