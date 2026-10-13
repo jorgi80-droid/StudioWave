@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -179,7 +180,15 @@ private fun ArrangementWorkspace(project: StudioProject, zoom: Float, onZoom: (F
                 }
                 project.tracks.forEachIndexed { index, track -> TrackHeader(track, index) }
             }
-            TimelineGrid(project, zoom, scrollBars, onScroll, selectedClip) { selectedClip = it }
+            TimelineGrid(
+                project = project,
+                zoom = zoom,
+                onZoom = onZoom,
+                scrollBars = scrollBars,
+                onScroll = onScroll,
+                selectedClip = selectedClip,
+                onSelectClip = { selectedClip = it }
+            )
         }
     }
 }
@@ -208,12 +217,20 @@ private fun TrackHeader(track: StudioTrack, index: Int) {
 }
 
 @Composable
-private fun TimelineGrid(project: StudioProject, zoom: Float, scrollBars: Float, onScroll: (Float) -> Unit, selectedClip: String?, onSelectClip: (String) -> Unit) {
+private fun TimelineGrid(
+    project: StudioProject,
+    zoom: Float,
+    onZoom: (Float) -> Unit,
+    scrollBars: Float,
+    onScroll: (Float) -> Unit,
+    selectedClip: String?,
+    onSelectClip: (String) -> Unit
+) {
     val accentColors = project.tracks.map { Color(it.colorArgb.toInt()) }
-    Box(Modifier.fillMaxSize().background(Color(0xFF17191C)).pointerInput(zoom) {
-        detectTransformGestures { _, pan, gestureZoom, _ ->
-            onScroll((scrollBars - pan.x / 100f).coerceAtLeast(0f))
-            // Keep zoom control synchronized with pinch distance.
+    Box(Modifier.fillMaxSize().background(Color(0xFF17191C)).pointerInput(zoom, scrollBars) {
+        detectTransformGestures { centroid, pan, gestureZoom, _ ->
+            onZoom((zoom * gestureZoom).coerceIn(0.55f, 2.8f))
+            onScroll((scrollBars - pan.x / (74f * zoom)).coerceAtLeast(0f))
         }
     }) {
         Canvas(Modifier.fillMaxSize()) {
@@ -242,12 +259,16 @@ private fun TimelineGrid(project: StudioProject, zoom: Float, scrollBars: Float,
             project.tracks.forEachIndexed { trackIndex, track ->
                 Box(Modifier.fillMaxWidth().height(67.dp)) {
                     track.clips.forEach { clip ->
-                        val x = (clip.startTick.toFloat() / 3840f * 74f * zoom).dp
+                        val x = ((clip.startTick.toFloat() / 3840f * 74f * zoom) - scrollBars * 74f * zoom).dp
                         val w = (clip.lengthTicks.toFloat() / 3840f * 74f * zoom).dp
                         val accent = accentColors[trackIndex]
-                        Column(Modifier.padding(start = x, top = 7.dp, bottom = 7.dp).width(w.coerceAtLeast(24.dp)).fillMaxHeight()
-                            .background(accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f), RoundedCornerShape(4.dp))
-                            .padding(4.dp)) {
+                        Column(
+                            Modifier.padding(start = x.coerceAtLeast(0.dp), top = 7.dp, bottom = 7.dp)
+                                .width(w.coerceAtLeast(24.dp)).fillMaxHeight()
+                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.65f else 0.34f), RoundedCornerShape(4.dp))
+                                .clickable { onSelectClip(clip.id) }
+                                .padding(4.dp)
+                        ) {
                             Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
                             if (track.kind == "midi") Canvas(Modifier.fillMaxSize()) {
                                 clip.midiNotes.forEach { note ->
