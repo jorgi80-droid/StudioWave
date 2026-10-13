@@ -976,7 +976,6 @@ private fun ArrangementWorkspace(
                     onToggleDevices()
                 }
             }
-        }
         Box(Modifier.align(Alignment.BottomEnd).fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
             // Keep routine edit feedback out of the timeline; only validation errors appear inline.
             if (statusMessage != null) {
