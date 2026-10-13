@@ -40,6 +40,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -579,15 +581,20 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
             return@LaunchedEffect
         }
         loading = true
-        val result = runCatching {
-            withContext(Dispatchers.IO) {
-                WaveformPeakCache.get(source) ?: decodeWaveformPeaks(context, Uri.parse(source), 240)
-                    .also { WaveformPeakCache.put(source, it) }
+        try {
+            waveform = withContext(Dispatchers.IO) {
+                val decodeJob = currentCoroutineContext()[Job]
+                WaveformPeakCache.get(source, 240) ?: decodeWaveformPeaks(context, Uri.parse(source), 240) {
+                    decodeJob?.ensureActive()
+                }.also { WaveformPeakCache.put(source, 240, it) }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            loadError = failure.message ?: "Waveform tidak dapat dibaca."
+        } finally {
+            loading = false
         }
-        result.onSuccess { waveform = it }
-            .onFailure { loadError = it.message ?: "Waveform tidak dapat dibaca." }
-        loading = false
     }
 
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
@@ -1135,7 +1142,12 @@ private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
  * Decode actual PCM samples for display. Extractor and decoder run on Dispatchers.IO,
  * output is reduced to a bounded peak array, and native resources are always released.
  */
-private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peakCount: Int): List<Float> {
+private fun decodeWaveformPeaks(
+    context: android.content.Context,
+    uri: Uri,
+    peakCount: Int,
+    ensureActive: () -> Unit = {}
+): List<Float> {
     require(peakCount in 1..2048) { "Invalid waveform resolution" }
     val extractor = MediaExtractor()
     var decoder: android.media.MediaCodec? = null
@@ -1170,6 +1182,7 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
         var noProgressPolls = 0
 
         while (!outputFinished) {
+            ensureActive()
             var progressed = false
             if (!inputFinished) {
                 val inputIndex = decoder.dequeueInputBuffer(10_000)
@@ -1264,9 +1277,10 @@ private fun decodeWaveformPeaks(context: android.content.Context, uri: Uri, peak
 
 private object WaveformPeakCache {
     private val cache = android.util.LruCache<String, List<Float>>(12)
-    @Synchronized fun get(uri: String): List<Float>? = cache.get(uri)
-    @Synchronized fun put(uri: String, peaks: List<Float>) {
-        cache.put(uri, peaks)
+    private fun key(uri: String, peakCount: Int) = "$uri#$peakCount"
+    @Synchronized fun get(uri: String, peakCount: Int): List<Float>? = cache.get(key(uri, peakCount))
+    @Synchronized fun put(uri: String, peakCount: Int, peaks: List<Float>) {
+        cache.put(key(uri, peakCount), peaks)
     }
 }
 
@@ -1277,13 +1291,18 @@ private fun AudioClipWaveform(sourceUri: String?, accent: Color) {
     LaunchedEffect(sourceUri) {
         peaks = emptyList()
         if (sourceUri.isNullOrBlank()) return@LaunchedEffect
-        val loaded = runCatching {
-            withContext(Dispatchers.IO) {
-                WaveformPeakCache.get(sourceUri) ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 48)
-                    .also { WaveformPeakCache.put(sourceUri, it) }
+        try {
+            peaks = withContext(Dispatchers.IO) {
+                val decodeJob = currentCoroutineContext()[Job]
+                WaveformPeakCache.get(sourceUri, 48) ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 48) {
+                    decodeJob?.ensureActive()
+                }.also { WaveformPeakCache.put(sourceUri, 48, it) }
             }
-        }.getOrDefault(emptyList())
-        peaks = loaded
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            peaks = emptyList()
+        }
     }
     Canvas(Modifier.fillMaxSize()) {
         if (peaks.isEmpty()) {
