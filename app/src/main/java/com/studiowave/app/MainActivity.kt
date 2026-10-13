@@ -1399,21 +1399,30 @@ private fun TimelineGrid(
                                 .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
                                 .pointerInput(clip.id, trackIndex, zoom, trackHeightPx) {
+                                    // The trailing grip owns resize gestures. Do not let the clip-body
+                                    // drag handler consume those pointer changes first.
+                                    var startedOnResizeGrip = false
                                     detectDragGestures(
-                                        onDragStart = {
-                                            draggingClip = clip.id
-                                            dragFromTrack = trackIndex
-                                            dragOriginalTick = clip.startTick
-                                            dragDx = 0f
-                                            dragDy = 0f
-                                            onSelectClip(clip.id)
+                                        onDragStart = { down ->
+                                            startedOnResizeGrip = down.x >= size.width - 25.dp.toPx()
+                                            if (!startedOnResizeGrip) {
+                                                draggingClip = clip.id
+                                                dragFromTrack = trackIndex
+                                                dragOriginalTick = clip.startTick
+                                                dragDx = 0f
+                                                dragDy = 0f
+                                                onSelectClip(clip.id)
+                                            }
                                         },
                                         onDrag = { change, amount ->
-                                            change.consume()
-                                            dragDx += amount.x
-                                            dragDy += amount.y
+                                            if (!startedOnResizeGrip) {
+                                                change.consume()
+                                                dragDx += amount.x
+                                                dragDy += amount.y
+                                            }
                                         },
                                         onDragEnd = {
+                                            if (!startedOnResizeGrip) {
                                             val currentTracks = latestProject.tracks
                                             val startIndex = currentTracks.getOrNull(dragFromTrack)
                                                 ?.takeIf { track -> track.clips.any { it.id == clip.id } }
@@ -1449,12 +1458,17 @@ private fun TimelineGrid(
                                             dragFromTrack = -1
                                             dragDx = 0f
                                             dragDy = 0f
+                                            }
+                                            startedOnResizeGrip = false
                                         },
                                         onDragCancel = {
-                                            draggingClip = null
-                                            dragFromTrack = -1
-                                            dragDx = 0f
-                                            dragDy = 0f
+                                            if (!startedOnResizeGrip) {
+                                                draggingClip = null
+                                                dragFromTrack = -1
+                                                dragDx = 0f
+                                                dragDy = 0f
+                                            }
+                                            startedOnResizeGrip = false
                                         }
                                     )
                                 }
@@ -1496,7 +1510,7 @@ private fun TimelineGrid(
                                 var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
                                 Box(
                                     Modifier.align(Alignment.CenterEnd)
-                                        .width(with(density) { (clipWidthPx.toDp().value / 2f).coerceIn(10f, 20f).dp }).height(28.dp)
+                                        .width(with(density) { (clipWidthPx.toDp().value * 0.42f).coerceIn(12f, 24f).dp }).height(34.dp)
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
                                         .pointerInput(clip.id, zoom, clip.lengthTicks) {
                                             detectDragGestures(
