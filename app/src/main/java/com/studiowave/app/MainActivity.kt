@@ -938,16 +938,20 @@ private fun TimelineGrid(
                                             dragDy += amount.y
                                         },
                                         onDragEnd = {
-                                            val sourceIndex = dragFromTrack
+                                            val currentTracks = latestProject.tracks
+                                            val startIndex = currentTracks.getOrNull(dragFromTrack)
+                                                ?.takeIf { track -> track.clips.any { it.id == clip.id } }
+                                                ?.let { dragFromTrack }
+                                                ?: currentTracks.indexOfFirst { track -> track.clips.any { it.id == clip.id } }
                                             val rowHeightPx = trackHeightPx.coerceAtLeast(1f)
                                             val rowsMoved = kotlin.math.round(dragDy / rowHeightPx).toInt()
-                                            val targetIndex = (sourceIndex + rowsMoved).coerceIn(0, (trackCount - 1).coerceAtLeast(0))
-                                            val source = project.tracks.getOrNull(sourceIndex)
-                                            val target = project.tracks.getOrNull(targetIndex)
+                                            val targetIndex = (startIndex + rowsMoved).coerceIn(0, currentTracks.lastIndex.coerceAtLeast(0))
+                                            val source = currentTracks.getOrNull(startIndex)
+                                            val target = currentTracks.getOrNull(targetIndex)
                                             val sixteenthWidthPx = (baseBarWidthPx * zoom).coerceAtLeast(1f) / 16f
                                             val movedSixteenths = kotlin.math.round(dragDx / sixteenthWidthPx).toLong()
                                             val newTick = (dragOriginalTick + movedSixteenths * 240L).coerceAtLeast(0L)
-                                            if (source != null && target != null && source.kind == target.kind) {
+                                            if (startIndex >= 0 && source != null && target != null && source.kind == target.kind) {
                                                 moveCommit(clip.id, target.id, newTick)
                                             }
                                             draggingClip = null
