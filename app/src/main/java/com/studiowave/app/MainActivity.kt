@@ -1044,7 +1044,7 @@ private fun ArrangementWorkspace(
     scrollTicks: Double, onScroll: (Double) -> Unit,
     verticalZoom: Float, onVerticalZoom: (Float) -> Unit,
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
-    onOpenEditor: (String, String?) -> Unit,
+    onOpenEditor: (String, String?, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
     onPlaybackRestart: (StudioProject) -> Unit = {},
     onScratchTrack: (String, Float) -> Unit = { _, _ -> },
@@ -1266,7 +1266,10 @@ private fun ArrangementWorkspace(
                             TrackHeader(
                                 track, index, verticalZoom, scrollTracks,
                                 rowTopDp = row.topDp, rowHeightDp = row.heightDp,
-                                onDoubleTap = { onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id) },
+                                onDoubleTap = {
+                                    val editorClip = track.clips.minByOrNull { it.startTick }
+                                    onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id, editorClip?.id)
+                                },
                                 onColorTap = {
                                     val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEE)
                                     val current = palette.indexOf(track.colorArgb)
@@ -1370,10 +1373,10 @@ private fun ArrangementWorkspace(
                 onSelectClip = { selectedClip = it },
                 onOpenEditor = { clipId ->
                     if (clipId == null) {
-                        onOpenEditor("BROWSER", null)
+                        onOpenEditor("BROWSER", null, null)
                     } else {
                         val track = project.tracks.firstOrNull { item -> item.clips.any { it.id == clipId } }
-                        onOpenEditor(when (track?.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track?.id)
+                        onOpenEditor(when (track?.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track?.id, clipId)
                     }
                 },
                 onClipLongPress = {
@@ -1600,7 +1603,8 @@ private fun ArrangementWorkspace(
                         showClipView = false
                         onOpenEditor(
                             when (inspectorTrack.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
-                            inspectorTrack.id
+                            inspectorTrack.id,
+                            inspectorClip.id
                         )
                     }
                     SmallAction("DUP") { handleClipAction("Duplicate", inspectorClip.id) }
