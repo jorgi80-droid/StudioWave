@@ -83,14 +83,14 @@ import com.studiowave.app.data.StudioProjectFile
 import com.studiowave.app.data.StudioTrack
 import android.widget.Toast
 
-private val Room = Color(0xFF141517)
-private val CanvasSurface = Color(0xFF1E2024)
-private val Raised = Color(0xFF282B30)
-private val MutedText = Color(0xFFA4A8B0)
-private val Mint = Color(0xFF00D2B4)
-private val AbletonOrange = Color(0xFFFF764D)
-private val Green = Color(0xFF22C55E)
-private val Red = Color(0xFFEF4444)
+private val Room: Color @Composable get() = LocalStudioWavePalette.current.room
+private val CanvasSurface: Color @Composable get() = LocalStudioWavePalette.current.canvas
+private val Raised: Color @Composable get() = LocalStudioWavePalette.current.panel
+private val MutedText: Color @Composable get() = LocalStudioWavePalette.current.muted
+private val Mint: Color @Composable get() = LocalStudioWavePalette.current.accent
+private val AbletonOrange: Color @Composable get() = LocalStudioWavePalette.current.orange
+private val Green: Color @Composable get() = LocalStudioWavePalette.current.success
+private val Red: Color @Composable get() = LocalStudioWavePalette.current.danger
 
 internal fun choosePreferredRefreshRate(supportedRates: Iterable<Float>): Float? =
     supportedRates.asSequence()
