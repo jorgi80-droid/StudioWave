@@ -2992,6 +2992,35 @@ private fun PianoRollWorkspace(
                         editMessage = "${ids.size} note(s) deleted"
                     } else editMessage = "Select a note first"
                 }
+                SmallAction("SCALE") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    val selected = notes.filter { it.id in ids }
+                    if (selected.isEmpty()) editMessage = "Select notes first"
+                    else {
+                        // Snap selected notes to the nearest major scale around C while preserving timing.
+                        val allowed = setOf(0, 2, 4, 5, 7, 9, 11)
+                        val adjusted = selected.associate { note ->
+                            val pitchClass = Math.floorMod(note.pitch, 12)
+                            val nearest = (0..127).filter { candidate ->
+                                candidate / 12 == note.pitch / 12 && Math.floorMod(candidate, 12) in allowed
+                            }.minByOrNull { kotlin.math.abs(it - note.pitch) }
+                            note.id to note.copy(pitch = nearest ?: note.pitch)
+                        }
+                        updateNotes(notes.map { adjusted[it.id] ?: it })
+                        editMessage = "Selected notes snapped to C major"
+                    }
+                }
+                SmallAction("±1") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isEmpty()) editMessage = "Select notes first"
+                    else {
+                        val ascending = notes.filter { it.id in ids }.all { it.pitch < 127 }
+                        updateNotes(notes.map { note ->
+                            if (note.id in ids) note.copy(pitch = (note.pitch + if (ascending) 1 else -1).coerceIn(0,127)) else note
+                        })
+                        editMessage = if (ascending) "Selection +1 semitone" else "Selection −1 semitone"
+                    }
+                }
                 SmallAction("SNAP") { quantizeSelectedNotes() }
                 SmallAction("SPLIT") { splitSelectedClipAtTick() }
                 SmallAction("LEGATO") {
