@@ -2608,7 +2608,7 @@ private fun PianoRollWorkspace(
 
     Column(Modifier.fillMaxSize().background(pianoPalette.room, RoundedCornerShape(5.dp)).padding(3.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(20.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp))
+            Modifier.fillMaxWidth().height(18.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp))
                 .padding(horizontal = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2619,7 +2619,7 @@ private fun PianoRollWorkspace(
             SmallAction("BACK", onBack)
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 1.dp, bottom = 1.dp)
+            Modifier.fillMaxWidth().padding(top = 0.dp, bottom = 0.dp)
                 .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 2.dp, vertical = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2674,9 +2674,9 @@ private fun PianoRollWorkspace(
             }
         }
 
-        Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f).padding(top = 1.dp)) {
             if (keyboardVisible) {
-                Column(Modifier.width(42.dp).fillMaxHeight().background(pianoPalette.panel)) {
+                Column(Modifier.width(34.dp).fillMaxHeight().background(pianoPalette.panel)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
@@ -2884,10 +2884,10 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(editMessage, color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, maxLines = 1)
+        Row(Modifier.fillMaxWidth().height(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(editMessage, color = pianoPalette.muted, fontSize = 7.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = LocalStudioWavePalette.current.accent, fontSize = 8.sp)
+            Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = pianoPalette.accent, fontSize = 7.sp)
         }
     }
 }
