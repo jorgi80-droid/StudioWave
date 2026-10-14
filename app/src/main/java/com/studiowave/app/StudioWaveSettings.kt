@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 
 /** A single source of truth for StudioWave's Live-inspired surface and control colors. */
-private data class StudioWavePalette(
+internal data class StudioWavePalette(
     val room: Color, val canvas: Color, val panel: Color, val raised: Color, val control: Color,
     val text: Color, val muted: Color, val accent: Color, val orange: Color, val grid: Color,
     val border: Color, val success: Color, val warning: Color, val danger: Color
@@ -31,7 +31,7 @@ internal val LocalStudioWavePalette = compositionLocalOf {
         Color(0xFF454950), Color(0xFF3D4148), Color(0xFF22C55E), Color(0xFFE4B45E), Color(0xFFEF4F64))
 }
 
-private fun studioWavePalette(theme: String, tone: String, highContrast: Boolean): StudioWavePalette {
+internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolean): StudioWavePalette {
     val base = when (theme) {
         "Live Light" -> StudioWavePalette(Color(0xFFE2E3E6), Color(0xFFF1F2F4), Color(0xFFD2D4D9), Color(0xFFC2C5CB),
             Color(0xFFB7BBC2), Color(0xFF17191C), Color(0xFF555B64), Color(0xFF007F70), Color(0xFFC84F30),
@@ -55,7 +55,7 @@ private fun studioWavePalette(theme: String, tone: String, highContrast: Boolean
 }
 
 @Composable
-private fun StudioWaveSettingsScreen(
+internal fun StudioWaveSettingsScreen(
     section: String, onSectionChange: (String) -> Unit, onClose: () -> Unit,
     themeName: String, onThemeChange: (String) -> Unit, paletteTone: String, onPaletteToneChange: (String) -> Unit,
     highContrast: Boolean, onHighContrastChange: (Boolean) -> Unit, gridOpacity: Float, onGridOpacityChange: (Float) -> Unit,
@@ -132,7 +132,7 @@ private fun StudioWaveSettingsScreen(
     }
 }
 
-@Composable private fun SettingsNav(title: String, subtitle: String, selected: Boolean, p: StudioWavePalette, onClick: () -> Unit) {
+@Composable internal fun SettingsNav(title: String, subtitle: String, selected: Boolean, p: StudioWavePalette, onClick: () -> Unit) {
     Surface(color = if (selected) p.raised else p.panel, shape = RoundedCornerShape(5.dp),
         border = if (selected) BorderStroke(1.dp, p.accent.copy(alpha = 0.6f)) else BorderStroke(1.dp, p.border.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
@@ -143,19 +143,19 @@ private fun StudioWaveSettingsScreen(
     }
 }
 
-@Composable private fun SettingsSection(title: String, subtitle: String, p: StudioWavePalette) {
+@Composable internal fun SettingsSection(title: String, subtitle: String, p: StudioWavePalette) {
     Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(title, color = p.orange, fontSize = 9.sp, fontWeight = FontWeight.Black); Text(subtitle, color = p.muted, fontSize = 8.sp)
     }
 }
 
-@Composable private fun SettingsInfoCard(title: String, body: String, p: StudioWavePalette) {
+@Composable internal fun SettingsInfoCard(title: String, body: String, p: StudioWavePalette) {
     Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(title, color = p.accent, fontSize = 8.sp, fontWeight = FontWeight.Black); Text(body, color = p.text, fontSize = 9.sp)
     }
 }
 
-@Composable private fun SettingsChoiceRow(title: String, subtitle: String, choices: List<Pair<String, String>>, selected: String, onSelected: (String) -> Unit, p: StudioWavePalette) {
+@Composable internal fun SettingsChoiceRow(title: String, subtitle: String, choices: List<Pair<String, String>>, selected: String, onSelected: (String) -> Unit, p: StudioWavePalette) {
     Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(title, color = p.text, fontSize = 10.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = p.muted, fontSize = 8.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -170,14 +170,14 @@ private fun StudioWaveSettingsScreen(
     }
 }
 
-@Composable private fun SettingsToggleRow(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit, p: StudioWavePalette) {
+@Composable internal fun SettingsToggleRow(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit, p: StudioWavePalette) {
     Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) { Text(title, color = p.text, fontSize = 10.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = p.muted, fontSize = 8.sp) }
         Switch(checked = value, onCheckedChange = onChange)
     }
 }
 
-@Composable private fun SettingsSliderRow(title: String, subtitle: String, value: Float, valueText: String, onChange: (Float) -> Unit, p: StudioWavePalette, range: ClosedFloatingPointRange<Float> = 0f..1f) {
+@Composable internal fun SettingsSliderRow(title: String, subtitle: String, value: Float, valueText: String, onChange: (Float) -> Unit, p: StudioWavePalette, range: ClosedFloatingPointRange<Float> = 0f..1f) {
     Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Text(title, color = p.text, fontSize = 10.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.weight(1f)); Text(valueText, color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
         Text(subtitle, color = p.muted, fontSize = 8.sp)
@@ -185,7 +185,7 @@ private fun StudioWaveSettingsScreen(
     }
 }
 
-@Composable private fun StudioWaveKnobPreview(p: StudioWavePalette) {
+@Composable internal fun StudioWaveKnobPreview(p: StudioWavePalette) {
     Canvas(Modifier.size(62.dp)) {
         val radius = size.minDimension * 0.37f; val center = Offset(size.width / 2f, size.height / 2f)
         drawCircle(p.control, radius, center); drawCircle(p.border, radius, center, style = androidx.compose.ui.graphics.drawscope.Stroke(1.3.dp.toPx()))
@@ -198,7 +198,7 @@ private fun StudioWaveSettingsScreen(
     }
 }
 
-@Composable private fun StudioWaveFaderPreview(p: StudioWavePalette) {
+@Composable internal fun StudioWaveFaderPreview(p: StudioWavePalette) {
     Canvas(Modifier.fillMaxWidth().height(62.dp)) {
         val midY = size.height * 0.5f; val left = 5.dp.toPx(); val width = size.width - 10.dp.toPx()
         drawRoundRect(p.control, topLeft = Offset(left, midY - 3.dp.toPx()), size = Size(width, 6.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
