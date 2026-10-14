@@ -133,7 +133,8 @@ internal fun calculatePinchZoomFrame(
     currentSpanPx: Float,
     anchorTick: Double,
     centroidX: Float,
-    baseBarWidthPx: Float
+    baseBarWidthPx: Float,
+    viewportWidthPx: Float = 0f
 ): PinchZoomFrame {
     val ratio = if (baseSpanPx > 1f && currentSpanPx.isFinite() && currentSpanPx > 1f)
         currentSpanPx / baseSpanPx else 1f
@@ -1609,7 +1610,7 @@ private fun TimelineGrid(
                                 // Derive every scale/scroll frame from the same baseline.
                                 val frame = calculatePinchZoomFrame(
                                     timebase, gestureBaseZoom, gestureBaseScrollTicks, gestureBaseSpan, span,
-                                    gestureAnchorTick, centroid.x, baseBarWidthPx
+                                    gestureAnchorTick, centroid.x, baseBarWidthPx, size.width.toFloat()
                                 )
                                 val spanRatio = if (gestureBaseSpan > 1f && span > 1f) span / gestureBaseSpan else 1f
                                 val newZoom = frame.zoom
