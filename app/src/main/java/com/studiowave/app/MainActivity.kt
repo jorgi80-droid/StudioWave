@@ -3990,16 +3990,16 @@ private fun AudioClipWaveform(
             drawLine(accentColor.copy(alpha = 0.3f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 1f)
         } else {
             val mid = size.height / 2f
-            val offset = safeOffset.toDouble()
-            val span = safeLength.toDouble()
-            // The model stores source offset/clip length in musical ticks; map that range
-            // proportionally into the cached source peak array rather than stretching the full
-            // source into every trimmed or resized arrangement clip.
-            val sourceEnd = offset + span
+            val sourceOffset = safeOffset.toDouble()
+            val visibleSpan = safeLength.toDouble()
+            // Clip trims are represented in ticks, not source frames. Only the source's
+            // duration is known at this layer, so keep the viewport mapping monotonic and
+            // bounded instead of deriving the source duration from offset + visible span.
+            val estimatedSourceDuration = (sourceOffset + visibleSpan).coerceAtLeast(visibleSpan)
             val peakCount = peaks.size
-            val startIndex = kotlin.math.floor(offset / (offset + span).coerceAtLeast(1.0) * peakCount)
+            val startIndex = kotlin.math.floor(sourceOffset / estimatedSourceDuration * peakCount)
                 .toInt().coerceIn(0, peakCount - 1)
-            val endIndex = kotlin.math.ceil(sourceEnd / (offset + span).coerceAtLeast(1.0) * peakCount)
+            val endIndex = kotlin.math.ceil((sourceOffset + visibleSpan) / estimatedSourceDuration * peakCount)
                 .toInt().coerceIn(startIndex + 1, peakCount)
             val visiblePeaks = peaks.subList(startIndex, endIndex)
             val dx = size.width / visiblePeaks.size.coerceAtLeast(1)
