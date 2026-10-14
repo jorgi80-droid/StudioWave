@@ -1577,7 +1577,8 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(7.dp)) {
         WorkspaceTitleBar("DRUM RACK  /  STEP SEQUENCER", track?.name ?: "No drum track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            SmallAction("16 STEPS") { }
+            Text("16 STEPS", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 5.dp))
             SmallAction("CLEAR") {
                 if (track != null && clip != null) onProjectChange(project.copy(tracks = project.tracks.map { item ->
                     if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = List(16) { false }) else c }) else item
