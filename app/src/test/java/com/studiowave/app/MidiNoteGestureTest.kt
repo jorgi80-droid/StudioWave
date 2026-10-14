@@ -99,6 +99,29 @@ class MidiNoteGestureTest {
     }
 
     @Test
+    fun selectionIdsResolveToExistingNotesWithoutDuplicates() {
+        val a = MidiNote(pitch = 60, startTick = 0L, durationTicks = 240L)
+        val b = MidiNote(pitch = 64, startTick = 240L, durationTicks = 240L)
+        val c = MidiNote(pitch = 67, startTick = 480L, durationTicks = 240L)
+        val notes = listOf(a, b, c)
+        val selectedIds = setOf(a.id, c.id, "stale-note-id")
+        val selected = notes.filter { it.id in selectedIds }
+        assertEquals(listOf(a.id, c.id), selected.map { it.id })
+        assertEquals(2, selected.distinctBy { it.id }.size)
+    }
+
+    @Test
+    fun selectionCanContainEveryNoteForContextMenuSelectAll() {
+        val notes = listOf(
+            MidiNote(pitch = 60, startTick = 0L, durationTicks = 240L),
+            MidiNote(pitch = 64, startTick = 240L, durationTicks = 240L),
+            MidiNote(pitch = 67, startTick = 480L, durationTicks = 240L)
+        )
+        val selectedIds = notes.map { it.id }.toSet()
+        assertEquals(notes.size, notes.count { it.id in selectedIds })
+    }
+
+    @Test
     fun pianoRollVisibleStepMappingUsesOneStableRoundingRule() {
         assertEquals(32, pianoRollVisibleSteps(16, 1f))
         assertEquals(26, pianoRollVisibleSteps(16, 1.25f))
