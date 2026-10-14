@@ -1437,6 +1437,9 @@ private fun TimelineGrid(
     val currentOnScrollTracks by rememberUpdatedState(onScrollTracks)
     val currentViewport by rememberUpdatedState(viewport)
     val currentTrackHeightPx by rememberUpdatedState(trackHeightPx)
+    val currentTimebase by rememberUpdatedState(timebase)
+    val currentSnapDivision by rememberUpdatedState(snapDivision)
+    val currentSnapEnabled by rememberUpdatedState(snapToGrid)
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
     val currentOnSeekTick by rememberUpdatedState(onSeekTick)
@@ -1842,9 +1845,19 @@ private fun TimelineGrid(
                                         .width(resizeGripWidthDp.dp)
                                         .height(34.dp)
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
-                                        .pointerInput(clip.id, zoom, clip.startTick, clip.lengthTicks, clip.sourceOffsetTicks) {
+                                        .pointerInput(clip.id) {
+                                            var gestureViewport = currentViewport
+                                            var gestureTimebase = currentTimebase
+                                            var gestureSnapDivision = currentSnapDivision
+                                            var gestureSnapEnabled = currentSnapEnabled
+                                            var sourceOffsetAtStart = clip.sourceOffsetTicks.coerceAtLeast(0L)
                                             detectDragGestures(
                                                 onDragStart = {
+                                                    gestureViewport = currentViewport
+                                                    gestureTimebase = currentTimebase
+                                                    gestureSnapDivision = currentSnapDivision
+                                                    gestureSnapEnabled = currentSnapEnabled
+                                                    sourceOffsetAtStart = clip.sourceOffsetTicks.coerceAtLeast(0L)
                                                     leftResizeDeltaPx = 0f
                                                     liveResizeStart = clip.startTick.coerceAtLeast(0L)
                                                     liveResizeLength = clip.lengthTicks.coerceAtLeast(1L)
@@ -1857,13 +1870,13 @@ private fun TimelineGrid(
                                                     val originalStart = clip.startTick.coerceAtLeast(0L)
                                                     val originalLength = clip.lengthTicks.coerceAtLeast(1L)
                                                     val originalEnd = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
-                                                    val step = snapDivision.ticks(timebase)
-                                                    val minimumLength = if (snapToGrid && step > 0L) step else 1L
-                                                    val earliestStart = (originalStart - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
+                                                    val step = gestureSnapDivision.ticks(gestureTimebase)
+                                                    val minimumLength = if (gestureSnapEnabled && step > 0L) step else 1L
+                                                    val earliestStart = (originalStart - sourceOffsetAtStart).coerceAtLeast(0L)
                                                     val latestStart = (originalEnd - minimumLength).coerceAtLeast(earliestStart)
-                                                    val raw = (originalStart.toDouble() + viewport.pixelsToTickDelta(leftResizeDeltaPx).toDouble())
+                                                    val raw = (originalStart.toDouble() + gestureViewport.pixelsToTickDelta(leftResizeDeltaPx).toDouble())
                                                         .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong()
-                                                    liveResizeStart = viewport.snapTick(raw, snapDivision, snapToGrid).coerceIn(earliestStart, latestStart)
+                                                    liveResizeStart = gestureViewport.snapTick(raw, gestureSnapDivision, gestureSnapEnabled).coerceIn(earliestStart, latestStart)
                                                     liveResizeLength = (originalEnd - liveResizeStart).coerceAtLeast(minimumLength)
                                                 },
                                                 onDragEnd = {
@@ -1888,9 +1901,17 @@ private fun TimelineGrid(
                                     Modifier.align(Alignment.CenterEnd)
                                         .width(resizeGripWidthDp.dp).height(34.dp)
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
-                                        .pointerInput(clip.id, zoom, clip.lengthTicks) {
+                                        .pointerInput(clip.id) {
+                                            var gestureViewport = currentViewport
+                                            var gestureTimebase = currentTimebase
+                                            var gestureSnapDivision = currentSnapDivision
+                                            var gestureSnapEnabled = currentSnapEnabled
                                             detectDragGestures(
                                                 onDragStart = {
+                                                    gestureViewport = currentViewport
+                                                    gestureTimebase = currentTimebase
+                                                    gestureSnapDivision = currentSnapDivision
+                                                    gestureSnapEnabled = currentSnapEnabled
                                                     resizeDeltaPx = 0f
                                                     liveResizeStart = clip.startTick.coerceAtLeast(0L)
                                                     liveResizeLength = clip.lengthTicks.coerceAtLeast(1L)
@@ -1904,11 +1925,11 @@ private fun TimelineGrid(
                                                     val originalLength = clip.lengthTicks.coerceAtLeast(1L)
                                                     val originalEnd = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
                                                     val rawEnd = (originalEnd.toDouble() +
-                                                        viewport.pixelsToTickDelta(resizeDeltaPx).toDouble())
+                                                        gestureViewport.pixelsToTickDelta(resizeDeltaPx).toDouble())
                                                         .coerceIn((originalStart.toDouble() + 1.0).coerceAtMost(Long.MAX_VALUE.toDouble()), Long.MAX_VALUE.toDouble()).toLong()
-                                                    val step = snapDivision.ticks(timebase)
-                                                    val minimumLength = if (snapToGrid && step > 0L) step else 1L
-                                                    val snappedEnd = viewport.snapTick(rawEnd, snapDivision, snapToGrid)
+                                                    val step = gestureSnapDivision.ticks(gestureTimebase)
+                                                    val minimumLength = if (gestureSnapEnabled && step > 0L) step else 1L
+                                                    val snappedEnd = gestureViewport.snapTick(rawEnd, gestureSnapDivision, gestureSnapEnabled)
                                                         .coerceAtLeast((originalStart + minimumLength).coerceAtMost(Long.MAX_VALUE))
                                                     liveResizeStart = originalStart
                                                     liveResizeLength = (snappedEnd - originalStart).coerceAtLeast(minimumLength)
