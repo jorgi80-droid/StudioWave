@@ -358,7 +358,16 @@ private fun StudioWaveApp() {
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showSettings by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf("INTERFACE") }
-    var themeName by remember { mutableStateOf(preferences.getString("ui_theme", "Live Light") ?: "Live Light") }
+    var themeName by remember {
+        mutableStateOf(
+            if (preferences.getBoolean("ui_theme_selected_manually", false)) {
+                preferences.getString("ui_theme", "Live Light") ?: "Live Light"
+            } else {
+                // Migrate sessions that previously saved the old default dark palette to the requested light workspace.
+                "Live Light"
+            }
+        )
+    }
     var paletteTone by remember { mutableStateOf(preferences.getString("ui_tone", "Neutral") ?: "Neutral") }
     var highContrast by remember { mutableStateOf(preferences.getBoolean("ui_high_contrast", false)) }
     var gridOpacity by remember { mutableFloatStateOf(preferences.getFloat("ui_grid_opacity", 0.72f)) }
@@ -714,7 +723,10 @@ private fun StudioWaveApp() {
                 StudioWaveSettingsScreen(
                     section = settingsSection, onSectionChange = { settingsSection = it },
                     onClose = { showSettings = false },
-                    themeName = themeName, onThemeChange = { themeName = it },
+                    themeName = themeName, onThemeChange = {
+                        themeName = it
+                        preferences.edit().putBoolean("ui_theme_selected_manually", true).apply()
+                    },
                     paletteTone = paletteTone, onPaletteToneChange = { paletteTone = it },
                     highContrast = highContrast, onHighContrastChange = { highContrast = it },
                     gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
