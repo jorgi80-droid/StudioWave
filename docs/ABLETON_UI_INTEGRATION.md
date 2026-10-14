@@ -30,12 +30,14 @@ This implementation uses the Ableton Live 12 Reference Manual as a workflow and 
 ### Working UI backed by existing project or engine state
 - **Arrangement:** retains the shared `TimelineViewport` and `TimelineTimebase`, clip selection/context actions, clip move/resize, playback seek/follow, track rename/color/mute/solo/reorder/resize, Fit, snap toggle and division selector. The selected-clip **Clip View inspector** now reports clip type, track, start/end bars and clip-specific note/step/source information. Editor, duplicate and rename controls call real handlers.
 - **MIDI clip thumbnails:** display clip-relative note positions, pitch bands, beat/bar lines and velocity-sensitive contrast.
-- **Drum clip thumbnails and Step Sequencer:** expose existing boolean trigger steps; CLEAR/ALL and individual steps persist through the project model.
-- **Piano Roll:** uses the project PPQ and time signature, supports horizontal/vertical pinch zoom and drag-to-scroll, pitch ruler, note insertion/removal, persisted velocity edits, copy/paste and note-length changes. A compact virtual **note input** row inserts note events into the selected MIDI clip; it is not a live instrument keyboard.
+- **Drum clip thumbnails and Step Sequencer:** expose existing trigger steps; CLEAR/ALL and individual steps persist through the project model.
+- **Piano Roll:** uses the project PPQ and time signature, supports horizontal/vertical pinch zoom and drag-to-scroll, a pitch ruler, note insertion, non-destructive note selection, drag move/pitch, right-edge length resize, explicit delete, copy/paste and note-length actions. Velocity mode updates persisted velocity. The compact virtual **note input** row inserts MIDI note events into the selected clip; it does not claim to be a live-playable synth keyboard.
 - **Audio Clip Editor:** decodes source waveform peaks and allows trim-in/trim-out/reset ranges to persist to the current clip model. It is not a time-stretch/warp engine.
-- **Mixer:** track volume/pan/mute/solo/master-gain are backed by the existing mix model. Channel meters read the playback engine's per-track peak/RMS snapshots; the master meter uses the engine's peak/RMS/LUFS snapshots.
+- **Clip View inspector:** reports selection-aware clip metadata and offers working start-bar controls for every clip plus length-by-bar controls for MIDI/drum pattern clips. Audio source boundaries remain controlled by the Audio Editor and clip resize gestures.
+- **Mixer:** track volume/pan/mute/solo/master gain are backed by the mix model. Channel stereo meters now publish independent left/right peak and RMS readings measured from each track's interleaved stereo bus. The master meter uses the engine's peak/RMS/LUFS snapshots.
 - **Browser:** searchable current-project track/clip lists; selecting/opening items routes to existing editors. Audio import launches Android's document picker. The built-in device library is honestly empty until a device registry exists.
 - **Device Dock:** track-selection, volume, pan, mute and solo work against the real track model. The Device View uses explicit Available/Limited/Unavailable status cards, not inert FX knobs.
+- **Audio settings:** inactive output mode/sample rate/buffer selectors have been removed. The screen reports the real 44.1 kHz stereo PCM16 output and 256-frame mix block used by the playback engine.
 
 ### Remaining scope that must not be represented as implemented
 - **Audio warp/time-stretch and tempo-following source alignment:** no quality-preserving time-stretch processor exists yet.
