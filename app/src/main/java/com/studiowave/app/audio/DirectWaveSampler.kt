@@ -4,7 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
 import android.os.ParcelFileDescriptor
-import java.io.FileInputStream
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -53,7 +52,7 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
         } else {
             val descriptor = runCatching { appContext.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
             if (descriptor == null) 0 else runCatching {
-                descriptor.use { pool.load(it.fileDescriptor, 0L, descriptor.statSize.coerceAtLeast(0L), 1) }
+                descriptor.use { pool.load(it, 0L, it.statSize.coerceAtLeast(0L), 1) }
             }.getOrDefault(0)
         }
         if (id == 0) { onLoaded(false); return }
