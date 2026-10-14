@@ -1142,7 +1142,7 @@ private fun ArrangementWorkspace(
         statusMessage = "$name added"
         showAddTrack = false
         showTimelineMenu = false
-        if (openEditor) onOpenEditor(if (kind == "drum") "DRUM SEQUENCER" else "PIANO ROLL", newTrack.id)
+        if (openEditor) onOpenEditor(if (kind == "drum") "DRUM SEQUENCER" else "PIANO ROLL", newTrack.id, starterClip?.id)
     }
 
     fun handleClipAction(action: String, clipId: String) {
@@ -1153,7 +1153,7 @@ private fun ArrangementWorkspace(
         when (action) {
             "Open editor" -> {
                 showClipView = true
-                onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id)
+                onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id, clip.id)
             }
             "Cut" -> {
                 // Arrangement Cut splits at the playhead; it must not delete the entire clip.
@@ -1655,7 +1655,7 @@ private fun ArrangementWorkspace(
                         showTimelineMenu = false
                         showAddTrack = false
                         addTrackMenu = false
-                        onOpenEditor("BROWSER", null)
+                        onOpenEditor("BROWSER", null, null)
                     }.padding(9.dp))
                 }
             }
