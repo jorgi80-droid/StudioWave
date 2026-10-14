@@ -2216,24 +2216,43 @@ private fun TimelineGrid(
                                 }
                             } else if (track.kind == "midi") {
                                 Canvas(Modifier.fillMaxSize().padding(top = 13.dp, bottom = 2.dp)) {
-                                    // Clip note lanes use the same musical tick ratio as the MIDI editor.
+                                    // Miniature piano roll: pitch is vertically ordered and each
+                                    // note is placed from the same clip-relative musical tick ratio.
                                     val duration = clip.lengthTicks.coerceAtLeast(1L).toDouble()
-                                    val rowHeight = (size.height / 12f).coerceAtLeast(2f)
-                                    for (beat in 1..3) {
-                                        val x = size.width * beat / 4f
-                                        drawLine(clipInk.copy(alpha = if (isLightTheme) 0.24f else 0.20f), Offset(x, 0f), Offset(x, size.height), 1f)
+                                    val rowHeight = (size.height / 16f).coerceAtLeast(2f)
+                                    val beatTicks = (project.ppq.toLong() * 4L /
+                                        project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
+                                    val barTicks = beatTicks * project.numerator.coerceAtLeast(1).toLong()
+                                    val beatCount = (duration / beatTicks.toDouble()).toInt().coerceIn(1, 256)
+                                    for (beat in 1 until beatCount) {
+                                        val x = (beat.toDouble() * beatTicks.toDouble() / duration * size.width).toFloat()
+                                        drawLine(
+                                            clipInk.copy(alpha = if (isLightTheme) 0.20f else 0.18f),
+                                            Offset(x, 0f), Offset(x, size.height),
+                                            if (beatTicks > 0L && beatTicks * beat.toLong() % barTicks == 0L) 1.2f else 0.55f
+                                        )
+                                    }
+                                    // Subtle octave rows make the note pattern readable at thumbnail size.
+                                    for (octave in 1..7) {
+                                        val y = size.height * octave / 8f
+                                        drawLine(clipInk.copy(alpha = if (isLightTheme) 0.12f else 0.10f),
+                                            Offset(0f, y), Offset(size.width, y), 0.45f)
                                     }
                                     clip.midiNotes.forEach { note ->
-                                        val left = (note.startTick.toDouble() / duration * size.width).toFloat()
-                                        val noteWidth = (note.durationTicks.coerceAtLeast(1L).toDouble() / duration * size.width).toFloat()
-                                        val y = ((127 - note.pitch.coerceIn(0,127)).toFloat() / 128f * size.height)
-                                            .coerceIn(0f, (size.height - rowHeight).coerceAtLeast(0f))
-                                        drawRoundRect(
-                                            color = clipInk.copy(alpha = 0.98f),
-                                            topLeft = Offset(left, y),
-                                            size = Size(noteWidth.coerceAtLeast(2f), rowHeight.coerceAtMost(size.height)),
-                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
-                                        )
+                                        val safeStart = note.startTick.coerceAtLeast(0L).toDouble()
+                                        val safeDuration = note.durationTicks.coerceAtLeast(1L).toDouble()
+                                        val left = (safeStart / duration * size.width).toFloat()
+                                        val noteWidth = (safeDuration / duration * size.width).toFloat()
+                                        val normalizedPitch = (note.pitch.coerceIn(0, 127).toFloat() / 127f)
+                                        val y = (1f - normalizedPitch) * (size.height - rowHeight)
+                                        if (left < size.width && left + noteWidth > 0f) {
+                                            drawRoundRect(
+                                                color = accent.copy(alpha = (0.48f + note.velocity.coerceIn(1, 127) / 254f).coerceIn(0.5f, 0.98f)),
+                                                topLeft = Offset(left, y),
+                                                size = Size(noteWidth.coerceAtLeast(2f), rowHeight.coerceAtMost(size.height)),
+                                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
+                                            )
+                                        }
                                     }
                                 }
                             } else if (track.kind == "audio") {
