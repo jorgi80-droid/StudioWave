@@ -2577,7 +2577,11 @@ private fun PianoRollWorkspace(
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                         val keyMaxTopPitch = (119 - keyVisibleRows + 1).coerceAtLeast(0)
                         val keyTopPitch = topPitch.coerceIn(keyMaxTopPitch, 119)
-                        Column(Modifier.verticalScroll(rememberScrollState(((119 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0)))
+                        val keyScrollPx = rememberScrollState(((119 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
+                        LaunchedEffect(topPitch, keyRowHeightPx, constraints.maxHeight) {
+                            keyScrollPx.scrollTo(((119 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
+                        }
+                        Column(Modifier.verticalScroll(keyScrollPx)
                             .height((rowHeight * 120f).dp)) {
                             for (pitch in 119 downTo 0) {
                                 val isBlack = pitch % 12 in setOf(1, 3, 6, 8, 10)
