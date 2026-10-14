@@ -676,9 +676,9 @@ private fun StudioWaveApp() {
                     masterRmsDbfs,
                     masterMomentaryLufs,
                     masterPeakHistory,
-                    onSettings = { settingsSection = "INTERFACE"; showSettings = true },
                     musicalPositionLabel(playheadTick, project.ppq, project.numerator, project.denominator),
                     "${project.numerator}/${project.denominator}",
+                    onSettings = { settingsSection = "INTERFACE"; showSettings = true },
                     { value ->
                     bpm = value.coerceIn(40, 240)
                     changeProject(project.copy(bpm = bpm))
