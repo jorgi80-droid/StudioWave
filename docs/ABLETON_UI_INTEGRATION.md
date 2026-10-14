@@ -25,6 +25,31 @@ This implementation uses the Ableton Live 12 Reference Manual as a workflow and 
 - Do not add inert controls. Any new visible control must invoke an implemented operation or be omitted.
 - Validate with Android CI and device-level touch testing before calling the UI complete.
 
+## Current implementation status — mobile workspace pass
+
+### Working UI backed by existing project or engine state
+- **Arrangement:** retains the shared `TimelineViewport` and `TimelineTimebase`, clip selection/context actions, clip move/resize, playback seek/follow, track rename/color/mute/solo/reorder/resize, Fit, snap toggle and division selector. The selected-clip **Clip View inspector** now reports clip type, track, start/end bars and clip-specific note/step/source information. Editor, duplicate and rename controls call real handlers.
+- **MIDI clip thumbnails:** display clip-relative note positions, pitch bands, beat/bar lines and velocity-sensitive contrast.
+- **Drum clip thumbnails and Step Sequencer:** expose existing boolean trigger steps; CLEAR/ALL and individual steps persist through the project model.
+- **Piano Roll:** uses the project PPQ and time signature, supports horizontal/vertical pinch zoom and drag-to-scroll, pitch ruler, note insertion/removal, persisted velocity edits, copy/paste and note-length changes. A compact virtual **note input** row inserts note events into the selected MIDI clip; it is not a live instrument keyboard.
+- **Audio Clip Editor:** decodes source waveform peaks and allows trim-in/trim-out/reset ranges to persist to the current clip model. It is not a time-stretch/warp engine.
+- **Mixer:** track volume/pan/mute/solo/master-gain are backed by the existing mix model. Channel meters read the playback engine's per-track peak/RMS snapshots; the master meter uses the engine's peak/RMS/LUFS snapshots.
+- **Browser:** searchable current-project track/clip lists; selecting/opening items routes to existing editors. Audio import launches Android's document picker. The built-in device library is honestly empty until a device registry exists.
+- **Device Dock:** track-selection, volume, pan, mute and solo work against the real track model. The Device View uses explicit Available/Limited/Unavailable status cards, not inert FX knobs.
+
+### Remaining scope that must not be represented as implemented
+- **Audio warp/time-stretch and tempo-following source alignment:** no quality-preserving time-stretch processor exists yet.
+- **Instrument / effect racks, device insertion, effect order, macros, parameters, wet/dry, bypass and routing:** the project model has no serializable device chain and the audio engine has no matching DSP processor registry. Do not expose active-looking fake controls until both exist.
+- **Actual acoustic/sample instrument loading and drum sample voices:** the current arrangement renderer is still a limited basic oscillator/percussion implementation, not a full instrument engine.
+- **Automation lanes/locators, crossfades and complete Ableton clip loop controls:** need matching project data and engine semantics before controls can be added.
+- **Real-device verification:** touch reachability, layout at supported landscape resolutions, sustained playback while editing, frame pacing, and accessibility still require checking on the target Android device.
+
+### CI / safety
+- Build the debug APK and run `testDebugUnitTest` before considering a change validated.
+- Keep the current Kotlin/Compose UI additive. Do not rewrite the audio engine or `.sdaw` schema as part of a styling-only change.
+- CI's Android SDK/NDK setup uses `sdkmanager` with retry because a previous runner attempt received a truncated NDK archive. A setup failure before the Gradle step is environmental, not a Kotlin compile result; still require a successful new run.
+- Ableton Live is a design/workflow reference here; do not bundle proprietary Ableton images, icons, fonts or extracted assets without permission. Use native vector/Compose drawing for original, Live-inspired control surfaces.
+
 ## Official references
 - https://www.ableton.com/en/live-manual/12/arrangement-view/
 - https://www.ableton.com/en/live-manual/12/clip-view/
