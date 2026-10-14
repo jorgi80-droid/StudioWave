@@ -2782,6 +2782,10 @@ private fun PianoRollWorkspace(
     var lastViewportWidthPx by remember(track?.id, clip?.id) { mutableFloatStateOf(0f) }
     var topPitch by remember(track?.id) { mutableIntStateOf(108) } // Start near C8; all 128 standard MIDI pitches remain reachable
     var selectedNoteId by remember(track?.id, clip?.id) { mutableStateOf<String?>(null) }
+    var selectedNoteIds by remember(track?.id, clip?.id) { mutableStateOf<Set<String>>(emptySet()) }
+    var selectionMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
+    var velocityMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
+    var panMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
     var clipboard by remember(track?.id, clip?.id) { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
     var editMessage by remember(track?.id, clip?.id) { mutableStateOf("Pinch to zoom · drag empty grid to scroll") }
 
@@ -2846,6 +2850,9 @@ private fun PianoRollWorkspace(
             SmallAction(if (keyboardVisible) "KEYS" else "KEYS OFF") { keyboardVisible = !keyboardVisible }
             SmallAction(if (virtualKeyboardVisible) "NOTE INPUT ON" else "NOTE INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
             SmallAction(if (editToolsExpanded) "TOOLS" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
+            SmallAction(if (selectionMode) "SELECT ON" else "SELECT") { selectionMode = !selectionMode }
+            SmallAction(if (velocityMode) "VEL ON" else "VEL") { velocityMode = true; panMode = false }
+            SmallAction(if (panMode) "PAN ON" else "PAN") { panMode = true; velocityMode = false }
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
@@ -2878,16 +2885,22 @@ private fun PianoRollWorkspace(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SmallAction("COPY") {
-                    clipboard = notes.firstOrNull { it.id == selectedNoteId }
-                    editMessage = if (clipboard != null) "Note copied" else "Select a note first"
+                    val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
+                    clipboard = selected.firstOrNull()
+                    editMessage = if (selected.isNotEmpty()) "${selected.size} note(s) copied (clipboard stores first note)" else "Select a note first"
                 }
                 SmallAction("DEL") {
-                    val selected = notes.firstOrNull { it.id == selectedNoteId }
-                    if (selected != null) {
-                        updateNotes(notes.filterNot { it.id == selected.id })
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isNotEmpty()) {
+                        updateNotes(notes.filterNot { it.id in ids })
                         selectedNoteId = null
-                        editMessage = "Note deleted"
+                        selectedNoteIds = emptySet()
+                        editMessage = "${ids.size} note(s) deleted"
                     } else editMessage = "Select a note first"
+                }
+                SmallAction("SNAP") {
+                    snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
+                    editMessage = "Snap 1/$snapDenominator"
                 }
                 SmallAction("PASTE") {
                     val source = clipboard
@@ -3063,7 +3076,7 @@ private fun PianoRollWorkspace(
                                     val clickedPitch = (currentTopPitch -
                                         (down.position.y / gestureRowHeight).toInt()).coerceIn(0, 127)
                                     val notesAtDown = gestureNotes.value
-                                    val touchedNote = if (keyboardVisible) notesAtDown.firstOrNull { note ->
+                                    val touchedNote = if (keyboardVisible && !velocityMode && !panMode) notesAtDown.firstOrNull { note ->
                                         val noteStartStep = (note.startTick / stepTicks).toInt()
                                         val noteEndStep = noteStartStep +
                                             kotlin.math.ceil(note.durationTicks.coerceAtLeast(1L).toDouble() / stepTicks.toDouble())
@@ -3077,6 +3090,38 @@ private fun PianoRollWorkspace(
                                     val resizeNote = touchedNote != null && noteRightEdgePx != null &&
                                         noteRightEdgePx >= 0f && kotlin.math.abs(down.position.x - noteRightEdgePx) <=
                                         maxOf(with(pianoDensity) { 12.dp.toPx() }, gestureColWidth * 0.18f)
+                                    if (selectionMode && keyboardVisible) {
+                                        val origin = down.position
+                                        var current = origin
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            if (change.pressed) {
+                                                current = change.position
+                                                if ((current - origin).getDistance() > with(pianoDensity) { 8.dp.toPx() }) {
+                                                    val left = minOf(origin.x, current.x)
+                                                    val right = maxOf(origin.x, current.x)
+                                                    val top = minOf(origin.y, current.y)
+                                                    val bottom = maxOf(origin.y, current.y)
+                                                    val leftStep = visibleStartStep + (left / gestureColWidth).toInt()
+                                                    val rightStep = visibleStartStep + kotlin.math.ceil(right / gestureColWidth).toInt()
+                                                    val highPitch = (currentTopPitch - (top / gestureRowHeight).toInt()).coerceIn(0,127)
+                                                    val lowPitch = (currentTopPitch - (bottom / gestureRowHeight).toInt()).coerceIn(0,127)
+                                                    selectedNoteIds = notesAtDown.filter { note ->
+                                                        val noteStart = note.startTick / stepTicks
+                                                        val noteEnd = kotlin.math.ceil((note.startTick + note.durationTicks).toDouble() / stepTicks).toLong()
+                                                        noteEnd > leftStep && noteStart < rightStep && note.pitch in lowPitch..highPitch
+                                                    }.map { it.id }.toSet()
+                                                    change.consume()
+                                                }
+                                            }
+                                        } while (event.changes.any { it.pressed })
+                                        if (selectedNoteIds.isNotEmpty()) {
+                                            selectedNoteId = selectedNoteIds.first()
+                                            editMessage = "${selectedNoteIds.size} notes selected"
+                                        } else editMessage = "No notes inside selection"
+                                        return@awaitEachGesture
+                                    }
                                     var previous = down.position
                                     var finalPosition = down.position
                                     var dragged = false
@@ -3119,9 +3164,21 @@ private fun PianoRollWorkspace(
                                     } while (event.changes.any { it.pressed })
 
                                     val latestNotes = gestureNotes.value
-                                    if (touchedNote != null && keyboardVisible && track != null && clip != null) {
+                                    if ((velocityMode || panMode) && keyboardVisible && track != null && clip != null) {
+                                        val targetTick = clickedStep.toDouble() * stepTicks.toDouble()
+                                        val nearest = latestNotes.minByOrNull { note -> kotlin.math.abs(note.startTick.toDouble() - targetTick) }
+                                        if (nearest != null) {
+                                            selectedNoteId = nearest.id
+                                            if (panMode) editMessage = "Per-note pan is unsupported by current MIDI model; unchanged"
+                                            else {
+                                                val velocity = (127f * (1f - finalPosition.y / viewportHeightPx.coerceAtLeast(1f))).roundToInt().coerceIn(1,127)
+                                                gestureNoteWriter.value(latestNotes.map { note -> if (note.id == nearest.id) note.copy(velocity = velocity) else note })
+                                                editMessage = "Velocity $velocity"
+                                            }
+                                        }
+                                    } else if (touchedNote != null && keyboardVisible && track != null && clip != null) {
                                         selectedNoteId = touchedNote.id
-                                        if (dragged) {
+                                        if (dragged && !selectionMode) {
                                             val stepDelta = (accumulatedDelta.x / gestureColWidth).roundToInt().coerceIn(-100_000, 100_000)
                                             val pitchDelta = (-accumulatedDelta.y / gestureRowHeight).roundToInt().coerceIn(-127, 127)
                                             val updatedNote = transformMidiNoteFromGesture(
