@@ -2415,7 +2415,7 @@ private fun PianoRollWorkspace(
                 .padding(horizontal = 5.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
         ) {
-            SmallAction(if (keyboardVisible) "NOTES" else "VEL") { keyboardVisible = !keyboardVisible }
+            SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
             SmallAction("−") { pageOffsetSteps = (pageStartStep - visibleSteps).coerceAtLeast(0) }
             Text("BAR ${pageStartStep / stepsPerBar + 1}", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold)
             SmallAction("+") { pageOffsetSteps = (pageStartStep + visibleSteps).coerceAtMost(maxPageOffset) }
@@ -2444,25 +2444,38 @@ private fun PianoRollWorkspace(
             }
             Canvas(
                 Modifier.weight(1f).fillMaxHeight().background(Color(0xFF1B1D21))
-                    .pointerInput(track?.id, clip?.id, notes, stepTicks, pageStartStep) {
+                    .pointerInput(track?.id, clip?.id, notes, stepTicks, pageStartStep, keyboardVisible) {
                         detectTapGestures { point ->
                             if (track == null || clip == null) return@detectTapGestures
-                            val rowH = size.height / pitchRows.toFloat()
                             val colW = size.width / visibleSteps.toFloat()
-                            val row = (point.y / rowH).toInt().coerceIn(0, pitchRows - 1)
-                            val col = (point.x / colW).toInt().coerceIn(0, visibleSteps - 1)
-                            val pitch = (highestPitch - row).coerceIn(lowestPitch, highestPitch)
-                            val startTick = (pageStartStep + col) * stepTicks
-                            val existing = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
-                            val updatedNotes = if (existing != null) notes.filterNot { it.id == existing.id }
-                                else notes + com.studiowave.app.data.MidiNote(
-                                    pitch = pitch, startTick = startTick, durationTicks = stepTicks, velocity = 100
-                                )
-                            onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                                if (item.id == track.id) item.copy(clips = item.clips.map { c ->
-                                    if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c
-                                }) else item
-                            }))
+                            if (keyboardVisible) {
+                                val rowH = size.height / pitchRows.toFloat()
+                                val row = (point.y / rowH).toInt().coerceIn(0, pitchRows - 1)
+                                val col = (point.x / colW).toInt().coerceIn(0, visibleSteps - 1)
+                                val pitch = (highestPitch - row).coerceIn(lowestPitch, highestPitch)
+                                val startTick = (pageStartStep + col) * stepTicks
+                                val existing = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
+                                val updatedNotes = if (existing != null) notes.filterNot { it.id == existing.id }
+                                    else notes + com.studiowave.app.data.MidiNote(
+                                        pitch = pitch, startTick = startTick, durationTicks = stepTicks, velocity = 100
+                                    )
+                                onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                                    if (item.id == track.id) item.copy(clips = item.clips.map { c ->
+                                        if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c
+                                    }) else item
+                                }))
+                            } else {
+                                if (notes.isEmpty()) return@detectTapGestures
+                                val targetTick = (pageStartStep + (point.x / colW).toInt().coerceIn(0, visibleSteps - 1)) * stepTicks
+                                val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) } ?: return@detectTapGestures
+                                val velocity = (127f * (1f - point.y / size.height.coerceAtLeast(1))).roundToInt().coerceIn(1, 127)
+                                val updatedNotes = notes.map { if (it.id == nearest.id) it.copy(velocity = velocity) else it }
+                                onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                                    if (item.id == track.id) item.copy(clips = item.clips.map { c ->
+                                        if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c
+                                    }) else item
+                                }))
+                            }
                         }
                     }
             ) {
@@ -2494,22 +2507,34 @@ private fun PianoRollWorkspace(
                         }
                     )
                 }
-                notes.forEach { note ->
-                    if (note.pitch !in lowestPitch..highestPitch) return@forEach
-                    val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * colW
-                    val y = (highestPitch - note.pitch).toFloat() * rowH
-                    val width = note.durationTicks.toDouble() / stepTicks.toDouble() * colW
-                    if (x < size.width && x + width > 0.0) {
-                        drawRoundRect(
-                            Mint, Offset(x.toFloat(), y + 1f),
-                            Size(width.toFloat().coerceAtLeast(3f), (rowH - 2f).coerceAtLeast(2f)),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
-                        )
+                if (keyboardVisible) {
+                    notes.forEach { note ->
+                        if (note.pitch !in lowestPitch..highestPitch) return@forEach
+                        val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * colW
+                        val y = (highestPitch - note.pitch).toFloat() * rowH
+                        val width = note.durationTicks.toDouble() / stepTicks.toDouble() * colW
+                        if (x < size.width && x + width > 0.0) {
+                            drawRoundRect(
+                                Mint, Offset(x.toFloat(), y + 1f),
+                                Size(width.toFloat().coerceAtLeast(3f), (rowH - 2f).coerceAtLeast(2f)),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
+                            )
+                        }
+                    }
+                } else {
+                    notes.forEach { note ->
+                        val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * colW
+                        if (x in -colW..size.width) {
+                            val height = size.height * note.velocity.coerceIn(1, 127) / 127f
+                            drawRoundRect(Mint.copy(alpha = 0.9f), Offset(x.toFloat() + 2f, size.height - height),
+                                Size((colW - 4f).coerceAtLeast(2f), height),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                        }
                     }
                 }
             }
         }
-        if (!keyboardVisible) Row(Modifier.fillMaxWidth().height(58.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (false) Row(Modifier.fillMaxWidth().height(58.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("VEL", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.width(54.dp))
             Canvas(
