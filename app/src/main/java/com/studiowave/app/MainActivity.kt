@@ -2594,19 +2594,26 @@ private fun PianoRollWorkspace(
         Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
             if (keyboardVisible) {
                 Column(Modifier.width(55.dp).fillMaxHeight().background(Color(0xFF202328))) {
-                    Column(Modifier.verticalScroll(verticalScroll).height((rowHeight * 120f).dp)) {
-                        for (pitch in 119 downTo 0) {
-                            val isBlack = pitch % 12 in setOf(1, 3, 6, 8, 10)
-                            val isC = pitch % 12 == 0
-                            Box(
-                                Modifier.fillMaxWidth().height(rowHeight.dp)
-                                    .background(if (isBlack) Color(0xFF17191C) else Color(0xFF343840))
-                                    .clickable { topPitch = (pitch + visiblePitchRows - 1).coerceIn(0, maxTopPitch) },
-                                contentAlignment = Alignment.CenterStart
-                            ) {
-                                if (isC || pitch % 12 == 4 || pitch % 12 == 7) {
-                                    Text(pitchLabel(pitch), color = if (isC) Mint else Color(0xFFE4E8EF),
-                                        fontSize = 7.sp, modifier = Modifier.padding(start = 3.dp), maxLines = 1)
+                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                        val keyRowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
+                        val keyVisibleRows = (constraints.maxHeight / keyRowHeightPx.coerceAtLeast(1f)).coerceIn(12, 120)
+                        val keyMaxTopPitch = (119 - keyVisibleRows + 1).coerceAtLeast(0)
+                        val keyTopPitch = topPitch.coerceIn(keyMaxTopPitch, 119)
+                        Column(Modifier.verticalScroll(rememberScrollState(((119 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0)))
+                            .height((rowHeight * 120f).dp)) {
+                            for (pitch in 119 downTo 0) {
+                                val isBlack = pitch % 12 in setOf(1, 3, 6, 8, 10)
+                                val isC = pitch % 12 == 0
+                                Box(
+                                    Modifier.fillMaxWidth().height(rowHeight.dp)
+                                        .background(if (isBlack) Color(0xFF17191C) else Color(0xFF343840))
+                                        .clickable { topPitch = (pitch + keyVisibleRows - 1).coerceIn(0, keyMaxTopPitch) },
+                                    contentAlignment = Alignment.CenterStart
+                                ) {
+                                    if (isC || pitch % 12 == 4 || pitch % 12 == 7) {
+                                        Text(pitchLabel(pitch), color = if (isC) Mint else Color(0xFFE4E8EF),
+                                            fontSize = 7.sp, modifier = Modifier.padding(start = 3.dp), maxLines = 1)
+                                    }
                                 }
                             }
                         }
@@ -2776,7 +2783,7 @@ private fun MixerWorkspace(
     ) {
         val trackCount = project.tracks.size.coerceAtLeast(1)
         val availableWidth = maxWidth - 114.dp
-        val channelWidth = ((availableWidth - (trackCount - 1).coerceAtLeast(0) * 5f.dp) / trackCount.toFloat())
+        val channelWidth = ((availableWidth - (trackCount - 1).coerceAtLeast(0).toFloat() * 5f).div(trackCount.toFloat()))
             .coerceIn(104.dp, 180.dp)
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
