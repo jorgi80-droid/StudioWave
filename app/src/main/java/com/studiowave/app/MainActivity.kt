@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -3265,24 +3266,27 @@ private fun DeviceDock(
     val devicePalette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
     var page by remember { mutableStateOf("MIX") }
+    val gainDb = selectedTrack?.volume?.takeIf { it > 0.001f }?.let {
+        String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(it))
+    } ?: "−∞ dB"
     Column(
         Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp)
             .background(devicePalette.panel, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICE VIEW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = devicePalette.orange)
+            Text(if (page == "MIX") "TRACK CONTROLS" else "DEVICE VIEW", fontSize = 9.sp,
+                fontWeight = FontWeight.Black, color = devicePalette.orange)
             Spacer(Modifier.width(8.dp))
             Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = devicePalette.text, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            SmallAction(if (page == "MIX") "MIX" else "DEVICE CHAIN") { page = if (page == "MIX") "DEVICES" else "MIX" }
+            SmallAction(if (page == "MIX") "DEVICE CHAIN" else "TRACK MIX") { page = if (page == "MIX") "DEVICES" else "MIX" }
             SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
             SmallAction("× CLOSE") { onToggle() }
         }
         if (expanded) {
-            if (project.tracks.isEmpty()) {
-                Text("Tambahkan track di Arrangement untuk melihat perangkat dan kontrol channel.",
-                    color = devicePalette.muted, fontSize = 9.sp)
+            if (selectedTrack == null) {
+                Text("Add a track in Arrangement to see its controls.", color = devicePalette.muted, fontSize = 9.sp)
             } else {
                 Row(
                     Modifier.fillMaxWidth().height(28.dp).horizontalScroll(rememberScrollState()),
@@ -3290,41 +3294,57 @@ private fun DeviceDock(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     project.tracks.forEach { track ->
-                        val isSelected = selectedTrack?.id == track.id
+                        val isSelected = selectedTrack.id == track.id
                         Surface(
                             color = if (isSelected) devicePalette.accent.copy(alpha = 0.18f) else devicePalette.room,
                             shape = RoundedCornerShape(5.dp),
+                            border = if (isSelected) BorderStroke(1.dp, devicePalette.accent) else null,
                             modifier = Modifier.clickable { onSelectTrack(track.id) }
                         ) {
-                            Text(track.name.take(18), color = if (isSelected) devicePalette.accent else devicePalette.text,
-                                fontSize = 9.sp, maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
+                            Row(
+                                Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Box(Modifier.size(5.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(2.dp)))
+                                Text(track.name.take(18), color = if (isSelected) devicePalette.accent else devicePalette.text,
+                                    fontSize = 9.sp, maxLines = 1)
+                            }
                         }
                     }
                 }
-                if (selectedTrack != null && page == "MIX") {
+                if (page == "MIX") {
                     Row(
                         Modifier.fillMaxWidth().weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(Modifier.weight(0.85f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text("VOL  ${(selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt()}%",
-                                color = devicePalette.muted, fontSize = 9.sp, maxLines = 1)
+                        Column(Modifier.weight(0.9f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text("VOLUME  ·  $gainDb", color = devicePalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             val latestProject by rememberUpdatedState(project)
                             Canvas(
                                 Modifier.fillMaxWidth().weight(1f)
                                     .pointerInput(selectedTrack.id) {
-                                        detectDragGestures { change, _ ->
-                                            change.consume()
-                                            val height = size.height.coerceAtLeast(1).toFloat()
-                                            val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
-                                            val current = latestProject
-                                            onProjectChange(current.copy(tracks = current.tracks.map {
-                                                if (it.id == selectedTrack.id) it.copy(volume = value) else it
-                                            }))
-                                        }
+                                        detectDragGestures(
+                                            onDragStart = { start ->
+                                                val height = size.height.coerceAtLeast(1).toFloat()
+                                                val value = (1f - start.y / height).coerceIn(0f, 1f) * 1.5f
+                                                val current = latestProject
+                                                onProjectChange(current.copy(tracks = current.tracks.map {
+                                                    if (it.id == selectedTrack.id) it.copy(volume = value) else it
+                                                }))
+                                            },
+                                            onDrag = { change, _ ->
+                                                change.consume()
+                                                val height = size.height.coerceAtLeast(1).toFloat()
+                                                val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
+                                                val current = latestProject
+                                                onProjectChange(current.copy(tracks = current.tracks.map {
+                                                    if (it.id == selectedTrack.id) it.copy(volume = value) else it
+                                                }))
+                                            }
+                                        )
                                     }
                                     .pointerInput(selectedTrack.id) {
                                         detectTapGestures(onTap = { offset ->
@@ -3351,22 +3371,22 @@ private fun DeviceDock(
                                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
                                 val fraction = selectedTrack.volume.coerceIn(0f, 1.5f) / 1.5f
                                 val thumbY = railBottom - fraction * (railBottom - railTop)
-                                drawRoundRect(devicePalette.accent.copy(alpha = 0.78f), Offset(railLeft, thumbY),
-                                    Size(railWidth, (railBottom - thumbY).coerceAtLeast(0f)),
+                                drawRoundRect(devicePalette.accent.copy(alpha = 0.78f), Offset(railLeft, railTop),
+                                    Size(railWidth, (thumbY - railTop).coerceAtLeast(0f)),
                                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
                                 drawRoundRect(devicePalette.text, Offset(size.width * 0.16f, thumbY - 3f),
                                     Size(size.width * 0.68f, 6f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
                             }
                         }
-                        Column(Modifier.weight(1f)) {
-                            val pan = selectedTrack.pan.coerceIn(-1f, 1f)
+                        Column(Modifier.weight(0.9f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text("PAN  ·  " + when {
-                                pan <= -0.95f -> "L"
-                                pan >= 0.95f -> "R"
-                                else -> (pan * 100).toInt().toString()
-                            }, color = devicePalette.muted, fontSize = 9.sp)
+                                selectedTrack.pan <= -0.95f -> "L"
+                                selectedTrack.pan >= 0.95f -> "R"
+                                else -> (selectedTrack.pan * 100).toInt().toString()
+                            }, color = devicePalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             StudioWavePanKnob(
-                                value = pan,
+                                value = selectedTrack.pan.coerceIn(-1f, 1f),
                                 palette = devicePalette,
                                 onValueChange = { value ->
                                     onProjectChange(project.copy(tracks = project.tracks.map {
@@ -3377,7 +3397,7 @@ private fun DeviceDock(
                             )
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            SmallAction(if (selectedTrack.muted) "MUTE ✓" else "MUTE") {
+                            SmallAction(if (selectedTrack.muted) "MUTED" else "MUTE") {
                                 onProjectChange(project.copy(tracks = project.tracks.map {
                                     if (it.id == selectedTrack.id) it.copy(muted = !it.muted) else it
                                 }))
@@ -3389,27 +3409,28 @@ private fun DeviceDock(
                             }
                         }
                     }
-                } else if (selectedTrack != null) {
-                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        val devices = when (selectedTrack.kind) {
-                            "audio" -> listOf("AUDIO CLIP" to true, "WARP" to false, "AUDIO FX" to false)
-                            "drum" -> listOf("DRUM PATTERN" to true, "DRUM INSTRUMENT" to false, "AUDIO FX" to false)
-                            else -> listOf("MIDI NOTES" to true, "INSTRUMENT" to false, "MIDI FX" to false, "AUDIO FX" to false)
-                        }
-                        devices.forEach { (label, available) ->
+                } else {
+                    val slotInfo = when (selectedTrack.kind) {
+                        "audio" -> listOf("AUDIO SOURCE" to "Real imported source clip", "WARP / TIME STRETCH" to "Unavailable: source-preserving time-stretch is not implemented", "AUDIO EFFECTS" to "No DSP effect chain is registered")
+                        "drum" -> listOf("STEP SEQUENCER" to "Available: edit the clip from Arrangement", "DRUM INSTRUMENT" to "Unavailable: drum sample/instrument engine not implemented", "AUDIO EFFECTS" to "No DSP effect chain is registered")
+                        else -> listOf("MIDI CLIP" to "Available: note events are persisted in the project", "INSTRUMENT" to "Unavailable: pitched synthesis is currently a basic oscillator", "MIDI / AUDIO FX" to "No serializable processor chain is registered")
+                    }
+                    Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        slotInfo.forEachIndexed { index, item ->
                             Column(
-                                Modifier.weight(1f).fillMaxHeight()
-                                    .background(devicePalette.room, RoundedCornerShape(5.dp)).padding(8.dp),
+                                Modifier.width(164.dp).fillMaxHeight()
+                                    .background(devicePalette.room, RoundedCornerShape(5.dp))
+                                    .then(if (index == 0) Modifier.border(1.dp, devicePalette.accent, RoundedCornerShape(5.dp)) else Modifier)
+                                    .padding(7.dp),
                                 verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Box(Modifier.size(5.dp).background(if (available) devicePalette.success else devicePalette.muted.copy(alpha = 0.55f), RoundedCornerShape(50)))
-                                    Text(label, color = if (available) devicePalette.accent else devicePalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    Box(Modifier.size(6.dp).background(if (index == 0) devicePalette.success else devicePalette.warning, RoundedCornerShape(50)))
+                                    Text(item.first, color = if (index == 0) devicePalette.accent else devicePalette.text,
+                                        fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 2)
                                 }
-                                Text(
-                                    if (available) "Parameters available for this track" else "No processor connected — no audio FX are applied",
-                                    color = devicePalette.muted, fontSize = 8.sp
-                                )
+                                Text(item.second, color = devicePalette.muted, fontSize = 8.sp)
                             }
                         }
                     }
@@ -3418,7 +3439,6 @@ private fun DeviceDock(
         }
     }
 }
-
 @Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
