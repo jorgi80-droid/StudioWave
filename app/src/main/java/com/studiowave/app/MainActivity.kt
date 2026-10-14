@@ -3098,10 +3098,9 @@ private fun BrowserWorkspace(
     val categories = listOf("ALL", "SAMPLES", "CLIPS", "TRACKS", "DEVICES")
     val normalizedQuery = query.trim().lowercase()
     val tracks = project.tracks.filter { track ->
-        (category != "TRACKS" || true) &&
-            (normalizedQuery.isEmpty() || track.name.lowercase().contains(normalizedQuery) ||
-                track.kind.lowercase().contains(normalizedQuery) ||
-                track.clips.any { it.name.lowercase().contains(normalizedQuery) })
+        (normalizedQuery.isEmpty() || track.name.lowercase().contains(normalizedQuery) ||
+            track.kind.lowercase().contains(normalizedQuery) ||
+            track.clips.any { it.name.lowercase().contains(normalizedQuery) })
     }
     val clipEntries = project.tracks.flatMap { track -> track.clips.map { track to it } }
         .filter { (track, clip) ->
