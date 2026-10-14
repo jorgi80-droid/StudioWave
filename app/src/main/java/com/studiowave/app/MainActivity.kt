@@ -2366,7 +2366,7 @@ private fun PianoRollWorkspace(
                             val colW = size.width / visibleSteps.toFloat()
                             val targetTick = ((point.x / colW).toInt().coerceIn(0, visibleSteps - 1) * stepTicks)
                             val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) } ?: return@detectTapGestures
-                            val velocity = (127f * (1f - point.y / size.height.coerceAtLeast(1f))).roundToInt().coerceIn(1, 127)
+                            val velocity = (127f * (1f - point.y / size.height.coerceAtLeast(1))).roundToInt().coerceIn(1, 127)
                             val updatedNotes = notes.map { if (it.id == nearest.id) it.copy(velocity = velocity) else it }
                             onProjectChange(project.copy(tracks = project.tracks.map { item ->
                                 if (item.id == track.id) item.copy(clips = item.clips.map { c ->
