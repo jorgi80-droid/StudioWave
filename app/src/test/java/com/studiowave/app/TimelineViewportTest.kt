@@ -19,7 +19,10 @@ class TimelineViewportTest {
         assertTrue(frames.first().zoom > initialZoom)
         assertTrue(frames[2].zoom > frames[1].zoom)
         assertEquals(initialZoom, frames.last().zoom, 0.001f)
-        assertEquals(startScroll, frames.last().scrollTicks, 1e-6)
+        val expectedAnchorScroll = (anchor - anchorX / TimelineViewport(
+            timebase, 74f * initialZoom, startScroll, 0f
+        ).pixelsPerTick).coerceAtLeast(0.0)
+        assertEquals(expectedAnchorScroll, frames.last().scrollTicks, 1e-6)
         frames.forEach { assertTrue(it.scrollTicks >= 0.0) }
     }
 
