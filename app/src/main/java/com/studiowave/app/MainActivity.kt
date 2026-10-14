@@ -2499,19 +2499,19 @@ private fun PianoRollWorkspace(
     val beatTicks = (project.ppq.toLong() * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
     val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
     val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks).toInt().coerceAtLeast(1)
-    val pitchRows = 120 // MIDI pitches 0..119 = C-1 through B8; C1..C10 is labelled in octave units below.
+    val pitchRows = 120
     val rowHeight = (15f * zoomY).coerceIn(7f, 34f)
     val stepsOnScreen = (32f / zoomX.coerceIn(0.45f, 5f)).roundToInt().coerceIn(6, 72)
-    val clipLengthSteps = (((clip?.lengthTicks ?: stepTicks * 32L) + stepTicks - 1L) / stepTicks)
+    val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
+    val clipLengthSteps = ((rawLengthTicks + stepTicks - 1L) / stepTicks)
         .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
     val currentTopPitch = topPitch.coerceIn(0, 119)
     val highestPitch = currentTopPitch
     val lowestPitch = (highestPitch - 119 + 1).coerceAtLeast(0)
-    val visiblePitchRows = 120
-    val timelineScroll = rememberScrollState()
-    val verticalScroll = rememberScrollState()
+    val visiblePitchRows = (600f / rowHeight).roundToInt().coerceIn(12, 120)
+    val verticalScroll = rememberScrollState(((119 - currentTopPitch) * rowHeight).roundToInt().coerceAtLeast(0))
 
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
         val activeTrack = track ?: return
@@ -2538,7 +2538,9 @@ private fun PianoRollWorkspace(
         ) {
             SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
             SmallAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.45f, 5f) }
+            SmallAction("←") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
             Text("BAR ${pageStartStep / stepsPerBar + 1}", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            SmallAction("→") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
             SmallAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.45f, 5f) }
             SmallAction("PITCH −") { zoomY = (zoomY / 1.2f).coerceIn(0.5f, 2.6f) }
             SmallAction("PITCH +") { zoomY = (zoomY * 1.2f).coerceIn(0.5f, 2.6f) }
@@ -2731,7 +2733,7 @@ private fun PianoRollWorkspace(
                                     when { bar -> 1.4f; beat -> 0.9f; else -> 0.45f })
                             }
                             notes.forEach { note ->
-                                val x = (note.startTick.toDouble() / stepTicks.toDouble() - startStep) * localColWidth
+                                val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * localColWidth
                                 val row = currentTopPitch - note.pitch
                                 val y = row * localRowHeight
                                 val width = (note.durationTicks.toDouble() / stepTicks.toDouble() * localColWidth).toFloat().coerceAtLeast(3f)
@@ -2742,7 +2744,6 @@ private fun PianoRollWorkspace(
                                         size = Size(width, (localRowHeight - 2f).coerceAtLeast(2f)),
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
                                     )
-                                    // Visible resize grip at the trailing edge of the note.
                                     drawRect(Color.White.copy(alpha = 0.8f),
                                         Offset(x.toFloat() + width - 3f, y + 1f), Size(2f, (localRowHeight - 2f).coerceAtLeast(2f)))
                                 }
