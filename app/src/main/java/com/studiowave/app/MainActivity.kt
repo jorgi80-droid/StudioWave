@@ -3121,12 +3121,6 @@ private fun BrowserWorkspace(
                 clip.name.lowercase().contains(normalizedQuery) ||
                 track.name.lowercase().contains(normalizedQuery))
         }
-    val browserItems = when (category) {
-        "SAMPLES" -> clipEntries.filter { (track, clip) -> track.kind == "audio" && clip.sourceUri != null }
-        "TRACKS" -> emptyList()
-        "CLIPS" -> clipEntries
-        else -> clipEntries
-    }
     Column(Modifier.fillMaxSize().background(p.room).padding(5.dp)) {
         Row(
             Modifier.fillMaxWidth().height(30.dp).background(p.panel, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp),
