@@ -2783,7 +2783,7 @@ private fun MixerWorkspace(
     ) {
         val trackCount = project.tracks.size.coerceAtLeast(1)
         val availableWidth = maxWidth - 114.dp
-        val channelWidth = ((availableWidth - (trackCount - 1).coerceAtLeast(0).toFloat() * 5f.dp) / trackCount.toFloat())
+        val channelWidth = ((availableWidth - (trackCount - 1).coerceAtLeast(0) * 5.dp) / trackCount.toFloat())
             .coerceIn(104.dp, 180.dp)
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
