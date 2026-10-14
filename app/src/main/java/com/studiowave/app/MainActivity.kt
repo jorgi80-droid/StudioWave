@@ -4308,10 +4308,13 @@ private fun DirectWaveDevicePanel(
                         Row(
                             Modifier.fillMaxWidth().background(palette.room, RoundedCornerShape(3.dp))
                                 .clickable {
-                                    val presetIndex = listOf("arp_pluck", "sub_bass", "saw_lead", "soft_keys", "orchestra_pad", "analog_synth", "warm_pad").indexOf(sample.assetName)
+                                    val presetIndex = com.studiowave.app.audio.FactorySampleLibrary.presets.indexOfFirst {
+                                        it.fileName.substringBeforeLast('.') == sample.assetName
+                                    }
                                     if (presetIndex >= 0) {
-                                        val target = java.io.File(context.cacheDir, "${sample.assetName}.wav")
+                                        val target = java.io.File(context.cacheDir, sample.assetName + ".wav")
                                         runCatching { target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex)) }
+                                            .onFailure { Toast.makeText(context, "Gagal membuat sampel bawaan", Toast.LENGTH_SHORT).show() }
                                         val uri = Uri.fromFile(target)
                                         sampleUri = uri.toString()
                                         sampleLabel = sample.title
