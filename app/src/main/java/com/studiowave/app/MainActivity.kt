@@ -1352,7 +1352,7 @@ private fun TimelineGrid(
     val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks, 0f)
         .effectivePixelsPerBar
     val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
-        TimelineViewport(timebase, pixelsPerBar, scrollTicks.toDouble(), 0f, trackHeaderWidthPx)
+        TimelineViewport(timebase, pixelsPerBar, scrollTicks, 0f, trackHeaderWidthPx)
     }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
@@ -1507,7 +1507,7 @@ private fun TimelineGrid(
                     }
                     if (targetX != null) {
                         val nextScroll = currentViewport.placeTickAtViewportX(playheadTick, targetX)
-                            .scrollTimeTicks.toFloat()
+                            .scrollTimeTicks
                         if (kotlin.math.abs(nextScroll - currentScroll) > 0.5f) currentOnScroll(nextScroll)
                     }
                     delay(33L)
