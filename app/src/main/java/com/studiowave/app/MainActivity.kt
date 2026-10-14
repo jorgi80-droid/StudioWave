@@ -358,7 +358,7 @@ private fun StudioWaveApp() {
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showSettings by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf("INTERFACE") }
-    var themeName by remember { mutableStateOf(preferences.getString("ui_theme", "Live Dark") ?: "Live Dark") }
+    var themeName by remember { mutableStateOf(preferences.getString("ui_theme", "Live Light") ?: "Live Light") }
     var paletteTone by remember { mutableStateOf(preferences.getString("ui_tone", "Neutral") ?: "Neutral") }
     var highContrast by remember { mutableStateOf(preferences.getBoolean("ui_high_contrast", false)) }
     var gridOpacity by remember { mutableFloatStateOf(preferences.getFloat("ui_grid_opacity", 0.72f)) }
