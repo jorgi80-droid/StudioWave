@@ -1085,14 +1085,27 @@ private fun ArrangementWorkspace(
             Canvas(
                 Modifier.weight(1f).fillMaxHeight()
                     .pointerInput(project.tracks, scrollTicks, zoom, maxEndTick) {
-                        detectTapGestures { point ->
-                            val projectEnd = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
-                            val requestedScroll = point.x / size.width.coerceAtLeast(1).toDouble() * projectEnd
-                            val visibleTicks = size.width.toDouble() /
-                                TimelineViewport(fitTimebase, 74f * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
-                            val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visibleTicks).coerceAtLeast(0.0)
-                            onScroll(requestedScroll.coerceIn(0.0, maxScroll))
-                        }
+                        detectDragGestures(
+                            onDragStart = { start ->
+                                val end = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
+                                val fraction = (start.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f).toDouble()
+                                val visible = size.width.toDouble() /
+                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                                val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visible).coerceAtLeast(0.0)
+                                onScroll((end * fraction).coerceIn(0.0, maxScroll))
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val end = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
+                                val fraction = (change.position.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f).toDouble()
+                                val visible = size.width.toDouble() /
+                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                                val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visible).coerceAtLeast(0.0)
+                                onScroll((end * fraction).coerceIn(0.0, maxScroll))
+                            },
+                            onDragEnd = { },
+                            onDragCancel = { }
+                        )
                     }
             ) {
                 val endTick = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
