@@ -3,6 +3,8 @@ package com.studiowave.app.audio
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
+import android.content.res.AssetFileDescriptor
+import java.io.File
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -46,7 +48,16 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
 
     fun load(uri: Uri, onLoaded: (Boolean) -> Unit = {}) {
         loaded = false
-        val descriptor = runCatching { appContext.contentResolver.openAssetFileDescriptor(uri, "r") }.getOrNull()
+        val descriptor = if (uri.scheme == "file") {
+            val path = uri.path
+            if (path == null) null else runCatching {
+                val file = File(path)
+                val stream = java.io.FileInputStream(file)
+                AssetFileDescriptor(stream.fd, 0L, file.length())
+            }.getOrNull()
+        } else {
+            runCatching { appContext.contentResolver.openAssetFileDescriptor(uri, "r") }.getOrNull()
+        }
         if (descriptor == null) { onLoaded(false); return }
         val id = runCatching { descriptor.use { pool.load(it, 1) } }.getOrDefault(0)
         if (id == 0) { onLoaded(false); return }
