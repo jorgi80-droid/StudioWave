@@ -12,6 +12,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -871,8 +872,9 @@ private fun TransportBar(
                     Text("P ${peakDbfs.toInt()} dBFS", color = LocalStudioWavePalette.current.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text("${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
+                val transportMeterPalette = LocalStudioWavePalette.current
                 Canvas(Modifier.fillMaxWidth().height(9.dp)) {
-                    drawLine(LocalStudioWavePalette.current.grid, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
+                    drawLine(transportMeterPalette.grid, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
                     peakHistory.forEachIndexed { index, level ->
                         val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
                         val x = index * size.width / peakHistory.size.coerceAtLeast(1)
@@ -1647,6 +1649,7 @@ private fun AudioEditorWorkspace(
     onProjectChange: (StudioProject) -> Unit,
     onBack: () -> Unit
 ) {
+    val audioPalette = LocalStudioWavePalette.current
     val context = LocalContext.current
     val clip = track?.clips?.firstOrNull { it.sourceUri != null }
     val baseLengthTicks = remember(clip?.id) { (clip?.lengthTicks ?: 1L).coerceAtLeast(1L) }
@@ -1727,7 +1730,7 @@ private fun AudioEditorWorkspace(
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
         }
-        Box(Modifier.fillMaxWidth().weight(1f).background(LocalStudioWavePalette.current.canvas, RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().weight(1f).background(audioPalette.canvas, RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
             if (waveform.isNotEmpty()) {
                 Canvas(Modifier.fillMaxSize().padding(12.dp)) {
                     val mid = size.height / 2f
@@ -1735,7 +1738,7 @@ private fun AudioEditorWorkspace(
                     waveform.forEachIndexed { i, peak ->
                         val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.48f
                         val x = (i + 0.5f) * dx
-                        drawLine(Mint.copy(alpha = 0.9f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
+                        drawLine(audioPalette.accent.copy(alpha = 0.9f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
                     }
                 }
             } else {
@@ -1863,6 +1866,7 @@ private fun TimelineGrid(
     onResizeClip: (String, Long, Long) -> Unit,
     onMoveClip: (String, String, Long) -> Unit
 ) {
+    val timelinePalette = LocalStudioWavePalette.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
@@ -2067,7 +2071,7 @@ private fun TimelineGrid(
              for (bar in firstVisibleBar..lastVisibleBar) {
                  val x = canvasViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
                  if (x >= -barWidth && x <= size.width + barWidth) {
-                     drawLine(if (bar % 4 == 0) LocalStudioWavePalette.current.grid else LocalStudioWavePalette.current.grid.copy(alpha = 0.65f),
+                     drawLine(if (bar % 4 == 0) timelinePalette.grid else timelinePalette.grid.copy(alpha = 0.65f),
                          Offset(x, rulerHeightPx), Offset(x, size.height),
                          if (bar % 4 == 0) 1.5f else 0.7f)
                      val beatTicks = timebase.ticksPerBeat
@@ -2078,7 +2082,7 @@ private fun TimelineGrid(
                      for (beat in 0 until timebase.safeNumerator) {
                          val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
                          val beatX = canvasViewport.timeToViewportX(beatTick)
-                         if (beat > 0) drawLine(LocalStudioWavePalette.current.grid.copy(alpha = 0.55f), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
+                         if (beat > 0) drawLine(timelinePalette.grid.copy(alpha = 0.55f), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
                          if (subdivision > 0L) {
                              var tickOffset = subdivision
                              while (tickOffset < beatTicks) {
@@ -2088,7 +2092,7 @@ private fun TimelineGrid(
                                      beatTicks / 4L -> 0.38f
                                      else -> 0.24f
                                  }
-                                 drawLine(LocalStudioWavePalette.current.grid.copy(alpha = alpha),
+                                 drawLine(timelinePalette.grid.copy(alpha = alpha),
                                      Offset(subX, rulerHeightPx), Offset(subX, size.height), 0.55f)
                                  tickOffset += subdivision
                              }
@@ -2101,7 +2105,7 @@ private fun TimelineGrid(
                     ((row.topDp - scrollTracks) * verticalZoom).dp.toPx()
                 }
                 if (rowTopPx >= rulerHeightPx && rowTopPx <= size.height) {
-                    drawLine(LocalStudioWavePalette.current.grid.copy(alpha = 0.8f), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
+                    drawLine(timelinePalette.grid.copy(alpha = 0.8f), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
                 }
             }
         }
@@ -2109,7 +2113,7 @@ private fun TimelineGrid(
         // Arrangement Overview mirrors Live's whole-song map and its current viewport.
         Row(
             Modifier.fillMaxWidth().height(18.dp)
-                .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                .background(timelinePalette.panel, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                 .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2191,12 +2195,12 @@ private fun TimelineGrid(
                          center = Offset(x, size.height * 0.55f))
                  }
             }
-            drawRect(LocalStudioWavePalette.current.grid, size = Size(size.width, with(density) { 2.dp.toPx() }))
+            drawRect(timelinePalette.grid, size = Size(size.width, with(density) { 2.dp.toPx() }))
             val playheadX = rulerViewport.timeToViewportX(playheadTick)
             if (playheadX >= 0f && playheadX <= size.width) {
                 val markerRadius = with(density) { 3.dp.toPx() }
-                drawLine(LocalStudioWavePalette.current.danger, Offset(playheadX, 0f), Offset(playheadX, size.height), 1.6f)
-                drawCircle(LocalStudioWavePalette.current.danger, markerRadius, Offset(playheadX, markerRadius))
+                drawLine(timelinePalette.danger, Offset(playheadX, 0f), Offset(playheadX, size.height), 1.6f)
+                drawCircle(timelinePalette.danger, markerRadius, Offset(playheadX, markerRadius))
             }
         }
 
@@ -2511,7 +2515,7 @@ private fun TimelineGrid(
             Column(
                 Modifier.offset(x = x, y = y)
                     .width(menuWidth)
-                    .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(12.dp))
+                    .background(timelinePalette.panel, RoundedCornerShape(12.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -2524,7 +2528,7 @@ private fun TimelineGrid(
                         rowActions.forEach { action ->
                             val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
                             Surface(
-                                color = if (action == "Open editor") LocalStudioWavePalette.current.accent.copy(alpha = 0.18f) else LocalStudioWavePalette.current.room,
+                                color = if (action == "Open editor") timelinePalette.accent.copy(alpha = 0.18f) else timelinePalette.room,
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f).height(29.dp).clickable {
                                     if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
@@ -2553,6 +2557,7 @@ private fun PianoRollWorkspace(
     onProjectChange: (StudioProject) -> Unit,
     onBack: () -> Unit
 ) {
+    val pianoPalette = LocalStudioWavePalette.current
     val clip = track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
     var snapDenominator by remember(track?.id, clip?.id) { mutableIntStateOf(16) }
@@ -2796,7 +2801,7 @@ private fun PianoRollWorkspace(
                             for (row in 0..rowsVisible) {
                                 val pitch = currentTopPitch - row
                                 val isC = pitch >= 0 && pitch % 12 == 0
-                                drawLine(if (isC) LocalStudioWavePalette.current.border else LocalStudioWavePalette.current.grid,
+                                drawLine(if (isC) pianoPalette.border else pianoPalette.grid,
                                     Offset(0f, row * localRowHeight), Offset(size.width, row * localRowHeight),
                                     if (isC) 1.2f else 0.45f)
                             }
@@ -2804,7 +2809,7 @@ private fun PianoRollWorkspace(
                                 val stepAbsolute = pageStartStep + col
                                 val bar = stepAbsolute % stepsPerBar == 0
                                 val beat = stepAbsolute % stepsPerBeat == 0
-                                drawLine(when { bar -> LocalStudioWavePalette.current.border; beat -> LocalStudioWavePalette.current.grid; else -> LocalStudioWavePalette.current.grid.copy(alpha = 0.65f) },
+                                drawLine(when { bar -> pianoPalette.border; beat -> pianoPalette.grid; else -> pianoPalette.grid.copy(alpha = 0.65f) },
                                     Offset(col * localColWidth, 0f), Offset(col * localColWidth, size.height),
                                     when { bar -> 1.4f; beat -> 0.9f; else -> 0.45f })
                             }
@@ -2815,7 +2820,7 @@ private fun PianoRollWorkspace(
                                 val width = (note.durationTicks.toDouble() / stepTicks.toDouble() * localColWidth).toFloat().coerceAtLeast(3f)
                                 if (note.pitch in 0..119 && x < size.width && x + width > 0 && y + localRowHeight > 0 && y < size.height) {
                                     drawRoundRect(
-                                        color = if (note.id == selectedNoteId) LocalStudioWavePalette.current.orange else LocalStudioWavePalette.current.accent,
+                                        color = if (note.id == selectedNoteId) pianoPalette.orange else pianoPalette.accent,
                                         topLeft = Offset(x.toFloat(), y + 1f),
                                         size = Size(width, (localRowHeight - 2f).coerceAtLeast(2f)),
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
@@ -2848,8 +2853,9 @@ private fun MixerWorkspace(
     onProjectChange: (StudioProject) -> Unit,
     trackMeterReadings: Map<String, Pair<Float, Float>>
 ) {
+    val mixerPalette = LocalStudioWavePalette.current
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(7.dp)).padding(4.dp)
+        Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(7.dp)).padding(4.dp)
     ) {
         val trackCount = project.tracks.size.coerceAtLeast(1)
         val availableWidth = maxWidth - 114.dp
@@ -2863,7 +2869,7 @@ private fun MixerWorkspace(
         project.tracks.forEach { track ->
             Column(
                 Modifier.width(channelWidth).fillMaxHeight()
-                    .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 6.dp),
+                    .background(mixerPalette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -2881,7 +2887,7 @@ private fun MixerWorkspace(
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                Text("VOL  " + (track.volume * 100).toInt() + "%", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("VOL  " + (track.volume * 100).toInt() + "%", color = mixerPalette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 val latestProject by rememberUpdatedState(project)
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Canvas(Modifier.weight(1f).fillMaxHeight()) {
@@ -2894,7 +2900,7 @@ private fun MixerWorkspace(
                             val y = size.height - (segment + 1) * segmentHeight
                             val active = segment / 18f <= peak
                             drawRoundRect(
-                                color = if (!active) LocalStudioWavePalette.current.room else if (segment >= 15) LocalStudioWavePalette.current.danger else if (segment >= 11) LocalStudioWavePalette.current.warning else LocalStudioWavePalette.current.accent,
+                                color = if (!active) mixerPalette.room else if (segment >= 15) mixerPalette.danger else if (segment >= 11) mixerPalette.warning else mixerPalette.accent,
                                 topLeft = Offset((size.width - lane) / 2f, y + 1f),
                                 size = Size(lane, (segmentHeight - 2f).coerceAtLeast(1f)),
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
@@ -2974,7 +2980,7 @@ private fun MixerWorkspace(
         }
         Column(
             Modifier.width(110.dp).fillMaxHeight()
-                .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp)).padding(6.dp),
+                .background(mixerPalette.panel, RoundedCornerShape(5.dp)).padding(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
