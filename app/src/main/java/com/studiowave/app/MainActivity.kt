@@ -287,6 +287,7 @@ private fun StudioWaveApp() {
     var masterRmsDbfs by remember { mutableFloatStateOf(-120f) }
     var masterMomentaryLufs by remember { mutableFloatStateOf(-120f) }
     var masterPeakHistory by remember { mutableStateOf(List(48) { 0f }) }
+    var trackMeterReadings by remember { mutableStateOf<Map<String, Pair<Float, Float>>>(emptyMap()) }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     // Start with the device drawer collapsed so Arrangement gets the full vertical workspace.
     var showDock by remember { mutableStateOf(false) }
@@ -572,6 +573,15 @@ private fun StudioWaveApp() {
             delay(50)
         }
     }
+    LaunchedEffect(arrangementPlayback, project.tracks.map { it.id }) {
+        while (true) {
+            trackMeterReadings = project.tracks.associate { track ->
+                val meter = arrangementPlayback.trackMeterSnapshot(track.id)
+                track.id to (meter.peak to meter.rms)
+            }
+            delay(50)
+        }
+    }
     LaunchedEffect(project) {
         delay(350)
         val snapshot = project
@@ -670,6 +680,7 @@ private fun StudioWaveApp() {
                         "MIXER" -> MixerWorkspace(
                             project,
                             master,
+                            trackMeterReadings = trackMeterReadings,
                             onMasterChange = { value ->
                                 master = value.coerceIn(0f, 1f)
                                 arrangementPlayback.setMasterGain(master)
@@ -2624,22 +2635,9 @@ private fun MixerWorkspace(
     project: StudioProject,
     master: Float,
     onMasterChange: (Float) -> Unit,
-    onProjectChange: (StudioProject) -> Unit
+    onProjectChange: (StudioProject) -> Unit,
+    trackMeterReadings: Map<String, Pair<Float, Float>>
 ) {
-    var meterPeak by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
-    var meterRms by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
-    LaunchedEffect(project.tracks) {
-        // Show signal presence based on track content and control state rather than pretending
-        // these are real input meters; the master meter remains owned by the transport engine.
-        meterPeak = project.tracks.associate { track ->
-            track.id to when {
-                track.muted -> 0f
-                track.clips.isEmpty() -> 0f
-                else -> (track.volume.coerceIn(0f, 1.5f) / 1.5f).coerceIn(0f, 1f)
-            }
-        }
-        meterRms = meterPeak.mapValues { (_, value) -> value * 0.707f }
-    }
     Row(
         Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp))
             .horizontalScroll(rememberScrollState()).padding(4.dp),
@@ -2671,8 +2669,8 @@ private fun MixerWorkspace(
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Canvas(Modifier.weight(1f).fillMaxHeight()) {
                         // Dedicated stereo meter lane, visually separate from the channel fader.
-                        val peak = meterPeak[track.id] ?: 0f
-                        val rms = meterRms[track.id] ?: 0f
+                        val peak = trackMeterReadings[track.id]?.first ?: 0f
+                        val rms = trackMeterReadings[track.id]?.second ?: 0f
                         val lane = (size.width * 0.72f).coerceAtLeast(3f)
                         for (segment in 0 until 18) {
                             val segmentHeight = size.height / 18f
