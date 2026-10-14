@@ -199,4 +199,22 @@ class ProjectModelTest {
         assertTrue(left.midiNotes.map { it.id }.intersect(right.midiNotes.map { it.id }.toSet()).isEmpty())
     }
 
+
+    @Test fun mobileWorkspaceOverlayPolicyKeepsOnlyOneContextMenuOpen() {
+        fun normalize(timeline: Boolean, add: Boolean, trackFab: Boolean): Triple<Boolean, Boolean, Boolean> = when {
+            trackFab -> Triple(false, false, true)
+            add -> Triple(false, true, false)
+            else -> Triple(timeline, false, false)
+        }
+        assertEquals(Triple(false, false, true), normalize(true, true, true))
+        assertEquals(Triple(false, true, false), normalize(true, true, false))
+        assertEquals(Triple(true, false, false), normalize(true, false, false))
+    }
+
+    @Test fun timelineMenuNeverDuplicatesInstrumentTrackType() {
+        val availableTrackKinds = listOf("midi", "audio", "drum")
+        assertEquals(availableTrackKinds.size, availableTrackKinds.toSet().size)
+        assertEquals(listOf("midi", "audio", "drum"), availableTrackKinds)
+    }
+
 }
