@@ -27,11 +27,25 @@ class MidiNoteGestureTest {
         val original = MidiNote(pitch = 119, startTick = 0L, durationTicks = 960L)
         val movedLeft = transformMidiNoteFromGesture(original, 3840L, 240L, -100, 12, false)
         assertEquals(0L, movedLeft.startTick)
-        assertEquals(119, movedLeft.pitch)
+        assertEquals(127, movedLeft.pitch)
 
         val movedRight = transformMidiNoteFromGesture(original.copy(pitch = 0), 3840L, 240L, 100, -12, false)
         assertEquals(2880L, movedRight.startTick)
         assertEquals(0, movedRight.pitch)
+    }
+
+
+    @Test
+    fun fullStandardMidiRangeCanReachPitch127ButCannotExceedIt() {
+        val note = MidiNote(pitch = 120, startTick = 0L, durationTicks = 240L)
+        val high = transformMidiNoteFromGesture(note, 3840L, 240L, 0, 20, false)
+        assertEquals(127, high.pitch)
+
+        val alreadyAtTop = transformMidiNoteFromGesture(high, 3840L, 240L, 0, 1, false)
+        assertEquals(127, alreadyAtTop.pitch)
+
+        val low = transformMidiNoteFromGesture(note.copy(pitch = 7), 3840L, 240L, 0, -20, false)
+        assertEquals(0, low.pitch)
     }
 
     @Test
