@@ -1415,6 +1415,7 @@ private fun ArrangementWorkspace(
                 }
             }
         if (showClipView && selectedClipTrack != null && selectedClipModel != null) {
+            val clipPalette = LocalStudioWavePalette.current
             val clip = selectedClipModel
             val timebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
             val firstBar = clip.startTick / timebase.ticksPerBar + 1L
@@ -1422,10 +1423,10 @@ private fun ArrangementWorkspace(
                 else clip.startTick + clip.lengthTicks.coerceAtLeast(1L) - 1L
             val lastBar = lastTick / timebase.ticksPerBar + 1L
             Surface(
-                color = LocalStudioWavePalette.current.panel.copy(alpha = 0.96f),
-                contentColor = LocalStudioWavePalette.current.text,
+                color = clipPalette.panel.copy(alpha = 0.96f),
+                contentColor = clipPalette.text,
                 shape = RoundedCornerShape(9.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, LocalStudioWavePalette.current.border),
+                border = androidx.compose.foundation.BorderStroke(1.dp, clipPalette.border),
                 shadowElevation = 8.dp,
                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 110.dp, bottom = 8.dp)
                     .widthIn(min = 220.dp, max = 300.dp)
