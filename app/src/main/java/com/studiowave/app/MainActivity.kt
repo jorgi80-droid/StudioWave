@@ -4210,22 +4210,9 @@ private fun DirectWaveDevicePanel(
     var category by remember(trackId) { mutableStateOf("ALL") }
     var showSamples by remember(trackId) { mutableStateOf(false) }
     val samples = remember {
-        listOf(
-            BuiltInStudioSample("ARP", "Arp · Glass Sequence", "arp_glass", "Bright pluck sequence"),
-            BuiltInStudioSample("ARP", "Arp · Pulse Pattern", "arp_pulse", "Short rhythmic pluck"),
-            BuiltInStudioSample("BASS", "Bass · Deep Round", "bass_round", "Round low bass tone"),
-            BuiltInStudioSample("BASS", "Bass · Analog Bite", "bass_analog", "Saw-based analog bass"),
-            BuiltInStudioSample("LEAD", "Lead · Bright Mono", "lead_bright", "Bright synthetic lead"),
-            BuiltInStudioSample("LEAD", "Lead · Soft Edge", "lead_soft", "Softer synthetic lead"),
-            BuiltInStudioSample("KEYBOARD", "Keyboard · Soft EP", "keyboard_ep", "Electric-piano style tone"),
-            BuiltInStudioSample("KEYBOARD", "Keyboard · Felt Keys", "keyboard_felt", "Soft keyboard tone"),
-            BuiltInStudioSample("ORCHESTRA", "Orchestra · Warm Strings", "orchestra_strings", "Sustained ensemble tone"),
-            BuiltInStudioSample("ORCHESTRA", "Orchestra · Brass Pad", "orchestra_brass", "Warm synthetic brass"),
-            BuiltInStudioSample("SYNTH", "Synth · FM Bell", "synth_bell", "Bell-like FM timbre"),
-            BuiltInStudioSample("SYNTH", "Synth · Digital Pulse", "synth_pulse", "Digital pulse tone"),
-            BuiltInStudioSample("PAD", "Pad · Aurora", "pad_aurora", "Slow evolving pad"),
-            BuiltInStudioSample("PAD", "Pad · Air Choir", "pad_air", "Airy synthetic choir")
-        )
+        com.studiowave.app.audio.FactorySampleLibrary.presets.map { preset ->
+            BuiltInStudioSample(preset.category.uppercase(), preset.name, preset.fileName.substringBeforeLast('.'), preset.description)
+        }
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
