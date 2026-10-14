@@ -2818,6 +2818,7 @@ private fun PianoRollWorkspace(
     var clipboard by remember(track?.id, clip?.id) { mutableStateOf<List<com.studiowave.app.data.MidiNote>>(emptyList()) }
     var selectionDrag by remember(track?.id, clip?.id) { mutableStateOf<Pair<Offset, Offset>?>(null) }
     var editMessage by remember(track?.id, clip?.id) { mutableStateOf("Pinch to zoom · drag empty grid to scroll") }
+    var noteContextMenuExpanded by remember(track?.id, clip?.id) { mutableStateOf(false) }
 
     val safePpq = project.ppq.coerceIn(24, 3840).toLong()
     val ticksPerQuarter = safePpq
@@ -2897,6 +2898,7 @@ private fun PianoRollWorkspace(
             SmallAction(if (virtualKeyboardVisible) "NOTE INPUT ON" else "NOTE INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
             SmallAction(if (editToolsExpanded) "TOOLS" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
             SmallAction(if (selectionMode) "SELECT ON" else "SELECT") { selectionMode = !selectionMode }
+            SmallAction("NOTE MENU") { noteContextMenuExpanded = true }
             SmallAction(if (velocityMode) "VEL ON" else "VEL") {
                 velocityMode = !velocityMode
                 if (velocityMode) panMode = false
@@ -2936,6 +2938,85 @@ private fun PianoRollWorkspace(
             TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
             TransportAction("1/${snapDenominator}") {
                 snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
+            }
+            Box {
+                SmallAction("⋮") { noteContextMenuExpanded = true }
+                DropdownMenu(
+                    expanded = noteContextMenuExpanded,
+                    onDismissRequest = { noteContextMenuExpanded = false },
+                    modifier = Modifier.background(pianoPalette.panel)
+                ) {
+                    val selectedIds = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    val selectedNotes = notes.filter { it.id in selectedIds }
+                    DropdownMenuItem(
+                        text = { Text("Copy selected notes", color = pianoPalette.text) },
+                        enabled = selectedNotes.isNotEmpty(),
+                        onClick = {
+                            val anchorTick = selectedNotes.minOfOrNull { it.startTick } ?: 0L
+                            val anchorPitch = selectedNotes.minOfOrNull { it.pitch } ?: 0
+                            clipboard = selectedNotes.map { note ->
+                                note.copy(startTick = (note.startTick - anchorTick).coerceAtLeast(0L), pitch = note.pitch - anchorPitch)
+                            }
+                            editMessage = "${selectedNotes.size} note(s) copied"
+                            noteContextMenuExpanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Duplicate selected notes", color = pianoPalette.text) },
+                        enabled = selectedNotes.isNotEmpty() && clip != null,
+                        onClick = {
+                            val activeClip = clip
+                            if (activeClip != null && selectedNotes.isNotEmpty()) {
+                                val anchorTick = selectedNotes.minOf { it.startTick }
+                                val endTick = selectedNotes.maxOf { it.startTick + it.durationTicks }
+                                val span = (endTick - anchorTick).coerceAtLeast(stepTicks)
+                                val duplicates = if (endTick <= activeClip.lengthTicks - span) {
+                                    selectedNotes.map { note ->
+                                        note.copy(id = java.util.UUID.randomUUID().toString(), startTick = note.startTick + span)
+                                    }
+                                } else emptyList()
+                                if (duplicates.isNotEmpty()) {
+                                    updateNotes(notes + duplicates)
+                                    selectedNoteIds = duplicates.map { it.id }.toSet()
+                                    selectedNoteId = duplicates.first().id
+                                    editMessage = "${duplicates.size} note(s) duplicated"
+                                } else editMessage = "Not enough clip space to duplicate selection"
+                            }
+                            noteContextMenuExpanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete selected notes", color = pianoPalette.text) },
+                        enabled = selectedIds.isNotEmpty(),
+                        onClick = {
+                            updateNotes(notes.filterNot { it.id in selectedIds })
+                            selectedNoteId = null
+                            selectedNoteIds = emptySet()
+                            editMessage = "${selectedIds.size} note(s) deleted"
+                            noteContextMenuExpanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Select all notes", color = pianoPalette.text) },
+                        enabled = notes.isNotEmpty(),
+                        onClick = {
+                            selectedNoteIds = notes.map { it.id }.toSet()
+                            selectedNoteId = notes.firstOrNull()?.id
+                            editMessage = "${notes.size} note(s) selected"
+                            noteContextMenuExpanded = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Clear selection", color = pianoPalette.text) },
+                        enabled = selectedIds.isNotEmpty(),
+                        onClick = {
+                            selectedNoteId = null
+                            selectedNoteIds = emptySet()
+                            editMessage = "Selection cleared"
+                            noteContextMenuExpanded = false
+                        }
+                    )
+                }
             }
             SmallAction("BACK", onBack)
         }
