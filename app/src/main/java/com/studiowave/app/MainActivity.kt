@@ -2538,8 +2538,8 @@ private fun PianoRollWorkspace(
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
                 modifier = Modifier.widthIn(max = 100.dp))
             Spacer(Modifier.weight(1f))
-            SmallAction(if (keyboardVisible) "PIANO KEYS" else "PIANO KEYS OFF") { keyboardVisible = !keyboardVisible }
-            SmallAction(if (virtualKeyboardVisible) "KEYBOARD ON" else "KEYBOARD") { virtualKeyboardVisible = !virtualKeyboardVisible }
+            SmallAction(if (keyboardVisible) "KEYS" else "KEYS OFF") { keyboardVisible = !keyboardVisible }
+            SmallAction(if (virtualKeyboardVisible) "PLAY KEYS" else "KEYBOARD") { virtualKeyboardVisible = !virtualKeyboardVisible }
             SmallAction(if (editToolsExpanded) "TOOLS" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
