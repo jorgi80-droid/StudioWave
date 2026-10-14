@@ -1077,64 +1077,6 @@ private fun ArrangementWorkspace(
                 .toFloat().coerceIn(0.1f, 16f)
         }
         Column(Modifier.fillMaxSize().background(Color(0xFF17181B), RoundedCornerShape(7.dp)).padding(1.dp)) {
-        Row(
-            Modifier.fillMaxWidth().height(18.dp)
-                .background(Color(0xFF24262A), RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
-                .padding(horizontal = 3.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("OVERVIEW", color = MutedText, fontSize = 7.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(48.dp))
-            Canvas(
-                Modifier.weight(1f).fillMaxHeight()
-                    .pointerInput(project.tracks, scrollTicks, zoom, maxEndTick) {
-                        detectDragGestures(
-                            onDragStart = { start ->
-                                val end = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
-                                val fraction = (start.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f).toDouble()
-                                val visible = size.width.toDouble() /
-                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
-                                val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visible).coerceAtLeast(0.0)
-                                onScroll((end * fraction).coerceIn(0.0, maxScroll))
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                val end = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
-                                val fraction = (change.position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f).toDouble()
-                                val visible = size.width.toDouble() /
-                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
-                                val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visible).coerceAtLeast(0.0)
-                                onScroll((end * fraction).coerceIn(0.0, maxScroll))
-                            },
-                            onDragEnd = { },
-                            onDragCancel = { }
-                        )
-                    }
-            ) {
-                val endTick = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
-                val rowHeight = size.height / project.tracks.size.coerceAtLeast(1)
-                project.tracks.forEachIndexed { index, track ->
-                    track.clips.forEach { clip ->
-                        val left = (clip.startTick.toDouble() / endTick * size.width).toFloat()
-                        val width = (clip.lengthTicks.toDouble() / endTick * size.width).toFloat().coerceAtLeast(1f)
-                        drawRoundRect(
-                            Color(track.colorArgb.toInt()).copy(alpha = 0.9f),
-                            Offset(left, index * rowHeight),
-                            Size(width, rowHeight.coerceAtLeast(1f)),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
-                        )
-                    }
-                }
-                val viewportStart = (scrollTicks / endTick * size.width).toFloat().coerceIn(0f, size.width)
-                val visibleTicks = size.width.toDouble() /
-                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
-                val viewportWidth = (visibleTicks / endTick * size.width).toFloat().coerceIn(2f, size.width)
-                drawRoundRect(
-                    Color.White.copy(alpha = 0.2f), Offset(viewportStart, 0f),
-                    Size(viewportWidth, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
-                )
-            }
-        }
         Box(Modifier.fillMaxWidth().weight(1f)) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(104.dp)) {
