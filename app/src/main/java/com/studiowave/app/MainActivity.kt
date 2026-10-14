@@ -1700,8 +1700,8 @@ private fun ArrangementWorkspace(
 }
 
 @Composable
-private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (StudioProject) -> Unit, project: StudioProject, onBack: () -> Unit) {
-    val clip = track?.clips?.firstOrNull()
+private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (StudioProject) -> Unit, project: StudioProject, onBack: () -> Unit, selectedClipId: String? = null) {
+    val clip = track?.clips?.firstOrNull { it.id == selectedClipId } ?: track?.clips?.firstOrNull()
     val rawSteps = clip?.drumSteps ?: emptyList()
     val steps = rawSteps.take(16) + List((16 - rawSteps.size).coerceAtLeast(0)) { false }
     Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room).padding(7.dp)) {
@@ -1750,11 +1750,13 @@ private fun AudioEditorWorkspace(
     track: StudioTrack?,
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    selectedClipId: String? = null
 ) {
     val audioPalette = LocalStudioWavePalette.current
     val context = LocalContext.current
-    val clip = track?.clips?.firstOrNull { it.sourceUri != null }
+    val clip = track?.clips?.firstOrNull { it.id == selectedClipId }
+        ?: track?.clips?.firstOrNull { it.sourceUri != null }
     val baseLengthTicks = remember(clip?.id) { (clip?.lengthTicks ?: 1L).coerceAtLeast(1L) }
     val baseSourceOffsetTicks = remember(clip?.id) { (clip?.sourceOffsetTicks ?: 0L).coerceAtLeast(0L) }
     var startFraction by remember(clip?.id) { mutableFloatStateOf(0f) }
@@ -2688,11 +2690,12 @@ private fun PianoRollWorkspace(
     track: StudioTrack?,
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    selectedClipId: String? = null
 ) {
     val pianoPalette = LocalStudioWavePalette.current
     val pianoGridOpacity = LocalStudioWaveGridOpacity.current.coerceIn(0f, 1f)
-    val clip = track?.clips?.firstOrNull()
+    val clip = track?.clips?.firstOrNull { it.id == selectedClipId } ?: track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
     var snapDenominator by remember(track?.id, clip?.id) { mutableIntStateOf(16) }
     var keyboardVisible by remember(track?.id) { mutableStateOf(true) }
