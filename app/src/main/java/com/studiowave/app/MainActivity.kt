@@ -2542,7 +2542,9 @@ private fun TimelineGrid(
                                     sourceUri = clip.sourceUri,
                                     accent = clipInk,
                                     sourceOffsetTicks = clip.sourceOffsetTicks,
-                                    visibleLengthTicks = clip.lengthTicks
+                                    visibleLengthTicks = clip.lengthTicks,
+                                    bpm = project.bpm,
+                                    ppq = project.ppq
                                 )
                             }
                                 }
@@ -4121,43 +4123,82 @@ private fun AudioClipWaveform(
     sourceUri: String?,
     accent: Color,
     sourceOffsetTicks: Long = 0L,
-    visibleLengthTicks: Long = 1L
+    visibleLengthTicks: Long = 1L,
+    bpm: Int = 120,
+    ppq: Int = 960
 ) {
     val context = LocalContext.current
-    val safeOffset = sourceOffsetTicks.coerceAtLeast(0L)
-    val safeLength = visibleLengthTicks.coerceAtLeast(1L)
     var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
+    var sourceDurationSeconds by remember(sourceUri) { mutableStateOf<Double?>(null) }
     LaunchedEffect(sourceUri) {
         peaks = emptyList()
+        sourceDurationSeconds = null
         if (sourceUri.isNullOrBlank()) return@LaunchedEffect
         try {
-            peaks = withContext(Dispatchers.IO) {
+            val loaded = withContext(Dispatchers.IO) {
                 val decodeJob = currentCoroutineContext()[Job]
-                WaveformPeakCache.get(sourceUri, 240) ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 240) {
-                    decodeJob?.ensureActive()
-                }.also { WaveformPeakCache.put(sourceUri, 240, it) }
+                val duration = WaveformPeakCache.getDurationSeconds(sourceUri)
+                    ?: readAudioSourceDurationSeconds(context, Uri.parse(sourceUri))?.also {
+                        WaveformPeakCache.putDurationSeconds(sourceUri, it)
+                    }
+                val cachedPeaks = WaveformPeakCache.get(sourceUri, 240)
+                    ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 240) {
+                        decodeJob?.ensureActive()
+                    }.also { WaveformPeakCache.put(sourceUri, 240, it) }
+                duration to cachedPeaks
             }
+            sourceDurationSeconds = loaded.first
+            peaks = loaded.second
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
             peaks = emptyList()
+            sourceDurationSeconds = null
         }
     }
     Canvas(Modifier.fillMaxSize()) {
         val accentColor = accent
+        val mid = size.height / 2f
         if (peaks.isEmpty()) {
-            drawLine(accentColor.copy(alpha = 0.3f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 1f)
+            drawLine(accentColor.copy(alpha = 0.3f), Offset(0f, mid), Offset(size.width, mid), 1f)
         } else {
-            val mid = size.height / 2f
-            // Tick offsets are not source-time offsets until BPM/warp metadata is available.
-            // Until that mapping exists, draw the entire decoded source faithfully; do not
-            // pretend a guessed tick ratio identifies exact source frames.
-            val peakCount = peaks.size
-            val dx = size.width / peakCount.coerceAtLeast(1)
-            peaks.forEachIndexed { index, peak ->
-                val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.46f
-                val x = (index + 0.5f) * dx
-                drawLine(accentColor.copy(alpha = 0.95f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
+            val durationSeconds = sourceDurationSeconds
+            val range = durationSeconds?.let {
+                audioWaveformClipRange(
+                    sourceOffsetTicks = sourceOffsetTicks,
+                    clipLengthTicks = visibleLengthTicks,
+                    bpm = bpm,
+                    ppq = ppq,
+                    sourceDurationSeconds = it,
+                    peakCount = peaks.size
+                )
+            }
+            if (range == null) {
+                // Metadata could not be read, or the clip starts beyond the source. Don't invent
+                // a tick-to-frame conversion: show the whole source only for unknown duration.
+                if (durationSeconds == null) {
+                    val dx = size.width / peaks.size.coerceAtLeast(1)
+                    peaks.forEachIndexed { index, peak ->
+                        val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.46f
+                        val x = (index + 0.5f) * dx
+                        drawLine(accentColor.copy(alpha = 0.88f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
+                    }
+                } else {
+                    drawLine(accentColor.copy(alpha = 0.25f), Offset(0f, mid), Offset(size.width, mid), 1f)
+                }
+            } else {
+                val dx = size.width * (range.sourceDurationSeconds / peaks.size.toDouble()) /
+                    range.clipDurationSeconds
+                for (index in range.firstPeakIndex until range.endPeakIndexExclusive) {
+                    val peak = peaks[index].coerceIn(0f, 1f)
+                    val sampleTime = (index + 0.5) * range.sourceDurationSeconds / peaks.size
+                    val x = ((sampleTime - range.sourceOffsetSeconds) / range.clipDurationSeconds * size.width).toFloat()
+                    if (x >= 0f && x <= size.width) {
+                        val amplitude = peak * size.height * 0.46f
+                        drawLine(accentColor.copy(alpha = 0.95f), Offset(x, mid - amplitude), Offset(x, mid + amplitude),
+                            dx.toFloat().coerceIn(1f, 3f))
+                    }
+                }
             }
         }
     }
