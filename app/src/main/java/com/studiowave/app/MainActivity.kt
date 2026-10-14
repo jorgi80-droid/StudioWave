@@ -878,7 +878,7 @@ private fun TransportBar(
                     peakHistory.forEachIndexed { index, level ->
                         val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
                         val x = index * size.width / peakHistory.size.coerceAtLeast(1)
-                        drawLine(Mint.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
+                        drawLine(transportMeterPalette.accent.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
                             (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
                     }
                 }
@@ -2191,7 +2191,7 @@ private fun TimelineGrid(
                         rulerPaint
                     )
                 } else if (bar % 4 != 0) {
-                     drawCircle(color = MutedText, radius = with(density) { 1.dp.toPx() },
+                     drawCircle(color = timelinePalette.muted, radius = with(density) { 1.dp.toPx() },
                          center = Offset(x, size.height * 0.55f))
                  }
             }
@@ -2939,7 +2939,7 @@ private fun MixerWorkspace(
                     val fraction = track.volume.coerceIn(0f, 1.5f) / 1.5f
                     val thumbY = railBottom - fraction * (railBottom - railTop)
                     drawRoundRect(
-                        Mint.copy(alpha = 0.7f),
+                        mixerPalette.accent.copy(alpha = 0.7f),
                         Offset(railLeft, thumbY),
                         Size(railWidth, (railBottom - thumbY).coerceAtLeast(0f)),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
@@ -2989,7 +2989,7 @@ private fun MixerWorkspace(
                 drawRoundRect(Color(0xFF131518), Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
                 val h = size.height * master.coerceIn(0f, 1f)
-                drawRoundRect(Mint, Offset(size.width * 0.34f, size.height - h), Size(size.width * 0.32f, h),
+                drawRoundRect(mixerPalette.accent, Offset(size.width * 0.34f, size.height - h), Size(size.width * 0.32f, h),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
             }
             Text("GAIN " + (master * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
