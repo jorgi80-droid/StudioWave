@@ -97,18 +97,23 @@ data class TimelineViewport(
         }
     }
 
+    /** Convert a musical tick to the arrangement-wide x coordinate (including track header). */
     fun timeToScreenX(tick: Long): Float {
         val x = trackHeaderWidthPx.toDouble() + (tick.toDouble() - scrollTimeTicks) * pixelsPerTick
         return x.coerceIn(-Float.MAX_VALUE.toDouble(), Float.MAX_VALUE.toDouble()).toFloat()
     }
 
+    /** Inverse of [timeToScreenX]; callers drawing in the timeline pane should use [viewportXToTime]. */
     fun screenXToTime(screenX: Float): Long =
         (scrollTimeTicks + (screenX.toDouble() - trackHeaderWidthPx) / pixelsPerTick)
             .coerceIn(0.0, Long.MAX_VALUE.toDouble()).roundToLong()
 
+    /** Converts a musical tick into the local x coordinate of the timeline pane. */
     fun timeToViewportX(tick: Long): Float = timeToScreenX(tick) - trackHeaderWidthPx
 
+    /** Converts a timeline-pane local x coordinate into a musical tick. */
     fun viewportXToTime(viewportX: Float): Long = screenXToTime(viewportX + trackHeaderWidthPx)
+
 
     fun firstVisibleBar(marginBars: Int = 1): Long =
         floor(scrollTimeTicks / timebase.ticksPerBar.toDouble()).toLong().minus(marginBars)
