@@ -47,7 +47,8 @@ internal fun measureStereoMeterLevels(samples: FloatArray, sampleCount: Int = sa
     var peakRight = 0f
     var squareLeft = 0.0
     var squareRight = 0.0
-    var frames = 0
+    var leftFrames = 0
+    var rightFrames = 0
     var i = 0
     while (i + 1 < count) {
         val left = samples[i].takeIf { it.isFinite() } ?: 0f
@@ -56,20 +57,22 @@ internal fun measureStereoMeterLevels(samples: FloatArray, sampleCount: Int = sa
         peakRight = maxOf(peakRight, kotlin.math.abs(right))
         squareLeft += left.toDouble() * left.toDouble()
         squareRight += right.toDouble() * right.toDouble()
-        frames++
+        leftFrames++
+        rightFrames++
         i += 2
     }
     if (i < count) {
         val left = samples[i].takeIf { it.isFinite() } ?: 0f
         peakLeft = maxOf(peakLeft, kotlin.math.abs(left))
         squareLeft += left.toDouble() * left.toDouble()
-        frames++
+        leftFrames++
     }
-    val denominator = frames.coerceAtLeast(1).toDouble()
+    val leftDenominator = leftFrames.coerceAtLeast(1).toDouble()
+    val rightDenominator = rightFrames.coerceAtLeast(1).toDouble()
     return StereoMeterLevels(
         peakLeft.coerceIn(0f, 1f), peakRight.coerceIn(0f, 1f),
-        kotlin.math.sqrt(squareLeft / denominator).toFloat().coerceIn(0f, 1f),
-        kotlin.math.sqrt(squareRight / denominator).toFloat().coerceIn(0f, 1f)
+        kotlin.math.sqrt(squareLeft / leftDenominator).toFloat().coerceIn(0f, 1f),
+        kotlin.math.sqrt(squareRight / rightDenominator).toFloat().coerceIn(0f, 1f)
     )
 }
 
