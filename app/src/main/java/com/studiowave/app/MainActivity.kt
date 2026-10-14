@@ -912,10 +912,11 @@ private fun WorkspaceRail(
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
         RailButton("EDIT", selected == "PIANO ROLL" || selected == "AUDIO EDITOR" || selected == "DRUM SEQUENCER", Icons.Default.Keyboard) {
-            when (selected) {
-                "PIANO ROLL", "AUDIO EDITOR", "DRUM SEQUENCER" -> onSelect("ARRANGEMENT")
-                else -> onSelect("PIANO ROLL")
-            }
+            onSelect(when (selected) {
+                "PIANO ROLL", "AUDIO EDITOR", "DRUM SEQUENCER" -> "ARRANGEMENT"
+                "ARRANGEMENT" -> "PIANO ROLL"
+                else -> selected
+            })
         }
         RailButton("MIX", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
         RailButton("DEV", devicesOpen, Icons.Default.GraphicEq, onToggleDevices)
