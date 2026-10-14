@@ -2491,7 +2491,7 @@ private fun PianoRollWorkspace(
     var zoomX by remember(track?.id, clip?.id) { mutableFloatStateOf(1.0f) }
     var zoomY by remember(track?.id) { mutableFloatStateOf(1.0f) }
     var startStep by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
-    var topPitch by remember(track?.id) { mutableIntStateOf(108) } // C8 at the top initially
+    var topPitch by remember(track?.id) { mutableIntStateOf(108) } // Start near C8; all 120 notes remain reachable
     var selectedNoteId by remember(track?.id, clip?.id) { mutableStateOf<String?>(null) }
     var clipboard by remember(track?.id, clip?.id) { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
     var editMessage by remember(track?.id, clip?.id) { mutableStateOf("Pinch to zoom · drag empty grid to scroll") }
@@ -2507,13 +2507,6 @@ private fun PianoRollWorkspace(
         .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
-    val visiblePitchRows = (720f / rowHeight).roundToInt().coerceIn(12, 120)
-    val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
-    val currentTopPitch = topPitch.coerceIn(maxTopPitch, 119)
-    val highestPitch = currentTopPitch
-    val lowestPitch = (highestPitch - visiblePitchRows + 1).coerceAtLeast(0)
-    val currentVisibleTop = currentTopPitch
-    val verticalScroll = rememberScrollState(((119 - currentVisibleTop) * rowHeight).roundToInt().coerceAtLeast(0))
 
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
         val activeTrack = track ?: return
@@ -2689,7 +2682,8 @@ private fun PianoRollWorkspace(
                                         val startTick = snapStep(step) * stepTicks
                                         val hitNote = notes.firstOrNull { note ->
                                             val noteStartStep = (note.startTick / stepTicks).toInt()
-                                            val noteEndStep = noteStartStep + (note.durationTicks / stepTicks).toInt().coerceAtLeast(1)
+                                            val noteEndStep = noteStartStep +
+                                                kotlin.math.ceil(note.durationTicks.toDouble() / stepTicks.toDouble()).toInt().coerceAtLeast(1)
                                             note.pitch == pitch && step >= noteStartStep && step < noteEndStep
                                         }
                                         val found = hitNote ?: notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
