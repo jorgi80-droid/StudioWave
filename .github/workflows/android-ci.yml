@@ -46,4 +46,4 @@ jobs:
           name: StudioWave-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
