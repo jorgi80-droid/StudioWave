@@ -1817,11 +1817,27 @@ private fun AudioEditorWorkspace(
                 Canvas(Modifier.fillMaxSize().padding(12.dp)) {
                     val mid = size.height / 2f
                     val dx = size.width / waveform.size.coerceAtLeast(1)
+                    val trimStartX = size.width * startFraction.coerceIn(0f, 1f)
+                    val trimEndX = size.width * endFraction.coerceIn(startFraction, 1f)
+                    // Shade excluded source regions so the saved trim range is visible on the waveform itself.
+                    if (trimStartX > 0f) {
+                        drawRect(audioPalette.border.copy(alpha = 0.34f), Offset.Zero,
+                            Size(trimStartX, size.height))
+                    }
+                    if (trimEndX < size.width) {
+                        drawRect(audioPalette.border.copy(alpha = 0.34f), Offset(trimEndX, 0f),
+                            Size((size.width - trimEndX).coerceAtLeast(0f), size.height))
+                    }
                     waveform.forEachIndexed { i, peak ->
                         val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.48f
                         val x = (i + 0.5f) * dx
-                        drawLine(audioPalette.accent.copy(alpha = 0.9f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
+                        val insideRange = x >= trimStartX && x <= trimEndX
+                        val waveColor = if (insideRange) audioPalette.accent.copy(alpha = 0.96f)
+                            else audioPalette.muted.copy(alpha = 0.62f)
+                        drawLine(waveColor, Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
                     }
+                    drawLine(audioPalette.orange, Offset(trimStartX, 0f), Offset(trimStartX, size.height), 1.8f)
+                    drawLine(audioPalette.orange, Offset(trimEndX, 0f), Offset(trimEndX, size.height), 1.8f)
                 }
             } else {
                 Text(
