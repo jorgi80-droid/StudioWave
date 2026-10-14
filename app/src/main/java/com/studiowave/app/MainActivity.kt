@@ -626,10 +626,22 @@ private fun StudioWaveApp() {
                             },
                             onProjectChange = { changeProject(it) }
                         )
-                        "PIANO ROLL" -> PianoRollWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        "PIANO ROLL" -> PianoRollWorkspace(
+                            project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "midi" }
+                                ?: project.tracks.firstOrNull { it.kind == "midi" },
+                            project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" }
+                        )
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
-                        "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
+                        "DRUM SEQUENCER" -> DrumSequencerWorkspace(
+                            project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "drum" }
+                                ?: project.tracks.firstOrNull { it.kind == "drum" },
+                            { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" }
+                        )
+                        "AUDIO EDITOR" -> AudioEditorWorkspace(
+                            project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "audio" }
+                                ?: project.tracks.firstOrNull { it.kind == "audio" },
+                            onBack = { selectedWorkspace = "ARRANGEMENT" }
+                        )
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
                             onPlaybackRestart = { updatedProject ->
                                 if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
@@ -678,42 +690,69 @@ private fun TransportBar(
     onUndo: () -> Unit, onRedo: () -> Unit,
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
-    Row(
-        Modifier.fillMaxWidth().height(44.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    Column(
+        Modifier.fillMaxWidth().background(Color(0xFF202226), RoundedCornerShape(7.dp))
+            .padding(horizontal = 7.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Text("StudioWave", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Mint, maxLines = 1)
-        Text("BPM", color = MutedText, fontSize = 8.sp)
-        SmallAction("−") { onBpm(bpm - 1) }
-        Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-        SmallAction("+") { onBpm(bpm + 1) }
-        Text(timeSignatureLabel, fontSize = 9.sp, color = MutedText, maxLines = 1)
-        Text(positionLabel, fontSize = 8.sp, color = Color(0xFFDADEE5), maxLines = 1)
-        SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
-        SmallIconButton(Icons.Default.Stop, MutedText, onStop)
-        SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
-        SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
-        SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
-        SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
-        Spacer(Modifier.weight(1f))
-        Text("MST", color = MutedText, fontSize = 7.sp)
-        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(92.dp).height(32.dp), valueRange = 0f..1f)
-        Column(Modifier.width(166.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text("M ${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Mint, maxLines = 1)
+            Text("BPM", color = MutedText, fontSize = 8.sp)
+            SmallAction("−") { onBpm(bpm - 1) }
+            Surface(color = Color(0xFF111315), shape = RoundedCornerShape(4.dp)) {
+                Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
             }
-            Canvas(Modifier.fillMaxWidth().height(11.dp)) {
-                drawLine(Color(0xFF343A40), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
-                peakHistory.forEachIndexed { index, level ->
-                    val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
-                    val x = index * size.width / peakHistory.size.coerceAtLeast(1)
-                    drawLine(Mint.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
-                        (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
+            SmallAction("+") { onBpm(bpm + 1) }
+            Surface(color = Color(0xFF111315), shape = RoundedCornerShape(4.dp)) {
+                Text(timeSignatureLabel, fontSize = 9.sp, color = MutedText,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
+            SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
+            SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
+            SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
+        }
+        Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            SmallIconButton(Icons.Default.Stop, MutedText, onStop)
+            Surface(
+                color = if (playing) Color(0xFF21483B) else Color(0xFF18443F),
+                shape = RoundedCornerShape(7.dp),
+                modifier = Modifier.size(width = 42.dp, height = 32.dp).clickable(onClick = onPlay)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playing) "Pause playback" else "Start playback",
+                        tint = if (playing) Green else Mint, modifier = Modifier.size(22.dp))
                 }
             }
-            Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 8.sp, maxLines = 1)
+            Surface(color = Color(0xFF111315), shape = RoundedCornerShape(5.dp)) {
+                Text(positionLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                    color = Color(0xFFE4E8EF), modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), maxLines = 1)
+            }
+            Spacer(Modifier.weight(1f))
+            Text("MASTER", color = MutedText, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Slider(value = master, onValueChange = onMaster,
+                modifier = Modifier.width(82.dp).height(30.dp), valueRange = 0f..1f)
+            Column(Modifier.width(112.dp), verticalArrangement = Arrangement.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+                Canvas(Modifier.fillMaxWidth().height(9.dp)) {
+                    drawLine(Color(0xFF343A40), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
+                    peakHistory.forEachIndexed { index, level ->
+                        val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
+                        val x = index * size.width / peakHistory.size.coerceAtLeast(1)
+                        drawLine(Mint.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
+                            (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
+                    }
+                }
+                Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 7.sp, maxLines = 1)
+            }
         }
     }
 }
@@ -721,11 +760,16 @@ private fun TransportBar(
 @Composable
 private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
     Column(
-        Modifier.width(48.dp).fillMaxHeight().background(Raised, RoundedCornerShape(7.dp)).padding(2.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+        Modifier.width(44.dp).fillMaxHeight().background(Color(0xFF202226), RoundedCornerShape(7.dp)).padding(3.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
-        RailButton("KEYS", selected == "PIANO ROLL", Icons.Default.Keyboard) { onSelect("PIANO ROLL") }
+        RailButton("CLIP", selected == "PIANO ROLL" || selected == "AUDIO EDITOR" || selected == "DRUM SEQUENCER", Icons.Default.Keyboard) {
+            when (selected) {
+                "PIANO ROLL", "AUDIO EDITOR", "DRUM SEQUENCER" -> onSelect("ARRANGEMENT")
+                else -> onSelect("PIANO ROLL")
+            }
+        }
         RailButton("MIX", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
         RailButton("FILES", selected == "BROWSER", Icons.Default.LibraryMusic) { onSelect("BROWSER") }
     }
@@ -733,17 +777,38 @@ private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
 
 @Composable
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(40.dp), shape = RoundedCornerShape(10.dp),
-        contentPadding = PaddingValues(1.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = if (selected) Color(0xFF18443F) else Color(0xFF202226),
-            contentColor = if (selected) Mint else MutedText)) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Surface(
+        color = if (selected) Color(0xFF29453D) else Color(0xFF17191C),
+        contentColor = if (selected) Mint else MutedText,
+        shape = RoundedCornerShape(6.dp),
+        modifier = Modifier.fillMaxWidth().height(43.dp).clickable(onClick = onClick)
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, contentDescription = label, modifier = Modifier.size(17.dp))
             Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
 }
 
+@Composable
+private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF25282D), RoundedCornerShape(5.dp))
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, fontSize = 10.sp, color = Mint, fontWeight = FontWeight.Black, maxLines = 1)
+        Spacer(Modifier.width(8.dp))
+        Text(subtitle, fontSize = 9.sp, color = MutedText, maxLines = 1)
+        Spacer(Modifier.weight(1f))
+        Surface(color = Color(0xFF363B43), shape = RoundedCornerShape(5.dp),
+            modifier = Modifier.size(width = 34.dp, height = 24.dp).clickable(onClick = onBack)) {
+            Box(contentAlignment = Alignment.Center) { Text("BACK", fontSize = 7.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+@Composable
 @Composable
 private fun ArrangementWorkspace(
     project: StudioProject,
@@ -2078,17 +2143,20 @@ private fun PianoRollWorkspace(
 ) {
     val clip = track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
-    Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp)) {
-        Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("PIANO ROLL", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-            Spacer(Modifier.width(8.dp))
-            Text(track?.name ?: "Select a MIDI track", color = MutedText, fontSize = 9.sp, maxLines = 1)
-            Spacer(Modifier.weight(1f))
-            Text("TAP GRID: ADD / REMOVE NOTE", color = MutedText, fontSize = 9.sp)
-            Spacer(Modifier.width(8.dp))
-            Surface(color = Raised, shape = RoundedCornerShape(6.dp), modifier = Modifier.size(27.dp).clickable { onBack() }) {
-                Box(contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 20.sp) }
+    Column(Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(5.dp)) {
+        WorkspaceTitleBar("CLIP VIEW / NOTES", track?.name ?: "Choose a MIDI track", onBack)
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Surface(color = Color(0xFF29453D), shape = RoundedCornerShape(4.dp)) {
+                Text("NOTES", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
             }
+            Surface(color = Color(0xFF25282D), shape = RoundedCornerShape(4.dp)) {
+                Text("GRID 1/16", color = MutedText, fontSize = 8.sp,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            Text("TAP: ADD / REMOVE", color = MutedText, fontSize = 8.sp,
+                modifier = Modifier.align(Alignment.CenterVertically))
         }
         Canvas(Modifier.fillMaxSize().padding(top = 4.dp).pointerInput(track?.id, clip?.id, notes) {
             detectTapGestures { point ->
@@ -2109,10 +2177,17 @@ private fun PianoRollWorkspace(
         }) {
             val rowH = size.height / 24f
             val colW = size.width / 32f
-            for (r in 0..24) drawLine(if (r % 12 == 0) Color(0xFF5D626B) else Color(0xFF343840),
-                Offset(0f, r * rowH), Offset(size.width, r * rowH), if (r % 12 == 0) 1.5f else 0.6f)
-            for (col in 0..32) drawLine(if (col % 4 == 0) Color(0xFF5D626B) else Color(0xFF343840),
-                Offset(col * colW, 0f), Offset(col * colW, size.height), if (col % 4 == 0) 1.2f else 0.6f)
+            for (r in 0..24) {
+                if (r < 24 && r % 3 == 1) drawRect(Color(0xFF202328), Offset(0f, r * rowH), Size(size.width, rowH))
+                val strong = r % 12 == 0
+                drawLine(if (strong) Color(0xFF69717D) else Color(0xFF343840),
+                    Offset(0f, r * rowH), Offset(size.width, r * rowH), if (strong) 1.2f else 0.55f)
+            }
+            for (col in 0..32) {
+                val strong = col % 4 == 0
+                drawLine(if (strong) Color(0xFF69717D) else Color(0xFF343840),
+                    Offset(col * colW, 0f), Offset(col * colW, size.height), if (strong) 1.2f else 0.55f)
+            }
             notes.forEach { note ->
                 val x = note.startTick.toFloat() / 240f * colW
                 val y = (84 - note.pitch).toFloat() / 3f * rowH
@@ -2132,12 +2207,13 @@ private fun MixerWorkspace(
     onProjectChange: (StudioProject) -> Unit
 ) {
     Row(
-        Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp))
+            .horizontalScroll(rememberScrollState()).padding(5.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         project.tracks.forEach { track ->
             Column(
-                Modifier.weight(1f).fillMaxHeight()
+                Modifier.width(112.dp).fillMaxHeight()
                     .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -2205,7 +2281,7 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.weight(1f).fillMaxHeight()
+            Modifier.width(122.dp).fillMaxHeight()
                 .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -2236,18 +2312,13 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
             Text("IMPORT AUDIO", fontSize = 10.sp, color = Color.White)
         }
         Spacer(Modifier.height(8.dp))
-        Text(
-            "Library lokal, preset, rekaman, dan proyek akan tersedia setelah browser file dan penyimpanan masing-masing selesai diimplementasikan.",
-            color = MutedText,
-            fontSize = 10.sp,
-            modifier = Modifier.padding(top = 8.dp)
-        )
-        Text(
-            "Saat ini: impor audio dari penyimpanan Android ke Arrangement.",
-            color = Color(0xFFD5D9E0),
-            fontSize = 10.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
+        Surface(color = Color(0xFF25282D), shape = RoundedCornerShape(7.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Column(Modifier.padding(10.dp)) {
+                Text("LOCAL AUDIO", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Mint)
+                Text("Choose an audio file from Android storage. It will be placed on the audio track in Arrangement.",
+                    color = Color(0xFFD5D9E0), fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
+            }
+        }
     }
 }
 
@@ -2359,12 +2430,10 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
     Surface(
         color = Color(0xFF353A42),
         contentColor = Color(0xFFE4E8EF),
-        shape = RoundedCornerShape(50),
-        modifier = Modifier.sizeIn(minWidth = 34.dp, minHeight = 34.dp)
-            .defaultMinSize(minWidth = 34.dp, minHeight = 34.dp)
-            .clickable(onClick = onClick)
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.height(36.dp).defaultMinSize(minWidth = 42.dp).clickable(onClick = onClick)
     ) {
-        Box(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
             Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
