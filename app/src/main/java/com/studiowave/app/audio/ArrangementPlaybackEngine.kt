@@ -477,6 +477,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
+        val perTrackMix = HashMap<String, FloatArray>()
         val sampleRate = plan.sampleRate
         val scheduledAudio = plan.audio
         val scheduledNotes = plan.notes
@@ -522,6 +523,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
                 val sampleCount = frames * 2
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
+                perTrackMix.values.forEach { java.util.Arrays.fill(it, 0, sampleCount, 0f) }
                 val blockEnd = position + frames
                 val mixState = liveMix
 
@@ -562,11 +564,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val sourceFrame = Math.floorMod(rawSourceFrame, event.asset.frames.toLong()).toInt()
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
-                        val leftSample = event.asset.pcmStereo[sourceIndex] / 32768f * trackGain * leftPan
-                        val rightSample = event.asset.pcmStereo[sourceIndex + 1] / 32768f * trackGain * rightPan
+                        val sourceLeft = event.asset.pcmStereo[sourceIndex] / 32768f * channelMix.volume * leftPan
+                        val sourceRight = event.asset.pcmStereo[sourceIndex + 1] / 32768f * channelMix.volume * rightPan
+                        val leftSample = sourceLeft * liveMasterGain
+                        val rightSample = sourceRight * liveMasterGain
                         mix[outIndex] += leftSample
                         mix[outIndex + 1] += rightSample
-                        meterTrack(event.track.id, leftSample, rightSample)
+                        val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                        channelBuffer[outIndex] += sourceLeft
+                        channelBuffer[outIndex + 1] += sourceRight
                     }
                 }
 
@@ -588,11 +594,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val envelope = min(attack, release)
                         val wave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * gain * envelope
                         val outIndex = ((absolute - position) * 2).toInt()
-                        val leftSample = wave * leftPan
-                        val rightSample = wave * rightPan
-                        mix[outIndex] += leftSample
-                        mix[outIndex + 1] += rightSample
-                        meterTrack(note.track.id, leftSample, rightSample)
+                        val sourceLeft = wave * leftPan / liveMasterGain.coerceAtLeast(0.000001f)
+                        val sourceRight = wave * rightPan / liveMasterGain.coerceAtLeast(0.000001f)
+                        mix[outIndex] += wave * leftPan
+                        mix[outIndex + 1] += wave * rightPan
+                        val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                        channelBuffer[outIndex] += sourceLeft
+                        channelBuffer[outIndex + 1] += sourceRight
                     }
                 }
 
@@ -611,26 +619,18 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
                         val wave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * gain
                         val outIndex = ((absolute - position) * 2).toInt()
-                        val leftSample = wave * leftPan
-                        val rightSample = wave * rightPan
-                        mix[outIndex] += leftSample
-                        mix[outIndex + 1] += rightSample
-                        meterTrack(drum.track.id, leftSample, rightSample)
+                        val sourceLeft = channelMix.volume * 0.38f * sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * leftPan
+                        val sourceRight = channelMix.volume * 0.38f * sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * rightPan
+                        mix[outIndex] += wave * leftPan
+                        mix[outIndex + 1] += wave * rightPan
+                        val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                        channelBuffer[outIndex] += sourceLeft
+                        channelBuffer[outIndex + 1] += sourceRight
                     }
                 }
 
-                // Track meters read the post-fader, post-pan contributions before master summing.
-                // Each track contributes at most one peak/RMS publish per audio block.
-                val trackPeaks = HashMap<String, Float>()
-                val trackSquares = HashMap<String, Double>()
-                val trackSampleCounts = HashMap<String, Int>()
-                fun meterTrack(trackId: String, left: Float, right: Float) {
-                    val peak = max(abs(left), abs(right))
-                    if (peak > (trackPeaks[trackId] ?: 0f)) trackPeaks[trackId] = peak
-                    trackSquares[trackId] = (trackSquares[trackId] ?: 0.0) + left.toDouble() * left.toDouble() + right.toDouble() * right.toDouble()
-                    trackSampleCounts[trackId] = (trackSampleCounts[trackId] ?: 0) + 2
-                }
-                // NOTE: these accumulators are prepared per block, then published once per track.
+                // Per-channel meters are calculated from each track's summed pre-master stereo bus.
+                // Buffers are reused across blocks; only one meter snapshot is published per track/block.
                 var blockPeak = 0f
                 var blockSquares = 0.0
                 for (i in 0 until sampleCount) {
@@ -643,14 +643,19 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
                 val momentaryLufs = loudnessMeter.processBlock(mix, sampleCount)
                 publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat(), momentaryLufs)
-                trackPeaks.forEach { (id, peak) ->
-                    val squares = trackSquares[id] ?: 0.0
-                    val count = trackSampleCounts[id] ?: 1
-                    publishTrackMeter(id, peak, kotlin.math.sqrt(squares / count.coerceAtLeast(1)).toFloat())
+                perTrackMix.forEach { (id, channel) ->
+                    var peak = 0f
+                    var sumSquares = 0.0
+                    for (i in 0 until sampleCount) {
+                        val absolute = abs(channel[i])
+                        if (absolute > peak) peak = absolute
+                        sumSquares += channel[i].toDouble() * channel[i].toDouble()
+                    }
+                    publishTrackMeter(id, peak, kotlin.math.sqrt(sumSquares / sampleCount.coerceAtLeast(1)).toFloat())
                 }
-                // Tracks with no audible contribution return to silence instead of holding stale levels.
+                // A silent/muted channel should not leave an old level stuck on screen.
                 mixState.tracks.keys.forEach { id ->
-                    if (id !in trackPeaks) publishTrackMeter(id, 0f, 0f)
+                    if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f)
                 }
                 var offset = 0
                 while (offset < sampleCount && running.get()) {
