@@ -159,4 +159,38 @@ class ProjectModelTest {
         }
     }
 
+    @Test fun splittingAudioClipPreservesArrangementContinuityAndSourceOffset() {
+        val source = com.studiowave.app.data.WaveClip(
+            id = "source", name = "song", startTick = 0L, lengthTicks = 3L * 60L * 120L * 960L / 60L,
+            sourceUri = "content://audio/song", sourceOffsetTicks = 0L
+        )
+        val splitTick = 60L * 120L * 960L / 60L
+        val (left, right) = splitWaveClip(source, splitTick)!!
+        assertEquals(splitTick, left.lengthTicks)
+        assertEquals(splitTick, right.startTick)
+        assertEquals(source.lengthTicks - splitTick, right.lengthTicks)
+        assertEquals(splitTick, right.sourceOffsetTicks)
+        assertEquals(source.sourceUri, left.sourceUri)
+        assertEquals(source.sourceUri, right.sourceUri)
+        assertTrue(left.id != right.id)
+        assertEquals(null, splitWaveClip(source, source.startTick))
+        assertEquals(null, splitWaveClip(source, source.startTick + source.lengthTicks))
+    }
+
+    @Test fun splittingMidiClipClipsNotesAtBoundaryWithoutDuplicatingNoteIds() {
+        val source = com.studiowave.app.data.WaveClip(
+            id = "midi", name = "notes", startTick = 1000L, lengthTicks = 4000L,
+            midiNotes = listOf(
+                com.studiowave.app.data.MidiNote(id = "before", pitch = 60, startTick = 0L, durationTicks = 1000L),
+                com.studiowave.app.data.MidiNote(id = "cross", pitch = 62, startTick = 1500L, durationTicks = 2000L),
+                com.studiowave.app.data.MidiNote(id = "after", pitch = 64, startTick = 3200L, durationTicks = 400L)
+            )
+        )
+        val (left, right) = splitWaveClip(source, 3000L)!!
+        assertTrue(left.midiNotes.all { it.startTick + it.durationTicks <= 2000L })
+        assertTrue(right.midiNotes.all { it.startTick + it.durationTicks <= right.lengthTicks })
+        assertEquals(listOf("cross", "after"), right.midiNotes.map { it.id }.sorted())
+        assertTrue(left.midiNotes.map { it.id }.intersect(right.midiNotes.map { it.id }.toSet()).isEmpty())
+    }
+
 }
