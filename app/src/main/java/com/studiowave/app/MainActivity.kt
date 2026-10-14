@@ -63,6 +63,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -171,16 +172,17 @@ internal fun transformMidiNoteFromGesture(
 ): com.studiowave.app.data.MidiNote {
     val safeStep = stepTicks.coerceAtLeast(1L)
     val safeClipLength = clipLengthTicks.coerceAtLeast(safeStep)
-    val start = note.startTick.coerceIn(0L, (safeClipLength - 1L).coerceAtLeast(0L))
     val originalDuration = note.durationTicks.coerceIn(safeStep, safeClipLength)
     val safeDeltaSteps = deltaSteps.coerceIn(-100_000, 100_000)
     if (resize) {
+        val start = note.startTick.coerceIn(0L, (safeClipLength - 1L).coerceAtLeast(0L))
         val maxDuration = (safeClipLength - start).coerceAtLeast(safeStep)
         val requested = originalDuration.toDouble() + safeDeltaSteps.toDouble() * safeStep.toDouble()
         val duration = requested.coerceIn(safeStep.toDouble(), maxDuration.toDouble()).toLong()
         return note.copy(startTick = start, durationTicks = duration.coerceIn(safeStep, maxDuration))
     }
     val maxStart = (safeClipLength - originalDuration).coerceAtLeast(0L)
+    val start = note.startTick.coerceIn(0L, maxStart)
     val rawStart = (start.toDouble() + safeDeltaSteps.toDouble() * safeStep.toDouble())
         .coerceIn(0.0, maxStart.toDouble()).toLong()
     val quotient = (rawStart.toDouble() / safeStep.toDouble()).roundToLong()
