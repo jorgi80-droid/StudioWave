@@ -190,6 +190,9 @@ class ProjectModelTest {
         assertTrue(left.midiNotes.all { it.startTick + it.durationTicks <= 2000L })
         assertTrue(right.midiNotes.all { it.startTick + it.durationTicks <= right.lengthTicks })
         assertEquals(listOf("cross", "after"), right.midiNotes.map { it.id }.sorted())
+        assertEquals(500L, right.midiNotes.first { it.id == "cross" }.startTick)
+        assertEquals(1500L, left.midiNotes.first { it.id == "cross" }.durationTicks)
+        assertEquals(500L, right.midiNotes.first { it.id == "cross" }.durationTicks)
         assertTrue(left.midiNotes.map { it.id }.intersect(right.midiNotes.map { it.id }.toSet()).isEmpty())
     }
 
