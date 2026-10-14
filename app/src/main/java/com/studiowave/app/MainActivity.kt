@@ -1526,18 +1526,18 @@ private fun ArrangementWorkspace(
                     if (isPatternClip) {
                         SmallAction("LEN −") {
                             val latest = inspectorTrack.clips.firstOrNull { it.id == inspectorClip.id } ?: return@SmallAction
-                            val newLength = (latest.lengthTicks - oneBarTicks).coerceAtLeast(oneBarTicks)
-                            val maxLength = (maxArrangementTick(inspectorTimebase) - latest.startTick.coerceAtLeast(0L)).coerceAtLeast(oneBarTicks)
+                            val maxLength = (maxArrangementTick(inspectorTimebase) - latest.startTick.coerceAtLeast(0L)).coerceAtLeast(1L)
+                            val newLength = (latest.lengthTicks - oneBarTicks).coerceAtLeast(oneBarTicks).coerceAtMost(maxLength)
                             onProjectChange(project.copy(tracks = project.tracks.map { track ->
                                 if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
-                                    if (clip.id == inspectorClip.id) clip.copy(lengthTicks = newLength.coerceAtMost(maxLength)) else clip
+                                    if (clip.id == inspectorClip.id) clip.copy(lengthTicks = newLength) else clip
                                 }) else track
                             }))
                         }
                         SmallAction("LEN +") {
                             val latest = inspectorTrack.clips.firstOrNull { it.id == inspectorClip.id } ?: return@SmallAction
-                            val maxLength = (maxArrangementTick(inspectorTimebase) - latest.startTick.coerceAtLeast(0L)).coerceAtLeast(oneBarTicks)
-                            val newLength = (latest.lengthTicks.coerceAtLeast(oneBarTicks) + oneBarTicks).coerceAtMost(maxLength)
+                            val maxLength = (maxArrangementTick(inspectorTimebase) - latest.startTick.coerceAtLeast(0L)).coerceAtLeast(1L)
+                            val newLength = (latest.lengthTicks.coerceAtLeast(1L) + oneBarTicks).coerceAtMost(maxLength)
                             onProjectChange(project.copy(tracks = project.tracks.map { track ->
                                 if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
                                     if (clip.id == inspectorClip.id) clip.copy(lengthTicks = newLength) else clip
