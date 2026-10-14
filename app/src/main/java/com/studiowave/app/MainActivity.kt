@@ -18,6 +18,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
@@ -1759,11 +1761,11 @@ private fun DrumSequencerWorkspace(
             Spacer(Modifier.weight(1f))
             Text("SCROLL FOR MORE", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
         }
-        Row(
-            Modifier.fillMaxWidth().height(46.dp).horizontalScroll(rememberScrollState()),
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().height(46.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            steps.forEachIndexed { step, isActive ->
+            itemsIndexed(steps) { step, isActive ->
                 val isBeat = step % 4 == 0
                 Surface(
                     color = if (isActive) palette.accent else if (isBeat) palette.control else palette.room,
