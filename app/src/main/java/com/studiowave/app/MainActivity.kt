@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.studiowave.app.audio.DirectWaveSampler
 import com.studiowave.app.audio.ArrangementPlaybackEngine
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioProjectFile
@@ -4156,56 +4157,166 @@ private fun DeviceDock(
                         }
                     }
                 } else {
-                    val slotInfo = when (selectedTrack.kind) {
-                        "audio" -> listOf(
-                            Triple("AUDIO SOURCE", "Available", "Imported clip source; trim is persisted"),
-                            Triple("WARP / TIME STRETCH", "Unavailable", "Requires a tempo-aware time-stretch processor"),
-                            Triple("AUDIO EFFECTS", "Unavailable", "No serializable DSP processor chain")
-                        )
-                        "drum" -> listOf(
-                            Triple("STEP SEQUENCER", "Available", "Edits the selected drum clip"),
-                            Triple("DRUM INSTRUMENT", "Unavailable", "Drum sample/instrument voices are not wired"),
-                            Triple("AUDIO EFFECTS", "Unavailable", "No serializable DSP processor chain")
-                        )
-                        else -> listOf(
-                            Triple("MIDI CLIP", "Available", "Note events and velocity are persisted"),
-                            Triple("INSTRUMENT", "Limited", "Current playback is basic oscillator synthesis"),
-                            Triple("MIDI / AUDIO FX", "Unavailable", "No serializable processor chain")
-                        )
-                    }
-                    Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        slotInfo.forEach { item ->
-                            val available = item.second == "Available"
-                            val limited = item.second == "Limited"
-                            Column(
-                                Modifier.width(164.dp).fillMaxHeight()
-                                    .background(devicePalette.room, RoundedCornerShape(5.dp))
-                                    .then(if (available) Modifier.border(1.dp, devicePalette.accent, RoundedCornerShape(5.dp)) else Modifier)
-                                    .padding(7.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Box(Modifier.size(6.dp).background(
-                                        when { available -> devicePalette.success; limited -> devicePalette.warning; else -> devicePalette.muted },
-                                        RoundedCornerShape(50.dp)
-                                    ))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(item.first, color = if (available) devicePalette.accent else devicePalette.text,
-                                            fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 2)
-                                        Text(item.second.uppercase(), color = if (limited) devicePalette.warning else devicePalette.muted,
-                                            fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                                Text(item.third, color = devicePalette.muted, fontSize = 8.sp)
-                            }
-                        }
-                    }
+                    DirectWaveDevicePanel(
+                        trackId = selectedTrack.id,
+                        trackName = selectedTrack.name,
+                        palette = devicePalette
+                    )
                 }
             }
         }
     }
 }
+@Composable
+private fun DirectWaveDevicePanel(
+    trackId: String,
+    trackName: String,
+    palette: StudioWavePalette
+) {
+    val context = LocalContext.current
+    val preferences = remember(context) {
+        context.getSharedPreferences("studiowave_directwave", android.content.Context.MODE_PRIVATE)
+    }
+    val sampler = remember(trackId) { DirectWaveSampler(context) }
+    var sampleLabel by remember(trackId) { mutableStateOf("NO SAMPLE LOADED") }
+    var sampleReady by remember(trackId) { mutableStateOf(false) }
+    var pitch by remember(trackId) { mutableFloatStateOf(0f) }
+    var attack by remember(trackId) { mutableFloatStateOf(5f) }
+    var decay by remember(trackId) { mutableFloatStateOf(120f) }
+    var sustain by remember(trackId) { mutableFloatStateOf(0.8f) }
+    var release by remember(trackId) { mutableFloatStateOf(180f) }
+    var loop by remember(trackId) { mutableStateOf(false) }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            sampleLabel = uri.lastPathSegment?.substringAfterLast('/')?.takeLast(24) ?: "Imported sample"
+            preferences.edit().putString("sample.$trackId", uri.toString()).apply()
+            sampler.load(uri) { ready -> sampleReady = ready }
+        }
+    }
+    DisposableEffect(sampler) { onDispose { sampler.close() } }
+    LaunchedEffect(trackId, sampler) {
+        pitch = preferences.getInt("pitch.$trackId", 0).toFloat()
+        attack = preferences.getInt("attack.$trackId", 5).toFloat()
+        decay = preferences.getInt("decay.$trackId", 120).toFloat()
+        sustain = preferences.getInt("sustain.$trackId", 80) / 100f
+        release = preferences.getInt("release.$trackId", 180).toFloat()
+        loop = preferences.getBoolean("loop.$trackId", false)
+        sampler.pitchSemitones = pitch.toInt()
+        sampler.attackMs = attack.toInt()
+        sampler.decayMs = decay.toInt()
+        sampler.sustain = sustain
+        sampler.releaseMs = release.toInt()
+        sampler.looping = loop
+        preferences.getString("sample.$trackId", null)?.let { saved ->
+            val uri = Uri.parse(saved)
+            sampleLabel = uri.lastPathSegment?.substringAfterLast('/')?.takeLast(24) ?: "Saved sample"
+            sampler.load(uri) { ready -> sampleReady = ready }
+        }
+    }
+    Column(
+        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+            .background(palette.room, RoundedCornerShape(5.dp)).padding(7.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1f)) {
+                Text("DIRECTWAVE  /  SAMPLE INSTRUMENT", color = palette.orange,
+                    fontSize = 9.sp, fontWeight = FontWeight.Black)
+                Text("$trackName · ${if (sampleReady) "READY" else sampleLabel}",
+                    color = if (sampleReady) palette.success else palette.muted, fontSize = 8.sp, maxLines = 1)
+            }
+            SmallAction("LOAD WAV/MP3") { launcher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/mpeg", "audio/*")) }
+            SmallAction(if (loop) "LOOP ON" else "LOOP OFF") {
+                loop = !loop
+                sampler.looping = loop
+                preferences.edit().putBoolean("loop.$trackId", loop).apply()
+            }
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("PITCH ${pitch.toInt()} st", color = palette.text, fontSize = 8.sp, modifier = Modifier.width(70.dp))
+            Slider(value = pitch, onValueChange = {
+                pitch = it; sampler.pitchSemitones = it.toInt()
+            }, onValueChangeFinished = {
+                preferences.edit().putInt("pitch.$trackId", pitch.toInt()).apply()
+            }, valueRange = -24f..24f, modifier = Modifier.weight(1f))
+            Text("±24", color = palette.muted, fontSize = 8.sp)
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            DirectWaveEnvelopeControl("A", attack, 0f..2000f, palette, Modifier.weight(1f)) {
+                attack = it; sampler.attackMs = it.toInt()
+                preferences.edit().putInt("attack.$trackId", it.toInt()).apply()
+            }
+            DirectWaveEnvelopeControl("D", decay, 0f..2000f, palette, Modifier.weight(1f)) {
+                decay = it; sampler.decayMs = it.toInt()
+                preferences.edit().putInt("decay.$trackId", it.toInt()).apply()
+            }
+            DirectWaveEnvelopeControl("S", sustain, 0f..1f, palette, Modifier.weight(1f)) {
+                sustain = it; sampler.sustain = it
+                preferences.edit().putInt("sustain.$trackId", (it * 100).toInt()).apply()
+            }
+            DirectWaveEnvelopeControl("R", release, 0f..2000f, palette, Modifier.weight(1f)) {
+                release = it; sampler.releaseMs = it.toInt()
+                preferences.edit().putInt("release.$trackId", it.toInt()).apply()
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67).forEach { note ->
+                val label = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")[note % 12]
+                Surface(
+                    color = if (note % 12 in setOf(1, 3, 6, 8, 10)) palette.control else palette.panel,
+                    contentColor = palette.text,
+                    shape = RoundedCornerShape(3.dp),
+                    border = BorderStroke(1.dp, palette.border),
+                    modifier = Modifier.weight(1f).height(34.dp).pointerInput(note, sampleReady) {
+                        detectTapGestures(onPress = {
+                            if (sampleReady) sampler.noteOn(note)
+                            tryAwaitRelease()
+                            sampler.noteOff(note)
+                        })
+                    }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+        Text(
+            if (sampleReady) "16-voice sample playback · pitch · loop · ADSR · touch keyboard"
+            else "Load a local WAV/MP3 sample to enable audition. FL Studio .dwp/.instr import and multisample zones are not implemented yet.",
+            color = palette.muted, fontSize = 8.sp
+        )
+    }
+}
+
+@Composable
+private fun DirectWaveEnvelopeControl(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    palette: StudioWavePalette,
+    modifier: Modifier = Modifier,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            when (label) {
+                "S" -> "$label ${(value * 100).toInt()}%"
+                else -> "$label ${value.toInt()}ms"
+            },
+            color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Bold
+        )
+        Slider(value = value, onValueChange = onValueChange, valueRange = range)
+    }
+}
+
 @Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
