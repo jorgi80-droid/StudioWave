@@ -3174,9 +3174,9 @@ private fun DeviceDock(
                 } else if (selectedTrack != null) {
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         val devices = when (selectedTrack.kind) {
-                            "audio" -> listOf("SAMPLE" to true, "WARP" to false, "AUDIO EFFECTS" to false)
-                            "drum" -> listOf("DRUM PATTERN" to true, "INSTRUMENT" to false, "AUDIO EFFECTS" to false)
-                            else -> listOf("MIDI NOTES" to true, "INSTRUMENT" to false, "MIDI EFFECTS" to false, "AUDIO EFFECTS" to false)
+                            "audio" -> listOf("AUDIO CLIP" to true, "WARP" to false, "AUDIO FX" to false)
+                            "drum" -> listOf("DRUM PATTERN" to true, "DRUM INSTRUMENT" to false, "AUDIO FX" to false)
+                            else -> listOf("MIDI NOTES" to true, "INSTRUMENT" to false, "MIDI FX" to false, "AUDIO FX" to false)
                         }
                         devices.forEach { (label, available) ->
                             Column(
