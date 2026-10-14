@@ -2608,31 +2608,31 @@ private fun PianoRollWorkspace(
 
     Column(Modifier.fillMaxSize().background(pianoPalette.room, RoundedCornerShape(5.dp)).padding(3.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(21.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp))
+            Modifier.fillMaxWidth().height(20.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp))
                 .padding(horizontal = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("MIDI", color = LocalStudioWavePalette.current.orange, fontSize = 10.sp, fontWeight = FontWeight.Black)
+            Text("MIDI", color = pianoPalette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
             Text("${track?.name ?: "NO TRACK"}  /  ${clip?.name ?: "NO CLIP"}",
-                color = pianoPalette.text, fontSize = 9.sp, maxLines = 1)
+                color = pianoPalette.text, fontSize = 8.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             SmallAction("BACK", onBack)
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp)
-                .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp, vertical = 1.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().padding(top = 1.dp, bottom = 1.dp)
+                .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 2.dp, vertical = 0.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically
         ) {
-            SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
-            SmallAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.35f, 8f) }
-            SmallAction("BAR ◀") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
+            TransportAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
+            TransportAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.35f, 8f) }
+            TransportAction("BAR ◀") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
             Text("${pageStartStep / stepsPerBar + 1}", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            SmallAction("▶ BAR") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
-            SmallAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.35f, 8f) }
-            SmallAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
-            SmallAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
-            SmallAction("1/${snapDenominator}") { snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 } }
-            SmallAction(if (editToolsExpanded) "LESS" else "NOTE TOOLS") { editToolsExpanded = !editToolsExpanded }
+            TransportAction("▶ BAR") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
+            TransportAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.35f, 8f) }
+            TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
+            TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
+            TransportAction("1/${snapDenominator}") { snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 } }
+            TransportAction(if (editToolsExpanded) "LESS" else "NOTE TOOLS") { editToolsExpanded = !editToolsExpanded }
         }
         if (editToolsExpanded) {
             Row(
@@ -3605,3 +3605,20 @@ private fun MixerStateButton(
         }
     }
 }
+
+@Composable
+private fun TransportAction(label: String, onClick: () -> Unit) {
+    val p = LocalStudioWavePalette.current
+    Surface(
+        color = p.control,
+        contentColor = p.text,
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, p.border.copy(alpha = 0.65f)),
+        modifier = Modifier.height(23.dp).clickable(onClick = onClick)
+    ) {
+        Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) {
+            Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
+    }
+}
+
