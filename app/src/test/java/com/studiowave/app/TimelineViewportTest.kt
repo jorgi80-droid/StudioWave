@@ -255,4 +255,21 @@ class TimelineViewportTest {
         assertTrue(viewport == viewport.placeTickAtViewportX(3840L, Float.POSITIVE_INFINITY))
     }
 
+
+    @Test fun longClipGeometryRemainsLongerThanViewportAtHighZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewportWidthPx = 720f
+        val clipStart = 0L
+        val clipLength = timebase.ticksPerBar * 12L
+        listOf(1f, 2f, 4f).forEach { zoom ->
+            val viewport = TimelineViewport(timebase, 180f * zoom, 0.0, viewportWidthPx)
+            val clipWidth = viewport.tickDeltaToPixels(clipLength)
+            val mappedEnd = viewport.timeToViewportX(clipStart + clipLength)
+            val mappedStart = viewport.timeToViewportX(clipStart)
+            assertTrue("zoom=$zoom clip should extend beyond the visible lane", clipWidth > viewportWidthPx)
+            assertEquals("zoom=$zoom exact clip extent", clipWidth, mappedEnd - mappedStart, 0.05f)
+        }
+    }
+
+
 }
