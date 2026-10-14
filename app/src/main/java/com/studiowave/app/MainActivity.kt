@@ -43,6 +43,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
@@ -66,6 +67,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -297,7 +299,7 @@ private fun StudioWaveApp() {
     var paletteTone by remember { mutableStateOf(preferences.getString("ui_tone", "Neutral") ?: "Neutral") }
     var highContrast by remember { mutableStateOf(preferences.getBoolean("ui_high_contrast", false)) }
     var gridOpacity by remember { mutableFloatStateOf(preferences.getFloat("ui_grid_opacity", 0.72f)) }
-    var uiScale by remember { mutableFloatStateOf(preferences.getFloat("ui_scale", 1f).coerceIn(0.8f, 1.2f)) }
+    var uiScale by remember { mutableFloatStateOf(preferences.getFloat("ui_scale", 1f).coerceIn(0.6f, 1.2f)) }
     var audioSampleRate by remember { mutableIntStateOf(preferences.getInt("audio_sample_rate", 48000)) }
     var audioBufferFrames by remember { mutableIntStateOf(preferences.getInt("audio_buffer_frames", 512)) }
     var audioOutputMode by remember { mutableStateOf(preferences.getString("audio_output_mode", "SYSTEM") ?: "SYSTEM") }
@@ -618,6 +620,8 @@ private fun StudioWaveApp() {
     }
 
     val swatch = studioWavePalette(themeName, paletteTone, highContrast)
+    val baseDensity = LocalDensity.current
+    val scaledDensity = Density(baseDensity.density * uiScale, baseDensity.fontScale)
     SideEffect {
         preferences.edit()
             .putString("ui_theme", themeName)
@@ -635,7 +639,11 @@ private fun StudioWaveApp() {
         surface = swatch.panel, onPrimary = swatch.room, onBackground = swatch.text,
         onSurface = swatch.text
     )) {
-        CompositionLocalProvider(LocalStudioWavePalette provides swatch) {
+        CompositionLocalProvider(
+            LocalStudioWavePalette provides swatch,
+            LocalStudioWaveGridOpacity provides gridOpacity,
+            LocalDensity provides scaledDensity
+        ) {
         Surface(Modifier.fillMaxSize(), color = swatch.room) {
             if (showSettings) {
                 StudioWaveSettingsScreen(
@@ -645,7 +653,7 @@ private fun StudioWaveApp() {
                     paletteTone = paletteTone, onPaletteToneChange = { paletteTone = it },
                     highContrast = highContrast, onHighContrastChange = { highContrast = it },
                     gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
-                    uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.8f, 1.2f) },
+                    uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.6f, 1.2f) },
                     audioOutputMode = audioOutputMode, onAudioOutputModeChange = { audioOutputMode = it },
                     audioSampleRate = audioSampleRate, onAudioSampleRateChange = { audioSampleRate = it },
                     audioBufferFrames = audioBufferFrames, onAudioBufferFramesChange = { audioBufferFrames = it },
@@ -1869,6 +1877,7 @@ private fun TimelineGrid(
     onMoveClip: (String, String, Long) -> Unit
 ) {
     val timelinePalette = LocalStudioWavePalette.current
+    val timelineGridOpacity = LocalStudioWaveGridOpacity.current.coerceIn(0f, 1f)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
     val rulerHeightPx = with(density) { 24.dp.toPx() }
@@ -2073,7 +2082,7 @@ private fun TimelineGrid(
              for (bar in firstVisibleBar..lastVisibleBar) {
                  val x = canvasViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
                  if (x >= -barWidth && x <= size.width + barWidth) {
-                     drawLine(if (bar % 4 == 0) timelinePalette.grid else timelinePalette.grid.copy(alpha = 0.65f),
+                     drawLine(timelinePalette.grid.copy(alpha = timelineGridOpacity * (if (bar % 4 == 0) 1f else 0.65f)),
                          Offset(x, rulerHeightPx), Offset(x, size.height),
                          if (bar % 4 == 0) 1.5f else 0.7f)
                      val beatTicks = timebase.ticksPerBeat
@@ -2084,7 +2093,7 @@ private fun TimelineGrid(
                      for (beat in 0 until timebase.safeNumerator) {
                          val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
                          val beatX = canvasViewport.timeToViewportX(beatTick)
-                         if (beat > 0) drawLine(timelinePalette.grid.copy(alpha = 0.55f), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
+                         if (beat > 0) drawLine(timelinePalette.grid.copy(alpha = timelineGridOpacity * 0.55f), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
                          if (subdivision > 0L) {
                              var tickOffset = subdivision
                              while (tickOffset < beatTicks) {
@@ -2094,7 +2103,7 @@ private fun TimelineGrid(
                                      beatTicks / 4L -> 0.38f
                                      else -> 0.24f
                                  }
-                                 drawLine(timelinePalette.grid.copy(alpha = alpha),
+                                 drawLine(timelinePalette.grid.copy(alpha = timelineGridOpacity * alpha),
                                      Offset(subX, rulerHeightPx), Offset(subX, size.height), 0.55f)
                                  tickOffset += subdivision
                              }
@@ -2107,7 +2116,7 @@ private fun TimelineGrid(
                     ((row.topDp - scrollTracks) * verticalZoom).dp.toPx()
                 }
                 if (rowTopPx >= rulerHeightPx && rowTopPx <= size.height) {
-                    drawLine(timelinePalette.grid.copy(alpha = 0.8f), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
+                    drawLine(timelinePalette.grid.copy(alpha = timelineGridOpacity * 0.8f), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
                 }
             }
         }
@@ -2197,7 +2206,7 @@ private fun TimelineGrid(
                          center = Offset(x, size.height * 0.55f))
                  }
             }
-            drawRect(timelinePalette.grid, size = Size(size.width, with(density) { 2.dp.toPx() }))
+            drawRect(timelinePalette.grid.copy(alpha = timelineGridOpacity), size = Size(size.width, with(density) { 2.dp.toPx() }))
             val playheadX = rulerViewport.timeToViewportX(playheadTick)
             if (playheadX >= 0f && playheadX <= size.width) {
                 val markerRadius = with(density) { 3.dp.toPx() }
@@ -2561,6 +2570,7 @@ private fun PianoRollWorkspace(
     onBack: () -> Unit
 ) {
     val pianoPalette = LocalStudioWavePalette.current
+    val pianoGridOpacity = LocalStudioWaveGridOpacity.current.coerceIn(0f, 1f)
     val clip = track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
     var snapDenominator by remember(track?.id, clip?.id) { mutableIntStateOf(16) }
@@ -2804,7 +2814,7 @@ private fun PianoRollWorkspace(
                             for (row in 0..rowsVisible) {
                                 val pitch = currentTopPitch - row
                                 val isC = pitch >= 0 && pitch % 12 == 0
-                                drawLine(if (isC) pianoPalette.border else pianoPalette.grid,
+                                drawLine(if (isC) pianoPalette.border.copy(alpha = pianoGridOpacity) else pianoPalette.grid.copy(alpha = pianoGridOpacity),
                                     Offset(0f, row * localRowHeight), Offset(size.width, row * localRowHeight),
                                     if (isC) 1.2f else 0.45f)
                             }
@@ -2812,7 +2822,7 @@ private fun PianoRollWorkspace(
                                 val stepAbsolute = pageStartStep + col
                                 val bar = stepAbsolute % stepsPerBar == 0
                                 val beat = stepAbsolute % stepsPerBeat == 0
-                                drawLine(when { bar -> pianoPalette.border; beat -> pianoPalette.grid; else -> pianoPalette.grid.copy(alpha = 0.65f) },
+                                drawLine(when { bar -> pianoPalette.border.copy(alpha = pianoGridOpacity); beat -> pianoPalette.grid.copy(alpha = pianoGridOpacity); else -> pianoPalette.grid.copy(alpha = pianoGridOpacity * 0.65f) },
                                     Offset(col * localColWidth, 0f), Offset(col * localColWidth, size.height),
                                     when { bar -> 1.4f; beat -> 0.9f; else -> 0.45f })
                             }
@@ -2988,16 +2998,45 @@ private fun MixerWorkspace(
         ) {
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Canvas(Modifier.fillMaxWidth().weight(1f)) {
-                drawRoundRect(mixerPalette.room, Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
+            val latestMasterChange by rememberUpdatedState(onMasterChange)
+            Canvas(
+                Modifier.fillMaxWidth().weight(1f)
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, _ ->
+                            change.consume()
+                            val height = size.height.coerceAtLeast(1).toFloat()
+                            latestMasterChange((1f - change.position.y / height).coerceIn(0f, 1f))
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { offset ->
+                            val height = size.height.coerceAtLeast(1).toFloat()
+                            latestMasterChange((1f - offset.y / height).coerceIn(0f, 1f))
+                        })
+                    }
+            ) {
+                val railWidth = size.width * 0.32f
+                val railLeft = (size.width - railWidth) / 2f
+                drawRoundRect(mixerPalette.room, Offset(railLeft, 0f), Size(railWidth, size.height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                val h = size.height * master.coerceIn(0f, 1f)
-                drawRoundRect(mixerPalette.accent, Offset(size.width * 0.34f, size.height - h), Size(size.width * 0.32f, h),
+                for (tick in 0..10) {
+                    val y = size.height * tick / 10f
+                    drawLine(mixerPalette.grid.copy(alpha = 0.55f), Offset(size.width * 0.08f, y),
+                        Offset(size.width * 0.24f, y), 1f)
+                }
+                val gain = master.coerceIn(0f, 1f)
+                val activeHeight = size.height * gain
+                drawRoundRect(mixerPalette.accent.copy(alpha = 0.82f),
+                    Offset(railLeft, size.height - activeHeight), Size(railWidth, activeHeight),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+                val thumbY = size.height - activeHeight
+                drawRoundRect(mixerPalette.text, Offset(size.width * 0.14f, thumbY - 3f),
+                    Size(size.width * 0.72f, 6f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
             }
-            Text("GAIN " + (master * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
-            Slider(value = master, onValueChange = onMasterChange, valueRange = 0f..1f,
-                modifier = Modifier.fillMaxWidth().height(24.dp))
+            val masterDbLabel = if (master <= 0.001f) "-∞ dB" else
+                String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(master))
+            Text("GAIN " + (master * 100).toInt() + "% · " + masterDbLabel,
+                color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
         }
         }
     }
@@ -3396,17 +3435,27 @@ private fun StudioWavePanKnob(
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val sensitivity = with(density) { 1f / 38.dp.toPx() }
+    val latestValue by rememberUpdatedState(value)
     Canvas(
         modifier
-            .pointerInput(value) {
+            .pointerInput(Unit) {
+                var dragStartValue = 0f
+                var accumulatedDrag = 0f
                 detectDragGestures(
+                    onDragStart = {
+                        dragStartValue = latestValue
+                        accumulatedDrag = 0f
+                    },
                     onDrag = { change, dragAmount ->
                         change.consume()
-                        onValueChange((value - dragAmount.y * sensitivity).coerceIn(-1f, 1f))
+                        accumulatedDrag -= dragAmount.y * sensitivity
+                        onValueChange((dragStartValue + accumulatedDrag).coerceIn(-1f, 1f))
                     }
                 )
             }
-            .clickable(onClickLabel = "Reset pan to center") { onValueChange(0f) }
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = { onValueChange(0f) })
+            }
     ) {
         val center = Offset(size.width / 2f, size.height / 2f)
         val radius = size.minDimension * 0.34f

@@ -31,6 +31,8 @@ internal val LocalStudioWavePalette = compositionLocalOf {
         Color(0xFF454950), Color(0xFF3D4148), Color(0xFF22C55E), Color(0xFFE4B45E), Color(0xFFEF4F64))
 }
 
+internal val LocalStudioWaveGridOpacity = compositionLocalOf { 0.72f }
+
 internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolean): StudioWavePalette {
     val base = when (theme) {
         "Live Light" -> StudioWavePalette(Color(0xFFE2E3E6), Color(0xFFF1F2F4), Color(0xFFD2D4D9), Color(0xFFC2C5CB),
@@ -118,8 +120,8 @@ internal fun StudioWaveSettingsScreen(
                     SettingsChoiceRow("Color scheme", "One palette drives panel, text, grid and active controls.", listOf("Live Dark" to "Live Dark", "Live Mid" to "Live Mid", "Live Light" to "Live Light"), themeName, onThemeChange, p)
                     SettingsChoiceRow("Palette tone", "Warm, cool or neutral accent tone.", listOf("Neutral" to "Neutral", "Warm" to "Warm", "Cool" to "Cool"), paletteTone, onPaletteToneChange, p)
                     SettingsToggleRow("High contrast", "Increase contrast for labels, borders and grid.", highContrast, onHighContrastChange, p)
-                    SettingsSliderRow("Grid opacity", "Opacity preference for timeline/editor grid lines.", gridOpacity, "${(gridOpacity * 100).toInt()}%", onGridOpacityChange, p)
-                    SettingsSliderRow("UI scale", "Shared scale preference for compact landscape controls.", uiScale, "${(uiScale * 100).toInt()}%", onUiScaleChange, p, 0.8f..1.2f)
+                    SettingsSliderRow("Grid opacity", "Applied to Arrangement and Piano Roll grid lines.", gridOpacity, "${(gridOpacity * 100).toInt()}%", onGridOpacityChange, p)
+                    SettingsSliderRow("UI scale", "Scales workspace dimensions and controls.", uiScale, "${(uiScale * 100).toInt()}%", onUiScaleChange, p, 0.6f..1.2f)
                     SettingsSection("CONTROL SURFACE", "Shared palette for knobs, faders and buttons.", p)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(6.dp)).padding(8.dp)) { Text("KNOB", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); StudioWaveKnobPreview(p) }
