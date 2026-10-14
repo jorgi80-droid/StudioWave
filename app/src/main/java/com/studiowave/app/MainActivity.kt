@@ -4454,9 +4454,8 @@ private fun DirectWaveSampleWaveform(
             peaks = withContext(Dispatchers.IO) {
                 val uri = Uri.parse(sampleUri)
                 if (uri.scheme == "android.resource") {
-                    // Built-ins below are generated as finite oscillators; preview still displays
-                    // a deterministic preview from the sample's URI/name until PCM preview cache exists.
-                    List(128) { index -> (0.15f + 0.7f * kotlin.math.abs(kotlin.math.sin(index * 0.31))).coerceIn(0f, 1f) }
+                    // Built-in presets are synthesized offline from their preset ID.
+                    studioPresetWaveform(uri.lastPathSegment.orEmpty(), 128)
                 } else {
                     decodeWaveformPeaks(context, uri, 128)
                 }
@@ -4483,6 +4482,19 @@ private fun DirectWaveSampleWaveform(
                 }
             }
         }
+    }
+}
+
+/** Deterministic per-preset waveform for the compact waveform preview. */
+private fun studioPresetWaveform(preset: String, count: Int): List<Float> {
+    val seed = preset.hashCode().toLong().absoluteValue.coerceAtLeast(1L)
+    return List(count.coerceIn(1, 1024)) { index ->
+        val t = index.toDouble() / count.coerceAtLeast(1)
+        val harmonic = kotlin.math.abs(
+            kotlin.math.sin((2.0 * Math.PI * (1.0 + seed % 7) * t) +
+                0.35 * kotlin.math.sin(2.0 * Math.PI * (3.0 + seed % 11) * t))
+        )
+        (0.08 + 0.82 * harmonic).toFloat().coerceIn(0f, 1f)
     }
 }
 
