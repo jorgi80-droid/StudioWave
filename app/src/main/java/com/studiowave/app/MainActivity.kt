@@ -3049,8 +3049,7 @@ private fun PianoRollWorkspace(
                                         }
                                     } while (event.changes.any { it.pressed })
                                 } else {
-                                    val currentStepsForGesture = (stepsPerBar.toFloat() * 2f / gestureZoomX.value)
-                                        .roundToInt().coerceIn(4, 96)
+                                    val currentStepsForGesture = pianoRollVisibleSteps(stepsPerBar, gestureZoomX.value)
                                     val gestureColWidth = (viewportWidthPx / currentStepsForGesture.toFloat()).coerceAtLeast(2f)
                                     val gestureRowHeight = with(pianoDensity) {
                                         (18f * gestureZoomY.value).coerceIn(10f, 44f).dp.toPx()
