@@ -2456,10 +2456,16 @@ private fun PianoRollWorkspace(
     val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
     val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks).toInt().coerceAtLeast(1)
     val rowHeight = (18f * zoomY).coerceIn(10f, 44f)
-    val stepsOnScreen = (stepsPerBar.toFloat() * 2f / zoomX.coerceIn(0.35f, 8f)).roundToInt().coerceIn(4, 96)
     val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
-    val clipLengthSteps = ((rawLengthTicks + stepTicks - 1L) / stepTicks)
-        .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
+    // Base the visible musical span on the selected clip duration, like Arrangement zoom:
+    // zoom changes pixels-per-step, not the duration represented by the viewport.
+    val clipLengthSteps = kotlin.math.ceil(rawLengthTicks.toDouble() / stepTicks.toDouble())
+        .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(1)
+    val stepsOnScreen = kotlin.math.ceil(
+        (project.ppq.toDouble() * 4.0 * project.numerator.coerceAtLeast(1).toDouble() /
+            project.denominator.coerceAtLeast(1).toDouble()) / stepTicks.toDouble() *
+            2.0 / zoomX.coerceIn(0.35f, 8f)
+    ).toInt().coerceIn(4, 96)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
     val gestureZoomX = rememberUpdatedState(zoomX)
@@ -2496,10 +2502,24 @@ private fun PianoRollWorkspace(
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
                 modifier = Modifier.widthIn(max = 100.dp))
             Spacer(Modifier.weight(1f))
-            SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
-            TransportAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.35f, 8f) }
-            Text("${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            TransportAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.35f, 8f) }
+            SmallAction(if (keyboardVisible) "KEYS ON" else "KEYS OFF") { keyboardVisible = !keyboardVisible }
+            TransportAction("−") {
+                val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
+                val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
+                val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
+                val anchor = startStep + oldVisible / 2
+                zoomX = nextZoom
+                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
+            }
+            Text("BAR ${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            TransportAction("+") {
+                val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
+                val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
+                val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
+                val anchor = startStep + oldVisible / 2
+                zoomX = nextZoom
+                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
+            }
             TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
             TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
             TransportAction("1/${snapDenominator}") {
@@ -2551,7 +2571,7 @@ private fun PianoRollWorkspace(
 
         Row(Modifier.fillMaxWidth().weight(1f)) {
             if (keyboardVisible) {
-                Column(Modifier.width(30.dp).fillMaxHeight().background(pianoPalette.panel)) {
+                Column(Modifier.width(54.dp).fillMaxHeight().background(pianoPalette.panel)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
