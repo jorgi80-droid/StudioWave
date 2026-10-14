@@ -45,6 +45,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.roundToInt
@@ -238,6 +239,20 @@ private fun StudioWaveApp() {
     var playbackJob by remember { mutableStateOf<Job?>(null) }
     var playheadTick by remember { mutableLongStateOf(0L) }
     var playbackSession by remember { mutableLongStateOf(0L) }
+    val playbackProgress = remember { Channel<Pair<Long, Long>>(Channel.CONFLATED) }
+    val latestProjectForProgress by rememberUpdatedState(project)
+    LaunchedEffect(playbackProgress) {
+        for ((session, tick) in playbackProgress) {
+            if (session == playbackSession) {
+                val activeProject = latestProjectForProgress
+                val limit = maxArrangementTick(TimelineTimebase(
+                    activeProject.bpm, activeProject.numerator, activeProject.denominator, activeProject.ppq
+                ))
+                val boundedTick = tick.coerceIn(0L, limit)
+                if (boundedTick >= playheadTick) playheadTick = boundedTick
+            }
+        }
+    }
     var bpm by remember { mutableIntStateOf(project.bpm) }
     var audioError by remember { mutableStateOf<String?>(null) }
     var master by remember { mutableFloatStateOf(0.72f) }
@@ -336,12 +351,8 @@ private fun StudioWaveApp() {
                     },
                     startAtTick = startTick,
                     onProgress = { positionTicks ->
-                        playbackScope.launch(Dispatchers.Main.immediate) {
-                            if (session == playbackSession) {
-                                val nextTick = positionTicks.coerceAtLeast(0L)
-                                if (nextTick >= playheadTick) playheadTick = nextTick
-                            }
-                        }
+                        // Conflate progress from the audio worker to avoid an unbounded main-thread backlog.
+                        playbackProgress.trySend(session to positionTicks.coerceAtLeast(0L))
                     }
                 )
                 if (session == playbackSession) {
@@ -1006,13 +1017,15 @@ private fun ArrangementWorkspace(
                 onClipAction = { action, clipId -> handleClipAction(action, clipId) },
                 onDismissClipMenu = { clipMenu = null },
                 onResizeClip = { clipId, newStartTick, lengthTicks ->
-                    val safeLength = lengthTicks.coerceIn(1L, Long.MAX_VALUE / 2L)
+                    val resizeTimebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+                    val arrangementEndTick = maxArrangementTick(resizeTimebase)
+                    val safeStart = newStartTick.coerceIn(0L, arrangementEndTick - 1L)
+                    val safeLength = lengthTicks.coerceIn(1L, arrangementEndTick - safeStart)
                     val resizedProject = project.copy(tracks = project.tracks.map { track ->
                         track.copy(clips = track.clips.map { clip ->
                             if (clip.id != clipId) clip else {
                                 val delta = newStartTick - clip.startTick
                                 val oldLength = clip.lengthTicks.coerceAtLeast(1L)
-                                val safeStart = newStartTick.coerceAtLeast(0L)
                                 val safeDelta = safeStart - clip.startTick
                                 val nextNotes = if (safeDelta > 0L) {
                                     clip.midiNotes.mapNotNull { note ->
@@ -1058,7 +1071,14 @@ private fun ArrangementWorkspace(
                     // causes an audible gap. A fresh plan is built on the next explicit Play/seek.
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
-                    val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
+                    val moveTimebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+                    val arrangementEndTick = maxArrangementTick(moveTimebase)
+                    val movingClip = project.tracks.asSequence().flatMap { it.clips.asSequence() }
+                        .firstOrNull { it.id == clipId }
+                    val maxStartTick = (arrangementEndTick - (movingClip?.lengthTicks ?: 1L).coerceAtLeast(1L))
+                        .coerceAtLeast(0L)
+                    val boundedStartTick = startTick.coerceIn(0L, maxStartTick)
+                    val movedProject = project.moveClipToTrack(clipId, targetTrackId, boundedStartTick)
                     if (movedProject != null) {
                         onProjectChange(movedProject)
                         onPlaybackRestart(movedProject)
@@ -1669,11 +1689,15 @@ private fun TimelineGrid(
                         // viewport scale; a fixed visual minimum makes clip lengths jump on zoom.
                         val effectiveClipStart = if (resizingClip == clip.id) liveResizeStart else clip.startTick
                         val effectiveClipLength = if (resizingClip == clip.id) liveResizeLength else clip.lengthTicks
-                        val clipWidthPx = viewport.tickDeltaToPixels(effectiveClipLength.coerceAtLeast(1L)).coerceAtLeast(1f)
+                        val arrangementEndTick = maxArrangementTick(timebase)
+                        val boundedClipStart = effectiveClipStart.coerceIn(0L, arrangementEndTick)
+                        val boundedClipLength = effectiveClipLength.coerceAtLeast(1L)
+                            .coerceAtMost((arrangementEndTick - boundedClipStart).coerceAtLeast(1L))
+                        val clipWidthPx = viewport.tickDeltaToPixels(boundedClipLength).coerceAtLeast(1f)
                         val clipWidthDp = with(density) { clipWidthPx.toDp().value }
                         val resizeGripWidthDp = minOf(18f, clipWidthDp * 0.38f).coerceAtLeast(0.01f)
                         val resizeGripWidthPx = with(density) { resizeGripWidthDp.dp.toPx() }
-                        val displayLeftPx = viewport.timeToViewportX(effectiveClipStart)
+                        val displayLeftPx = viewport.timeToViewportX(boundedClipStart)
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
@@ -1689,7 +1713,7 @@ private fun TimelineGrid(
                                 .fillMaxHeight()
                                 .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
-                                .pointerInput(clip.id, trackIndex, zoom, trackHeightPx) {
+                                .pointerInput(clip.id, trackIndex) {
                                     // The trailing grip owns resize gestures. Do not let the clip-body
                                     // drag handler consume those pointer changes first.
                                     var startedOnResizeGrip = false
