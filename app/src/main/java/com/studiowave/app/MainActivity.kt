@@ -2490,27 +2490,28 @@ private fun TimelineGrid(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        clip.name,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = timelinePalette.text,
-                                        maxLines = 1
-                                    )
-                                    val detail = when (track.kind) {
-                                        "midi" -> "${clip.midiNotes.size} NOTES · ${clip.lengthTicks} TICKS"
-                                        "drum" -> "${clip.drumSteps.count { it }} ACTIVE STEPS"
-                                        "audio" -> clip.sourceUri?.substringAfterLast('/')?.take(28) ?: "NO AUDIO SOURCE"
-                                        else -> track.kind.uppercase()
-                                    }
-                                    Text(
-                                        detail,
-                                        fontSize = 6.sp,
-                                        color = timelinePalette.text.copy(alpha = 0.82f),
-                                        maxLines = 1
-                                    )
+                                Text(
+                                    clip.name,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = timelinePalette.text,
+                                    maxLines = 1
+                                )
+                                val clipBadge = when (track.kind) {
+                                    "midi" -> "MIDI · ${clip.midiNotes.size} N"
+                                    "drum" -> "DRUM · ${clip.drumSteps.count { it }}"
+                                    "audio" -> "AUDIO"
+                                    else -> track.kind.uppercase()
                                 }
+                                Text(
+                                    clipBadge,
+                                    fontSize = 6.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = timelinePalette.text.copy(alpha = 0.82f),
+                                    maxLines = 1
+                                )
+                            }
                             if (track.kind == "drum") {
                                 // Step-sequencer thumbnail: 16 equal steps, stronger beat accents, active hits clearly visible.
                                 Row(
@@ -2848,45 +2849,6 @@ private fun PianoRollWorkspace(
     val gestureNoteWriter = rememberUpdatedState<(List<com.studiowave.app.data.MidiNote>) -> Unit> { updated ->
         updateNotes(updated)
     }
-    fun splitSelectedClipAtTick() {
-        val selectedId = selectedClipId ?: return
-        val selectedTrack = track ?: return
-        val selectedClip = selectedTrack.clips.firstOrNull { it.id == selectedId } ?: return
-        val selection = selectedNoteIds + listOfNotNull(selectedNoteId)
-        if (selection.isEmpty()) { editMessage = "Select notes first"; return }
-        val splitTick = notes.filter { it.id in selection }.minOfOrNull { it.startTick } ?: return
-        if (splitTick <= 0L || splitTick >= selectedClip.lengthTicks) {
-            editMessage = "Select a note inside the clip to split"
-            return
-        }
-        val rightNotes = notes.filter { it.id in selection && it.startTick >= splitTick }.map {
-            it.copy(
-                id = java.util.UUID.randomUUID().toString(),
-                startTick = it.startTick - splitTick
-            )
-        }
-        val leftNotes = fitMidiNotesToClip(notes.filterNot { it.id in selection && it.startTick >= splitTick }, splitTick)
-        val rightLength = (selectedClip.lengthTicks - splitTick).coerceAtLeast(stepTicks)
-        val rightClip = selectedClip.copy(
-            id = java.util.UUID.randomUUID().toString(),
-            name = selectedClip.name + " (2)",
-            startTick = selectedClip.startTick + splitTick,
-            lengthTicks = rightLength,
-            midiNotes = fitMidiNotesToClip(rightNotes, rightLength)
-        )
-        onProjectChange(project.copy(tracks = project.tracks.map { current ->
-            if (current.id != selectedTrack.id) current else current.copy(
-                clips = current.clips.flatMap { item ->
-                    if (item.id != selectedClip.id) listOf(item)
-                    else listOf(item.copy(lengthTicks = splitTick, midiNotes = leftNotes), rightClip)
-                }
-            )
-        }))
-        selectedNoteId = null
-        selectedNoteIds = emptySet()
-        editMessage = "Clip split at selected note position"
-    }
-
     fun quantizeSelectedNotes() {
         val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
         if (ids.isEmpty()) { editMessage = "Select notes first"; return }
@@ -2992,37 +2954,9 @@ private fun PianoRollWorkspace(
                         editMessage = "${ids.size} note(s) deleted"
                     } else editMessage = "Select a note first"
                 }
-                SmallAction("SCALE") {
-                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
-                    val selected = notes.filter { it.id in ids }
-                    if (selected.isEmpty()) editMessage = "Select notes first"
-                    else {
-                        // Snap selected notes to the nearest major scale around C while preserving timing.
-                        val allowed = setOf(0, 2, 4, 5, 7, 9, 11)
-                        val adjusted = selected.associate { note ->
-                            val pitchClass = Math.floorMod(note.pitch, 12)
-                            val nearest = (0..127).filter { candidate ->
-                                candidate / 12 == note.pitch / 12 && Math.floorMod(candidate, 12) in allowed
-                            }.minByOrNull { kotlin.math.abs(it - note.pitch) }
-                            note.id to note.copy(pitch = nearest ?: note.pitch)
-                        }
-                        updateNotes(notes.map { adjusted[it.id] ?: it })
-                        editMessage = "Selected notes snapped to C major"
-                    }
+                SmallAction("SNAP") {
+                    quantizeSelectedNotes()
                 }
-                SmallAction("±1") {
-                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
-                    if (ids.isEmpty()) editMessage = "Select notes first"
-                    else {
-                        val ascending = notes.filter { it.id in ids }.all { it.pitch < 127 }
-                        updateNotes(notes.map { note ->
-                            if (note.id in ids) note.copy(pitch = (note.pitch + if (ascending) 1 else -1).coerceIn(0,127)) else note
-                        })
-                        editMessage = if (ascending) "Selection +1 semitone" else "Selection −1 semitone"
-                    }
-                }
-                SmallAction("SNAP") { quantizeSelectedNotes() }
-                SmallAction("SPLIT") { splitSelectedClipAtTick() }
                 SmallAction("LEGATO") {
                     val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
                     if (selected.size >= 2) {
