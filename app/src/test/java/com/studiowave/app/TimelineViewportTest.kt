@@ -272,4 +272,19 @@ class TimelineViewportTest {
     }
 
 
+    @Test fun extendedZoomRangeKeepsClipGeometryAndResizeDeltasConsistent() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val start = 8192L
+        val length = timebase.ticksPerBar * 10L
+        listOf(1200f, 1800f, 2400f, 3600f).forEach { scale ->
+            val viewport = TimelineViewport(timebase, scale, 4000.0, 720f, 104f)
+            val left = viewport.timeToViewportX(start)
+            val right = viewport.timeToViewportX(start + length)
+            val width = viewport.tickDeltaToPixels(length)
+            assertEquals("scale=$scale", width, right - left, 0.05f)
+            assertTrue("scale=$scale", kotlin.math.abs(viewport.pixelsToTickDelta(width) - length) <= 1L)
+            assertEquals(scale, viewport.effectivePixelsPerBar, 0.01f)
+        }
+    }
+
 }
