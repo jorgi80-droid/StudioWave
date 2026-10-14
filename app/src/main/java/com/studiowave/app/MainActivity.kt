@@ -446,7 +446,7 @@ private fun StudioWaveApp() {
                     playbackLoading = false
                     changeProject(imported)
                     bpm = imported.bpm
-                    scrollTicks = 0f
+                    scrollTicks = 0.0
                     scrollTracks = 0f
                     zoom = 1f
                     verticalZoom = 1f
@@ -1349,7 +1349,7 @@ private fun TimelineGrid(
         TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
     }
     val requestedPixelsPerBar = baseBarWidthPx * zoom
-    val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks.toDouble(), 0f)
+    val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks, 0f)
         .effectivePixelsPerBar
     val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
         TimelineViewport(timebase, pixelsPerBar, scrollTicks.toDouble(), 0f, trackHeaderWidthPx)
@@ -1475,7 +1475,7 @@ private fun TimelineGrid(
                                 if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
                                        val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
-                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
+                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
