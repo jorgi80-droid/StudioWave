@@ -3030,17 +3030,18 @@ private fun DeviceDock(
     onToggle: () -> Unit
 ) {
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
+    val devicePalette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
     var page by remember { mutableStateOf("MIX") }
     Column(
         Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp)
-            .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
+            .background(devicePalette.panel, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("DEVICE VIEW", fontSize = 10.sp, fontWeight = FontWeight.Black, color = AbletonOrange)
             Spacer(Modifier.width(8.dp))
-            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = Color(0xFFE4E8EF), maxLines = 1)
+            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = devicePalette.text, maxLines = 1)
             Spacer(Modifier.weight(1f))
             SmallAction(if (page == "MIX") "MIX" else "DEVICES") { page = if (page == "MIX") "DEVICES" else "MIX" }
             SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
@@ -3086,7 +3087,12 @@ private fun DeviceDock(
                                     }))
                                 },
                                 valueRange = 0f..1.5f,
-                                modifier = Modifier.fillMaxWidth().height(30.dp)
+                                modifier = Modifier.fillMaxWidth().height(30.dp),
+                                colors = SliderDefaults.colors(
+                                    thumbColor = devicePalette.text,
+                                    activeTrackColor = devicePalette.accent,
+                                    inactiveTrackColor = devicePalette.control
+                                )
                             )
                         }
                         Column(Modifier.weight(1f)) {
@@ -3095,16 +3101,16 @@ private fun DeviceDock(
                                 pan <= -0.95f -> "L"
                                 pan >= 0.95f -> "R"
                                 else -> (pan * 100).toInt().toString()
-                            }, color = MutedText, fontSize = 9.sp)
-                            Slider(
+                            }, color = devicePalette.muted, fontSize = 9.sp)
+                            StudioWavePanKnob(
                                 value = pan,
+                                palette = devicePalette,
                                 onValueChange = { value ->
                                     onProjectChange(project.copy(tracks = project.tracks.map {
                                         if (it.id == selectedTrack.id) it.copy(pan = value) else it
                                     }))
                                 },
-                                valueRange = -1f..1f,
-                                modifier = Modifier.fillMaxWidth().height(30.dp)
+                                modifier = Modifier.size(52.dp)
                             )
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -3130,13 +3136,13 @@ private fun DeviceDock(
                         devices.forEachIndexed { index, label ->
                             Column(
                                 Modifier.weight(1f).fillMaxHeight()
-                                    .background(Color(0xFF202328), RoundedCornerShape(5.dp)).padding(8.dp),
+                                    .background(devicePalette.room, RoundedCornerShape(5.dp)).padding(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Text(label, color = if (index == 0) Mint else MutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 Text(
                                     if (index == 0) "Track data available" else "Belum ada processor audio terhubung",
-                                    color = Color(0xFFD5D9E0), fontSize = 8.sp
+                                    color = devicePalette.text, fontSize = 8.sp
                                 )
                             }
                         }
