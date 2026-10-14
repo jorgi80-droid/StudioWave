@@ -2952,10 +2952,11 @@ private fun MixerWorkspace(
         Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(7.dp)).padding(4.dp)
     ) {
         val trackCount = project.tracks.size.coerceAtLeast(1)
-        val availableWidth = maxWidth - 114.dp
+        val availableWidth = (maxWidth - 100.dp).coerceAtLeast(1.dp)
         val gapWidthDp = ((trackCount - 1).coerceAtLeast(0) * 5).toFloat()
-        val channelWidth = ((availableWidth - gapWidthDp.dp) / trackCount.toFloat())
-            .coerceIn(104.dp, 180.dp)
+        val preferredChannelWidth = ((availableWidth - gapWidthDp.dp) / trackCount.toFloat())
+            .coerceIn(96.dp, 160.dp)
+        val channelWidth = preferredChannelWidth
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
