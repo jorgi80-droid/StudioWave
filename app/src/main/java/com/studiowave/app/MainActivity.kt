@@ -4210,20 +4210,20 @@ private fun DirectWaveDevicePanel(
     var showSamples by remember(trackId) { mutableStateOf(false) }
     val samples = remember {
         listOf(
-            BuiltInStudioSample("ARP", "Arp · Glass Sequence", "arp_glass", "Bright pluck sequence"),
-            BuiltInStudioSample("ARP", "Arp · Pulse Pattern", "arp_pulse", "Short rhythmic pluck"),
-            BuiltInStudioSample("BASS", "Bass · Deep Round", "bass_round", "Round low sine bass"),
-            BuiltInStudioSample("BASS", "Bass · Analog Bite", "bass_analog", "Saw-based analog bass"),
-            BuiltInStudioSample("LEAD", "Lead · Bright Mono", "lead_bright", "Brassy saw lead"),
-            BuiltInStudioSample("LEAD", "Lead · Soft Edge", "lead_soft", "Gentle filtered lead"),
-            BuiltInStudioSample("KEYBOARD", "Keyboard · Soft EP", "keyboard_ep", "Electric-piano style tone"),
-            BuiltInStudioSample("KEYBOARD", "Keyboard · Felt Keys", "keyboard_felt", "Soft felt-like keys"),
-            BuiltInStudioSample("ORCHESTRA", "Orchestra · Warm Strings", "orchestra_strings", "Sustained ensemble tone"),
-            BuiltInStudioSample("ORCHESTRA", "Orchestra · Brass Pad", "orchestra_brass", "Warm synthetic brass"),
-            BuiltInStudioSample("SYNTH", "Synth · FM Bell", "synth_bell", "Bell-like FM timbre"),
-            BuiltInStudioSample("SYNTH", "Synth · Digital Pulse", "synth_pulse", "Digital pulse tone"),
-            BuiltInStudioSample("PAD", "Pad · Aurora", "pad_aurora", "Slow evolving warm tone"),
-            BuiltInStudioSample("PAD", "Pad · Air Choir", "pad_air", "Airy synthetic choir")
+            BuiltInStudioSample("ARP", "Arp · Glass Sequence", "arp_pluck", "Bright pluck sequence"),
+            BuiltInStudioSample("ARP", "Arp · Pulse Pattern", "arp_pluck", "Short rhythmic pluck"),
+            BuiltInStudioSample("BASS", "Bass · Deep Round", "sub_bass", "Round low sine bass"),
+            BuiltInStudioSample("BASS", "Bass · Analog Bite", "sub_bass", "Saw-based analog bass"),
+            BuiltInStudioSample("LEAD", "Lead · Bright Mono", "saw_lead", "Brassy saw lead"),
+            BuiltInStudioSample("LEAD", "Lead · Soft Edge", "saw_lead", "Gentle filtered lead"),
+            BuiltInStudioSample("KEYBOARD", "Keyboard · Soft EP", "soft_keys", "Electric-piano style tone"),
+            BuiltInStudioSample("KEYBOARD", "Keyboard · Felt Keys", "soft_keys", "Soft felt-like keys"),
+            BuiltInStudioSample("ORCHESTRA", "Orchestra · Warm Strings", "orchestra_pad", "Sustained ensemble tone"),
+            BuiltInStudioSample("ORCHESTRA", "Orchestra · Brass Pad", "orchestra_pad", "Warm synthetic brass"),
+            BuiltInStudioSample("SYNTH", "Synth · FM Bell", "analog_synth", "Bell-like FM timbre"),
+            BuiltInStudioSample("SYNTH", "Synth · Digital Pulse", "analog_synth", "Digital pulse tone"),
+            BuiltInStudioSample("PAD", "Pad · Aurora", "warm_pad", "Slow evolving warm tone"),
+            BuiltInStudioSample("PAD", "Pad · Air Choir", "warm_pad", "Airy synthetic choir")
         )
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -4308,9 +4308,11 @@ private fun DirectWaveDevicePanel(
                         Row(
                             Modifier.fillMaxWidth().background(palette.room, RoundedCornerShape(3.dp))
                                 .clickable {
-                                    val id = context.resources.getIdentifier(sample.assetName, "raw", context.packageName)
-                                    if (id != 0) {
-                                        val uri = Uri.parse("android.resource://${context.packageName}/$id")
+                                    val presetIndex = listOf("arp_pluck", "sub_bass", "saw_lead", "soft_keys", "orchestra_pad", "analog_synth", "warm_pad").indexOf(sample.assetName)
+                                    if (presetIndex >= 0) {
+                                        val target = java.io.File(context.cacheDir, "${sample.assetName}.wav")
+                                        runCatching { target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex)) }
+                                        val uri = Uri.fromFile(target)
                                         sampleUri = uri.toString()
                                         sampleLabel = sample.title
                                         sampleReady = false
