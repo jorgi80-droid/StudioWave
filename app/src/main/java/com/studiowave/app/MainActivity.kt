@@ -4050,11 +4050,70 @@ private fun decodeWaveformPeaks(
 
 private object WaveformPeakCache {
     private val cache = android.util.LruCache<String, List<Float>>(12)
+    private val durationCache = android.util.LruCache<String, Double>(12)
     private fun key(uri: String, peakCount: Int) = "$uri#$peakCount"
     @Synchronized fun get(uri: String, peakCount: Int): List<Float>? = cache.get(key(uri, peakCount))
     @Synchronized fun put(uri: String, peakCount: Int, peaks: List<Float>) {
         cache.put(key(uri, peakCount), peaks)
     }
+    @Synchronized fun getDurationSeconds(uri: String): Double? = durationCache.get(uri)
+    @Synchronized fun putDurationSeconds(uri: String, durationSeconds: Double) {
+        if (durationSeconds.isFinite() && durationSeconds > 0.0) {
+            durationCache.put(uri, durationSeconds)
+        }
+    }
+}
+
+/** Read the real audio-track duration without decoding PCM a second time. */
+private fun readAudioSourceDurationSeconds(context: android.content.Context, uri: Uri): Double? {
+    val extractor = MediaExtractor()
+    return try {
+        extractor.setDataSource(context, uri, null)
+        for (index in 0 until extractor.trackCount) {
+            val format = extractor.getTrackFormat(index)
+            if (format.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true &&
+                format.containsKey(MediaFormat.KEY_DURATION)) {
+                val durationUs = format.getLong(MediaFormat.KEY_DURATION)
+                if (durationUs > 0L) return durationUs.toDouble() / 1_000_000.0
+            }
+        }
+        null
+    } catch (_: Exception) {
+        null
+    } finally {
+        extractor.release()
+    }
+}
+
+internal data class AudioWaveformClipRange(
+    val firstPeakIndex: Int,
+    val endPeakIndexExclusive: Int,
+    val sourceOffsetSeconds: Double,
+    val clipDurationSeconds: Double,
+    val sourceDurationSeconds: Double
+)
+
+/** Use the same musical tick-to-time conversion as the playback engine. */
+internal fun audioWaveformClipRange(
+    sourceOffsetTicks: Long,
+    clipLengthTicks: Long,
+    bpm: Int,
+    ppq: Int,
+    sourceDurationSeconds: Double,
+    peakCount: Int
+): AudioWaveformClipRange? {
+    if (!sourceDurationSeconds.isFinite() || sourceDurationSeconds <= 0.0 || peakCount <= 0) return null
+    val ticksPerSecond = bpm.coerceAtLeast(1).toDouble() * ppq.coerceAtLeast(1).toDouble() / 60.0
+    val offsetSeconds = sourceOffsetTicks.coerceAtLeast(0L).toDouble() / ticksPerSecond
+    val clipSeconds = clipLengthTicks.coerceAtLeast(1L).toDouble() / ticksPerSecond
+    if (!offsetSeconds.isFinite() || !clipSeconds.isFinite() || offsetSeconds >= sourceDurationSeconds) return null
+    val endSeconds = (offsetSeconds + clipSeconds).coerceAtMost(sourceDurationSeconds)
+    if (endSeconds <= offsetSeconds) return null
+    val first = kotlin.math.floor(offsetSeconds / sourceDurationSeconds * peakCount)
+        .toInt().coerceIn(0, peakCount - 1)
+    val end = kotlin.math.ceil(endSeconds / sourceDurationSeconds * peakCount)
+        .toInt().coerceIn(first + 1, peakCount)
+    return AudioWaveformClipRange(first, end, offsetSeconds, clipSeconds, sourceDurationSeconds)
 }
 
 @Composable
