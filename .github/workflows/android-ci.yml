@@ -20,23 +20,33 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install Android SDK and native toolchain
-        uses: android-actions/setup-android@v3
-      - name: Accept Android SDK licenses
         shell: bash
         run: |
           set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
           set +o pipefail
-          yes | sdkmanager --licenses >/dev/null
+          yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-      - name: Install required Android packages
-        uses: android-actions/sdkmanager@v3
-        with:
-          packages: |
-            platforms;android-36
-            build-tools;36.0.0
-            platform-tools
-            ndk;27.0.12077973
-            cmake;3.22.1
+
+          # Retry transient Google SDK downloads; fail immediately if package metadata
+          # indicates the package is not available, but avoid a one-shot truncated ZIP.
+          install_packages() {
+            local attempt
+            for attempt in 1 2 3; do
+              if "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.0.12077973" "cmake;3.22.1"; then
+                return 0
+              fi
+              echo "Android SDK package install attempt $attempt failed; clearing incomplete NDK package and retrying."
+              rm -rf "$ANDROID_HOME/ndk/27.0.12077973" "$ANDROID_HOME/.temp"/* || true
+              sleep $((attempt * 3))
+            done
+            return 1
+          }
+          install_packages
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
