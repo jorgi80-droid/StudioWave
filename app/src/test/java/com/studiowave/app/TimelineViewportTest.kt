@@ -186,4 +186,23 @@ class TimelineViewportTest {
         }
     }
 
+    @Test fun gridSubdivisionNeverReturnsZeroWhenAVisibleBeatNeedsSubdivision() {
+        // Small PPQ plus a large denominator can produce fewer than 16 ticks per beat.
+        // A zero subdivision would make the Compose Canvas grid loop never advance.
+        val unusual = TimelineTimebase(120, 1, 32, 24)
+        val viewport = TimelineViewport(unusual, 1200f, 0.0, 800f)
+        assertEquals(3L, unusual.ticksPerBeat)
+        assertEquals(1L, viewport.gridSubdivisionTicks(1200.0))
+        assertEquals(0L, viewport.gridSubdivisionTicks(15.9))
+    }
+
+    @Test fun gridSubdivisionScalesWithZoomForNormalMeter() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 100f, 0.0, 800f)
+        assertEquals(60L, viewport.gridSubdivisionTicks(100.0))
+        assertEquals(120L, viewport.gridSubdivisionTicks(60.0))
+        assertEquals(240L, viewport.gridSubdivisionTicks(35.0))
+        assertEquals(480L, viewport.gridSubdivisionTicks(20.0))
+        assertEquals(0L, viewport.gridSubdivisionTicks(10.0))
+    }
+
 }
