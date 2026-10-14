@@ -854,6 +854,9 @@ private fun ArrangementWorkspace(
         }
     }
     var selectedClip by remember { mutableStateOf<String?>(null) }
+    var showClipView by remember { mutableStateOf(false) }
+    val selectedClipTrack = project.tracks.firstOrNull { track -> track.clips.any { it.id == selectedClip } }
+    val selectedClipModel = selectedClipTrack?.clips?.firstOrNull { it.id == selectedClip }
     var clipMenu by remember { mutableStateOf<String?>(null) }
     var showTimelineMenu by remember { mutableStateOf(false) }
     var showAddTrack by remember { mutableStateOf(false) }
@@ -1237,10 +1240,59 @@ private fun ArrangementWorkspace(
                 FloatingTimelineControl(snapDivision.label, "Change snap division") {
                     snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it }
                 }
-                FloatingTimelineControl(if (showDevices) "TRK×" else "TRK", if (showDevices) "Hide track inspector" else "Show track inspector") {
+                FloatingTimelineControl(if (showClipView) "CLIP×" else "CLIP", "Show selected clip details") {
+                    if (selectedClipModel == null) {
+                        statusMessage = "Select a clip first"
+                    } else {
+                        showClipView = !showClipView
+                    }
+                }
+                FloatingTimelineControl(if (showDevices) "DEV×" else "DEV", if (showDevices) "Hide device chain" else "Show device chain") {
                     onToggleDevices()
                 }
             }
+        if (showClipView && selectedClipTrack != null && selectedClipModel != null) {
+            val clip = selectedClipModel
+            val timebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+            val firstBar = clip.startTick / timebase.ticksPerBar + 1L
+            val lastTick = if (clip.startTick > Long.MAX_VALUE - clip.lengthTicks.coerceAtLeast(1L)) Long.MAX_VALUE
+                else clip.startTick + clip.lengthTicks.coerceAtLeast(1L) - 1L
+            val lastBar = lastTick / timebase.ticksPerBar + 1L
+            Surface(
+                color = Color(0xF21B1D21),
+                contentColor = Color.White,
+                shape = RoundedCornerShape(9.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF454950)),
+                shadowElevation = 8.dp,
+                modifier = Modifier.align(Alignment.BottomStart).padding(start = 110.dp, bottom = 8.dp)
+                    .widthIn(min = 220.dp, max = 300.dp)
+            ) {
+                Column(Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("CLIP VIEW", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(7.dp))
+                        Text(selectedClipTrack.name, color = MutedText, fontSize = 8.sp, maxLines = 1)
+                        Spacer(Modifier.weight(1f))
+                        Text("×", color = MutedText, fontSize = 14.sp, modifier = Modifier.clickable { showClipView = false }.padding(horizontal = 3.dp))
+                    }
+                    Text(clip.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(
+                        "${selectedClipTrack.kind.uppercase()}  •  BAR ${firstBar}–${lastBar}  •  ${String.format(java.util.Locale.US, "%.2f", clip.lengthTicks.toDouble() / timebase.ticksPerBar)} bars",
+                        color = MutedText, fontSize = 8.sp, maxLines = 1
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SmallAction("OPEN EDITOR") {
+                            onOpenEditor(when (selectedClipTrack.kind) {
+                                "audio" -> "AUDIO EDITOR"
+                                "drum" -> "DRUM SEQUENCER"
+                                else -> "PIANO ROLL"
+                            }, selectedClipTrack.id)
+                        }
+                        SmallAction("DUPLICATE") { handleClipAction("Duplicate", clip.id) }
+                    }
+                }
+            }
+        }
         Box(Modifier.align(Alignment.BottomEnd).fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
             // Keep routine edit feedback out of the timeline; only validation errors appear inline.
             if (statusMessage != null) {
