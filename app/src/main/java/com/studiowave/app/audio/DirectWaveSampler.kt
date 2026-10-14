@@ -39,6 +39,8 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
     @Volatile var releaseMs: Int = 180
         set(value) { field = value.coerceIn(0, 5000) }
     @Volatile var looping: Boolean = false
+    @Volatile var outputGain: Float = 1f
+        set(value) { field = value.coerceIn(0f, 1f) }
     @Volatile var fineTuneCents: Int = 0
         set(value) { field = value.coerceIn(-100, 100) }
 
@@ -75,7 +77,7 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
         generations[midi] = generation
         val rate = 2.0.pow(((midi - 60 + pitchSemitones).toDouble() + fineTuneCents / 100.0) / 12.0)
             .toFloat().coerceIn(0.5f, 2f)
-        val gain = velocity.coerceIn(1, 127) / 127f
+        val gain = (velocity.coerceIn(1, 127) / 127f) * outputGain
         val stream = pool.play(sampleId, 0f, 0f, 1, if (looping) -1 else 0, rate)
         if (stream == 0) return
         val voice = Voice(stream, midi, velocity.coerceIn(1, 127), generation)
