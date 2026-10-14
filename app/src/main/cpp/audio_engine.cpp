@@ -62,7 +62,7 @@ oboe::Result openLocked(int32_t rate){
 }
 }
 extern "C" JNIEXPORT jint JNICALL Java_com_studiowave_app_audio_NativeAudioEngine_nativeOpenOutput(JNIEnv*,jobject,jint rate){
- if(rate<8000||rate>192000)return static_cast<jint>(oboe::Result::ErrorInvalidParam);
+ if(rate<8000||rate>192000)return static_cast<jint>(oboe::Result::ErrorIllegalArgument);
  std::lock_guard<std::mutex> lock(streamMutex);return static_cast<jint>(openLocked(rate));
 }
 extern "C" JNIEXPORT void JNICALL Java_com_studiowave_app_audio_NativeAudioEngine_nativeCloseOutput(JNIEnv*,jobject){
