@@ -290,6 +290,16 @@ private fun StudioWaveApp() {
     var masterPeakHistory by remember { mutableStateOf(List(48) { 0f }) }
     var trackMeterReadings by remember { mutableStateOf<Map<String, Pair<Float, Float>>>(emptyMap()) }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
+    var showSettings by remember { mutableStateOf(false) }
+    var settingsSection by remember { mutableStateOf("INTERFACE") }
+    var themeName by remember { mutableStateOf(preferences.getString("ui_theme", "Live Dark") ?: "Live Dark") }
+    var paletteTone by remember { mutableStateOf(preferences.getString("ui_tone", "Neutral") ?: "Neutral") }
+    var highContrast by remember { mutableStateOf(preferences.getBoolean("ui_high_contrast", false)) }
+    var gridOpacity by remember { mutableFloatStateOf(preferences.getFloat("ui_grid_opacity", 0.72f)) }
+    var uiScale by remember { mutableFloatStateOf(preferences.getFloat("ui_scale", 1f).coerceIn(0.8f, 1.2f)) }
+    var audioSampleRate by remember { mutableIntStateOf(preferences.getInt("audio_sample_rate", 48000)) }
+    var audioBufferFrames by remember { mutableIntStateOf(preferences.getInt("audio_buffer_frames", 512)) }
+    var audioOutputMode by remember { mutableStateOf(preferences.getString("audio_output_mode", "SYSTEM") ?: "SYSTEM") }
     // Start with the device drawer collapsed so Arrangement gets the full vertical workspace.
     var showDock by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -606,12 +616,52 @@ private fun StudioWaveApp() {
         }
     }
 
+    val swatch = studioWavePalette(themeName, paletteTone, highContrast)
+    SideEffect {
+        preferences.edit()
+            .putString("ui_theme", themeName)
+            .putString("ui_tone", paletteTone)
+            .putBoolean("ui_high_contrast", highContrast)
+            .putFloat("ui_grid_opacity", gridOpacity)
+            .putFloat("ui_scale", uiScale)
+            .putInt("audio_sample_rate", audioSampleRate)
+            .putInt("audio_buffer_frames", audioBufferFrames)
+            .putString("audio_output_mode", audioOutputMode)
+            .apply()
+    }
     MaterialTheme(colorScheme = darkColorScheme(
-        primary = Mint, secondary = Color(0xFFFF7644), background = Room,
-        surface = Raised, onPrimary = Room, onBackground = Color(0xFFF8FAFC),
-        onSurface = Color(0xFFF8FAFC)
+        primary = swatch.accent, secondary = swatch.orange, background = swatch.room,
+        surface = swatch.panel, onPrimary = swatch.room, onBackground = swatch.text,
+        onSurface = swatch.text
     )) {
-        Surface(Modifier.fillMaxSize(), color = Room) {
+        CompositionLocalProvider(LocalStudioWavePalette provides swatch) {
+        Surface(Modifier.fillMaxSize(), color = swatch.room) {
+            if (showSettings) {
+                StudioWaveSettingsScreen(
+                    section = settingsSection, onSectionChange = { settingsSection = it },
+                    onClose = { showSettings = false },
+                    themeName = themeName, onThemeChange = { themeName = it },
+                    paletteTone = paletteTone, onPaletteToneChange = { paletteTone = it },
+                    highContrast = highContrast, onHighContrastChange = { highContrast = it },
+                    gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
+                    uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.8f, 1.2f) },
+                    audioOutputMode = audioOutputMode, onAudioOutputModeChange = { audioOutputMode = it },
+                    audioSampleRate = audioSampleRate, onAudioSampleRateChange = { audioSampleRate = it },
+                    audioBufferFrames = audioBufferFrames, onAudioBufferFramesChange = { audioBufferFrames = it },
+                    audioStatus = "Android system output; custom device routing is not wired into the current engine.",
+                    interfaceLog = listOf(
+                        "Theme: $themeName / $paletteTone",
+                        "UI scale: ${(uiScale * 100).toInt()}%",
+                        "Transport: ${if (playing) "PLAYING" else "STOPPED"}",
+                        "Audio output mode preference: $audioOutputMode",
+                        "Configured sample rate: $audioSampleRate Hz",
+                        "Configured buffer: $audioBufferFrames frames",
+                        "Peak: ${masterPeakDbfs.toInt()} dBFS; RMS: ${masterRmsDbfs.toInt()} dBFS",
+                        "Workspace: $selectedWorkspace",
+                        "Project autosave: enabled"
+                    )
+                )
+            } else {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
                 if (audioError != null) {
                     Surface(color = Color(0xFF4B2424), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
@@ -626,6 +676,7 @@ private fun StudioWaveApp() {
                     masterRmsDbfs,
                     masterMomentaryLufs,
                     masterPeakHistory,
+                    onSettings = { settingsSection = "INTERFACE"; showSettings = true },
                     musicalPositionLabel(playheadTick, project.ppq, project.numerator, project.denominator),
                     "${project.numerator}/${project.denominator}",
                     { value ->
@@ -739,6 +790,8 @@ private fun StudioWaveApp() {
                     )
                 }
             }
+            }
+        }
         }
     }
 }
