@@ -2226,10 +2226,11 @@ private fun TimelineGrid(
                                     val beatCount = (duration / beatTicks.toDouble()).toInt().coerceIn(1, 256)
                                     for (beat in 1 until beatCount) {
                                         val x = (beat.toDouble() * beatTicks.toDouble() / duration * size.width).toFloat()
+                                        val isBarLine = beatTicks * beat.toLong() % barTicks == 0L
                                         drawLine(
                                             clipInk.copy(alpha = if (isLightTheme) 0.20f else 0.18f),
                                             Offset(x, 0f), Offset(x, size.height),
-                                            if (beatTicks > 0L && beatTicks * beat.toLong() % barTicks == 0L) 1.2f else 0.55f
+                                            if (isBarLine) 1.2f else 0.55f
                                         )
                                     }
                                     // Subtle octave rows make the note pattern readable at thumbnail size.
