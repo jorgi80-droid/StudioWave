@@ -11,20 +11,20 @@ object FactorySampleLibrary {
     data class Preset(val name: String, val category: String, val fileName: String, val description: String)
 
     val presets = listOf(
-        Preset("Arp Pluck", "Arp", "arp_pluck.wav", "Bright plucked arpeggio"),
+        Preset("Arp Pluck", "Arp", "arp_glass.wav", "Bright plucked arpeggio"),
         Preset("Arp Pulse", "Arp", "arp_pulse.wav", "Short rhythmic pluck"),
-        Preset("Sub Bass", "Bass", "sub_bass.wav", "Clean low sine bass"),
-        Preset("Analog Bass", "Bass", "analog_bass.wav", "Rich harmonic bass"),
-        Preset("Saw Lead", "Lead", "saw_lead.wav", "Bright saw lead"),
-        Preset("Soft Lead", "Lead", "soft_lead.wav", "Gentler lead"),
-        Preset("Soft Keys", "Keyboard", "soft_keys.wav", "Soft electric-key tone"),
-        Preset("Felt Keys", "Keyboard", "felt_keys.wav", "Rounded keyboard tone"),
-        Preset("Orchestral Strings", "Orchestra", "orchestral_strings.wav", "Synthetic orchestral-like sustain"),
-        Preset("Warm Brass", "Orchestra", "warm_brass.wav", "Synthetic brass tone"),
-        Preset("Analog Synth", "Synth", "analog_synth.wav", "Detuned saw synth"),
-        Preset("FM Bell", "Synth", "fm_bell.wav", "Bell-like synthetic tone"),
-        Preset("Warm Pad", "Pad", "warm_pad.wav", "Slow warm sustained texture"),
-        Preset("Air Choir", "Pad", "air_choir.wav", "Airy sustained texture")
+        Preset("Sub Bass", "Bass", "bass_round.wav", "Clean low sine bass"),
+        Preset("Analog Bass", "Bass", "bass_analog.wav", "Rich harmonic bass"),
+        Preset("Saw Lead", "Lead", "lead_bright.wav", "Bright saw lead"),
+        Preset("Soft Lead", "Lead", "lead_soft.wav", "Gentler lead"),
+        Preset("Soft Keys", "Keyboard", "keyboard_ep.wav", "Soft electric-key tone"),
+        Preset("Felt Keys", "Keyboard", "keyboard_felt.wav", "Rounded keyboard tone"),
+        Preset("Orchestral Strings", "Orchestra", "orchestra_strings.wav", "Synthetic orchestral-like sustain"),
+        Preset("Warm Brass", "Orchestra", "orchestra_brass.wav", "Synthetic brass tone"),
+        Preset("Analog Synth", "Synth", "synth_pulse.wav", "Detuned saw synth"),
+        Preset("FM Bell", "Synth", "synth_bell.wav", "Bell-like synthetic tone"),
+        Preset("Warm Pad", "Pad", "pad_aurora.wav", "Slow warm sustained texture"),
+        Preset("Air Choir", "Pad", "pad_air.wav", "Airy sustained texture")
     )
 
     /** 16-bit mono PCM, 22.05 kHz. Each tone is generated deterministically and needs no network access. */
