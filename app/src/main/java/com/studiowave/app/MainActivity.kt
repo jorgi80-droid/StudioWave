@@ -688,8 +688,10 @@ private fun StudioWaveApp() {
                             { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" }
                         )
                         "AUDIO EDITOR" -> AudioEditorWorkspace(
-                            project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "audio" }
+                            track = project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "audio" }
                                 ?: project.tracks.firstOrNull { it.kind == "audio" },
+                            project = project,
+                            onProjectChange = { changeProject(it) },
                             onBack = { selectedWorkspace = "ARRANGEMENT" }
                         )
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId ->
@@ -1557,11 +1559,40 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
 }
 
 @Composable
-private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
+private fun AudioEditorWorkspace(
+    track: StudioTrack?,
+    project: StudioProject,
+    onProjectChange: (StudioProject) -> Unit,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val clip = track?.clips?.firstOrNull { it.sourceUri != null }
+    val baseLengthTicks = remember(clip?.id) { (clip?.lengthTicks ?: 1L).coerceAtLeast(1L) }
+    val baseSourceOffsetTicks = remember(clip?.id) { (clip?.sourceOffsetTicks ?: 0L).coerceAtLeast(0L) }
     var startFraction by remember(clip?.id) { mutableFloatStateOf(0f) }
     var endFraction by remember(clip?.id) { mutableFloatStateOf(1f) }
+
+    fun applyTrim(startFractionValue: Float, endFractionValue: Float) {
+        val activeTrack = track ?: return
+        val activeClip = clip ?: return
+        val safeStart = startFractionValue.coerceIn(0f, 0.99f)
+        val safeEnd = endFractionValue.coerceIn(safeStart + 0.01f, 1f)
+        val startTicks = (baseLengthTicks.toDouble() * safeStart.toDouble()).toLong()
+            .coerceIn(0L, (baseLengthTicks - 1L).coerceAtLeast(0L))
+        val endTicks = (baseLengthTicks.toDouble() * safeEnd.toDouble()).toLong()
+            .coerceIn(startTicks + 1L, baseLengthTicks)
+        val sourceOffset = if (baseSourceOffsetTicks > Long.MAX_VALUE - startTicks) Long.MAX_VALUE
+            else baseSourceOffsetTicks + startTicks
+        val nextLength = (endTicks - startTicks).coerceAtLeast(1L)
+        onProjectChange(project.copy(tracks = project.tracks.map { item ->
+            if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
+                if (current.id == activeClip.id) current.copy(
+                    sourceOffsetTicks = sourceOffset,
+                    lengthTicks = nextLength
+                ) else current
+            })
+        }))
+    }
     var waveform by remember(clip?.sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
     var loading by remember(clip?.sourceUri) { mutableStateOf(false) }
     var loadError by remember(clip?.sourceUri) { mutableStateOf<String?>(null) }
@@ -1596,15 +1627,23 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (clip?.sourceUri != null) "AUDIO SOURCE" else "NO AUDIO CLIP", color = AbletonOrange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.weight(1f))
-            SmallAction("RESET RANGE") { startFraction = 0f; endFraction = 1f }
+            SmallAction("RESET RANGE") {
+                startFraction = 0f
+                endFraction = 1f
+                applyTrim(0f, 1f)
+            }
         }
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("START", color = MutedText, fontSize = 7.sp)
-            Slider(value = startFraction, onValueChange = { startFraction = it.coerceIn(0f, (endFraction - 0.01f).coerceAtLeast(0f)) },
-                modifier = Modifier.weight(1f).height(20.dp))
+            Slider(value = startFraction, onValueChange = { value ->
+                startFraction = value.coerceIn(0f, (endFraction - 0.01f).coerceAtLeast(0f))
+                applyTrim(startFraction, endFraction)
+            }, modifier = Modifier.weight(1f).height(20.dp))
             Text("END", color = MutedText, fontSize = 7.sp)
-            Slider(value = endFraction, onValueChange = { endFraction = it.coerceIn((startFraction + 0.01f).coerceAtMost(1f), 1f) },
-                modifier = Modifier.weight(1f).height(20.dp))
+            Slider(value = endFraction, onValueChange = { value ->
+                endFraction = value.coerceIn((startFraction + 0.01f).coerceAtMost(1f), 1f)
+                applyTrim(startFraction, endFraction)
+            }, modifier = Modifier.weight(1f).height(20.dp))
         }
         Box(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF27292E), RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
             if (waveform.isNotEmpty()) {
