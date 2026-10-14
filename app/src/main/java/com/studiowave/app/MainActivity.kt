@@ -952,7 +952,6 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
 
 @Composable
 private fun ArrangementWorkspace(
-    val arrangementPalette = LocalStudioWavePalette.current
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
     zoom: Float, onZoom: (Float) -> Unit,
@@ -969,6 +968,7 @@ private fun ArrangementWorkspace(
     onToggleDevices: () -> Unit = {},
     onSeekTick: (Long) -> Unit = {}
 ) {
+    val arrangementPalette = LocalStudioWavePalette.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     val densityScale = density.density
     val trackIds = project.tracks.map { it.id }
