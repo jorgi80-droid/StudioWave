@@ -62,8 +62,7 @@ internal fun StudioWaveSettingsScreen(
     section: String, onSectionChange: (String) -> Unit, onClose: () -> Unit,
     themeName: String, onThemeChange: (String) -> Unit, paletteTone: String, onPaletteToneChange: (String) -> Unit,
     highContrast: Boolean, onHighContrastChange: (Boolean) -> Unit, gridOpacity: Float, onGridOpacityChange: (Float) -> Unit,
-    uiScale: Float, onUiScaleChange: (Float) -> Unit, audioOutputMode: String, onAudioOutputModeChange: (String) -> Unit,
-    audioSampleRate: Int, onAudioSampleRateChange: (Int) -> Unit, audioBufferFrames: Int, onAudioBufferFramesChange: (Int) -> Unit,
+    uiScale: Float, onUiScaleChange: (Float) -> Unit,
     audioStatus: String, interfaceLog: List<String>
 ) {
     val p = LocalStudioWavePalette.current
