@@ -1087,8 +1087,11 @@ private fun ArrangementWorkspace(
                     .pointerInput(project.tracks, scrollTicks, zoom, maxEndTick) {
                         detectTapGestures { point ->
                             val projectEnd = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
-                            onScroll((point.x / size.width.coerceAtLeast(1).toDouble() * projectEnd)
-                                .coerceIn(0.0, maxArrangementTick(fitTimebase).toDouble()))
+                            val requestedScroll = point.x / size.width.coerceAtLeast(1).toDouble() * projectEnd
+                            val visibleTicks = size.width.toDouble() /
+                                TimelineViewport(fitTimebase, 74f * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                            val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visibleTicks).coerceAtLeast(0.0)
+                            onScroll(requestedScroll.coerceIn(0.0, maxScroll))
                         }
                     }
             ) {
