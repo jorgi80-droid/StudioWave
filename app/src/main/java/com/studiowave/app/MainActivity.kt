@@ -809,7 +809,6 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
 }
 
 @Composable
-@Composable
 private fun ArrangementWorkspace(
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
