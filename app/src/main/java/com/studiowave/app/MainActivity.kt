@@ -2841,7 +2841,7 @@ private fun MixerWorkspace(
     trackMeterReadings: Map<String, Pair<Float, Float>>
 ) {
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(4.dp)
+        Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(7.dp)).padding(4.dp)
     ) {
         val trackCount = project.tracks.size.coerceAtLeast(1)
         val availableWidth = maxWidth - 114.dp
@@ -2855,7 +2855,7 @@ private fun MixerWorkspace(
         project.tracks.forEach { track ->
             Column(
                 Modifier.width(channelWidth).fillMaxHeight()
-                    .background(Color(0xFF25272B), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 6.dp),
+                    .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -2966,7 +2966,7 @@ private fun MixerWorkspace(
         }
         Column(
             Modifier.width(110.dp).fillMaxHeight()
-                .background(Color(0xFF292B30), RoundedCornerShape(5.dp)).padding(6.dp),
+                .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp)).padding(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
