@@ -961,7 +961,7 @@ private fun ArrangementWorkspace(
     onOpenEditor: (String, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
     onPlaybackRestart: (StudioProject) -> Unit = {},
-    onScratchTrack: (String, Float) -> Unit,
+    onScratchTrack: (String, Float) -> Unit = { _, _ -> },
     playheadTick: Long = 0L,
     isPlaying: Boolean = false,
     showDevices: Boolean = false,
