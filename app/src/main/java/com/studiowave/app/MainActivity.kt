@@ -884,6 +884,7 @@ private fun TransportBar(
                         drawLine(p.accent, Offset(x, size.height), Offset(x, size.height - bar), 1.2f)
                     }
                 }
+            }
         }
 }
 
