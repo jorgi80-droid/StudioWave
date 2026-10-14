@@ -636,6 +636,7 @@ private fun StudioWaveApp() {
                     zoom = 1f
                     verticalZoom = 1f
                     editorTrackId = null
+                    editorClipId = null
                     selectedWorkspace = "ARRANGEMENT"
                     audioError = null
                     Toast.makeText(context, "Proyek .sdaw berhasil dibuka", Toast.LENGTH_SHORT).show()
@@ -839,8 +840,9 @@ private fun StudioWaveApp() {
                             project = project,
                             selectedTrackId = editorTrackId,
                             onSelectTrack = { editorTrackId = it },
-                            onOpenEditor = { workspace, trackId ->
+                            onOpenEditor = { workspace, trackId, clipId ->
                                 if (trackId != null) editorTrackId = trackId
+                                editorClipId = clipId
                                 selectedWorkspace = workspace
                             },
                             onImportAudio = { audioPicker.launch(arrayOf("audio/*")) }
@@ -3425,7 +3427,7 @@ private fun BrowserWorkspace(
     project: StudioProject,
     selectedTrackId: String?,
     onSelectTrack: (String) -> Unit,
-    onOpenEditor: (String, String?) -> Unit,
+    onOpenEditor: (String, String?, String?) -> Unit,
     onImportAudio: () -> Unit
 ) {
     val p = LocalStudioWavePalette.current
@@ -3551,7 +3553,14 @@ private fun BrowserWorkspace(
                                 Text("${track.kind.uppercase()}  ·  ${track.clips.size} CLIPS", color = p.muted, fontSize = 7.sp)
                             }
                             SmallAction("SELECT") { onSelectTrack(track.id) }
-                            SmallAction("EDIT") { onSelectTrack(track.id); onOpenEditor(when(track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" }, track.id) }
+                            SmallAction("EDIT") {
+                                onSelectTrack(track.id)
+                                onOpenEditor(
+                                    when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
+                                    track.id,
+                                    track.clips.minByOrNull { it.startTick }?.id
+                                )
+                            }
                         }
                     }
                 }
@@ -3573,7 +3582,11 @@ private fun BrowserWorkspace(
                             }
                             SmallAction("OPEN") {
                                 onSelectTrack(track.id)
-                                onOpenEditor(when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" }, track.id)
+                                onOpenEditor(
+                                    when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
+                                    track.id,
+                                    clip.id
+                                )
                             }
                         }
                     }
