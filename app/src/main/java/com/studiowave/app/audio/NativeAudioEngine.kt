@@ -41,6 +41,8 @@ class NativeAudioEngine:AutoCloseable {
  fun queuedFrames():Int=if(running.get())nativeQueuedFrames().coerceAtLeast(0) else 0
  fun playedFrames():Long=nativePlayedFrames().coerceAtLeast(0L)
  fun underrunCount():Long=nativeUnderrunCount().coerceAtLeast(0L)
+ data class Diagnostics(val queuedFrames:Int,val playedFrames:Long,val underruns:Long)
+ fun diagnostics():Diagnostics = Diagnostics(queuedFrames(),playedFrames(),underrunCount())
  fun isRunning():Boolean=running.get()
  @Synchronized fun stop(){running.set(false);nativeCloseOutput()}
  override fun close(){if(closed.compareAndSet(false,true))stop()}
