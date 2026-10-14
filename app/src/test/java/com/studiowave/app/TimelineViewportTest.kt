@@ -55,6 +55,27 @@ class TimelineViewportTest {
         frames.forEach { assertTrue(it.scrollTicks >= 0.0) }
     }
 
+    @Test fun pinchScrollIsClampedToTheVisibleArrangementEnd() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val width = 900f
+        val maxTick = maxArrangementTick(timebase)
+        val frame = calculatePinchZoomFrame(
+            timebase = timebase,
+            baseZoom = 1f,
+            baseScrollTicks = maxTick.toDouble() - 100.0,
+            baseSpanPx = 180f,
+            currentSpanPx = 360f,
+            anchorTick = maxTick.toDouble() - 10.0,
+            centroidX = 850f,
+            baseBarWidthPx = 74f,
+            viewportWidthPx = width
+        )
+        val viewport = TimelineViewport(timebase, 74f * frame.zoom, frame.scrollTicks, width)
+        val maxScroll = (maxTick.toDouble() - width / viewport.pixelsPerTick).coerceAtLeast(0.0)
+        assertTrue("pinch must not scroll beyond the last visible arrangement region", frame.scrollTicks <= maxScroll + 1e-6)
+        assertTrue(frame.scrollTicks >= 0.0)
+    }
+
     @Test fun pinchFramesDoNotAccumulatePreviousFrameRounding() {
         val timebase = TimelineTimebase(126, 7, 8, 960)
         val start = TimelineViewport(timebase, 111f, 50_000.125, 900f)
