@@ -3413,26 +3413,47 @@ private fun DeviceDock(
                     }
                 } else {
                     val slotInfo = when (selectedTrack.kind) {
-                        "audio" -> listOf("AUDIO SOURCE" to "Real imported source clip", "WARP / TIME STRETCH" to "Unavailable: source-preserving time-stretch is not implemented", "AUDIO EFFECTS" to "No DSP effect chain is registered")
-                        "drum" -> listOf("STEP SEQUENCER" to "Available: edit the clip from Arrangement", "DRUM INSTRUMENT" to "Unavailable: drum sample/instrument engine not implemented", "AUDIO EFFECTS" to "No DSP effect chain is registered")
-                        else -> listOf("MIDI CLIP" to "Available: note events are persisted in the project", "INSTRUMENT" to "Unavailable: pitched synthesis is currently a basic oscillator", "MIDI / AUDIO FX" to "No serializable processor chain is registered")
+                        "audio" -> listOf(
+                            Triple("AUDIO SOURCE", "Available", "Imported clip source; trim is persisted"),
+                            Triple("WARP / TIME STRETCH", "Unavailable", "Requires a tempo-aware time-stretch processor"),
+                            Triple("AUDIO EFFECTS", "Unavailable", "No serializable DSP processor chain")
+                        )
+                        "drum" -> listOf(
+                            Triple("STEP SEQUENCER", "Available", "Edits the selected drum clip"),
+                            Triple("DRUM INSTRUMENT", "Unavailable", "Drum sample/instrument voices are not wired"),
+                            Triple("AUDIO EFFECTS", "Unavailable", "No serializable DSP processor chain")
+                        )
+                        else -> listOf(
+                            Triple("MIDI CLIP", "Available", "Note events and velocity are persisted"),
+                            Triple("INSTRUMENT", "Limited", "Current playback is basic oscillator synthesis"),
+                            Triple("MIDI / AUDIO FX", "Unavailable", "No serializable processor chain")
+                        )
                     }
                     Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        slotInfo.forEachIndexed { index, item ->
+                        slotInfo.forEach { item ->
+                            val available = item.second == "Available"
+                            val limited = item.second == "Limited"
                             Column(
                                 Modifier.width(164.dp).fillMaxHeight()
                                     .background(devicePalette.room, RoundedCornerShape(5.dp))
-                                    .then(if (index == 0) Modifier.border(1.dp, devicePalette.accent, RoundedCornerShape(5.dp)) else Modifier)
+                                    .then(if (available) Modifier.border(1.dp, devicePalette.accent, RoundedCornerShape(5.dp)) else Modifier)
                                     .padding(7.dp),
                                 verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Box(Modifier.size(6.dp).background(if (index == 0) devicePalette.success else devicePalette.warning, RoundedCornerShape(50)))
-                                    Text(item.first, color = if (index == 0) devicePalette.accent else devicePalette.text,
-                                        fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 2)
+                                    Box(Modifier.size(6.dp).background(
+                                        when { available -> devicePalette.success; limited -> devicePalette.warning; else -> devicePalette.muted },
+                                        RoundedCornerShape(50.dp)
+                                    ))
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item.first, color = if (available) devicePalette.accent else devicePalette.text,
+                                            fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 2)
+                                        Text(item.second.uppercase(), color = if (limited) devicePalette.warning else devicePalette.muted,
+                                            fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
-                                Text(item.second, color = devicePalette.muted, fontSize = 8.sp)
+                                Text(item.third, color = devicePalette.muted, fontSize = 8.sp)
                             }
                         }
                     }
