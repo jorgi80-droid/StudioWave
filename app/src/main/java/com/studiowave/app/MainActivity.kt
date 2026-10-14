@@ -1702,51 +1702,83 @@ private fun ArrangementWorkspace(
 }
 
 @Composable
-private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (StudioProject) -> Unit, project: StudioProject, onBack: () -> Unit, selectedClipId: String? = null) {
+private fun DrumSequencerWorkspace(
+    track: StudioTrack?,
+    onProjectChange: (StudioProject) -> Unit,
+    project: StudioProject,
+    onBack: () -> Unit,
+    selectedClipId: String? = null
+) {
+    val palette = LocalStudioWavePalette.current
     val clip = track?.clips?.firstOrNull { it.id == selectedClipId } ?: track?.clips?.firstOrNull()
     val rawSteps = clip?.drumSteps ?: emptyList()
-    val steps = rawSteps.take(16) + List((16 - rawSteps.size).coerceAtLeast(0)) { false }
-    Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room).padding(7.dp)) {
+    val stepCount = rawSteps.size.coerceIn(16, StudioProject.MAX_DRUM_STEPS_PER_CLIP)
+    val steps = rawSteps.take(stepCount) + List((stepCount - rawSteps.size).coerceAtLeast(0)) { false }
+
+    fun updateSteps(updated: List<Boolean>) {
+        val activeTrack = track ?: return
+        val activeClip = clip ?: return
+        val safeLength = updated.size.coerceIn(16, StudioProject.MAX_DRUM_STEPS_PER_CLIP)
+        val normalized = updated.take(safeLength) + List((safeLength - updated.size).coerceAtLeast(0)) { false }
+        onProjectChange(project.copy(tracks = project.tracks.map { item ->
+            if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
+                if (current.id == activeClip.id) current.copy(drumSteps = normalized) else current
+            })
+        }))
+    }
+
+    Column(Modifier.fillMaxSize().background(palette.room).padding(7.dp)) {
         WorkspaceTitleBar("DRUM RACK  /  STEP SEQUENCER", track?.name ?: "No drum track", onBack)
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("16 STEPS", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("${steps.size} STEPS", color = palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 5.dp))
             SmallAction("CLEAR") {
-                if (track != null && clip != null) onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = List(16) { false }) else c }) else item
-                }))
+                if (track != null && clip != null) updateSteps(List(steps.size) { false })
             }
             SmallAction("ALL") {
-                if (track != null && clip != null) onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = List(16) { true }) else c }) else item
-                }))
+                if (track != null && clip != null) updateSteps(List(steps.size) { true })
             }
             Spacer(Modifier.weight(1f))
+            Text("SCROLL FOR MORE", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
         }
-        Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            (0..15).forEach { step ->
-                val isActive = steps[step]
-                val accent = step % 4 == 0
+        Row(
+            Modifier.fillMaxWidth().height(46.dp).horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            steps.forEachIndexed { step, isActive ->
+                val isBeat = step % 4 == 0
                 Surface(
-                    color = if (isActive) Mint else if (accent) LocalStudioWavePalette.current.control else LocalStudioWavePalette.current.room,
-                    shape = RoundedCornerShape(3.dp),
-                    modifier = Modifier.weight(1f).fillMaxHeight().clickable {
+                    color = if (isActive) palette.accent else if (isBeat) palette.control else palette.room,
+                    shape = RoundedCornerShape(if (isBeat) 4.dp else 3.dp),
+                    border = BorderStroke(1.dp, if (isActive) palette.accent else palette.border.copy(alpha = 0.8f)),
+                    modifier = Modifier.width(34.dp).fillMaxHeight().clickable {
                         if (track != null && clip != null) {
-                            val updated = steps.toMutableList().also { it[step] = !it[step] }
-                            onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                                if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = updated) else c }) else item
-                            }))
+                            updateSteps(steps.toMutableList().also { it[step] = !it[step] })
                         }
                     }
                 ) {
-                    Box(contentAlignment = Alignment.Center) { Text((step + 1).toString(), color = if (isActive) LocalStudioWavePalette.current.room else LocalStudioWavePalette.current.text, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            (step + 1).toString(),
+                            color = if (isActive) palette.room else palette.text,
+                            fontSize = 8.sp,
+                            fontWeight = if (isBeat || isActive) FontWeight.Black else FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
-        Text("Tap steps to toggle triggers. CLEAR and ALL modify this clip’s 16-step pattern.", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp))
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Tap a step to toggle its trigger. CLEAR and ALL preserve the current pattern length.",
+            color = palette.muted, fontSize = 8.sp
+        )
     }
 }
-
 @Composable
 private fun AudioEditorWorkspace(
     track: StudioTrack?,
