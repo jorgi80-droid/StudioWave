@@ -2467,16 +2467,47 @@ private fun MixerWorkspace(
                 }
                 Spacer(Modifier.height(4.dp))
                 Text("VOL " + (track.volume * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
-                Slider(
-                    value = track.volume.coerceIn(0f, 1.5f),
-                    onValueChange = { value ->
-                        onProjectChange(project.copy(tracks = project.tracks.map {
-                            if (it.id == track.id) it.copy(volume = value) else it
-                        }))
-                    },
-                    valueRange = 0f..1.5f,
-                    modifier = Modifier.fillMaxWidth().height(24.dp)
-                )
+                val latestProject by rememberUpdatedState(project)
+                Canvas(
+                    Modifier.fillMaxWidth().weight(1f)
+                        .pointerInput(track.id) {
+                            detectDragGestures { change, _ ->
+                                change.consume()
+                                val height = size.height.coerceAtLeast(1).toFloat()
+                                val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
+                                val current = latestProject
+                                onProjectChange(current.copy(tracks = current.tracks.map {
+                                    if (it.id == track.id) it.copy(volume = value) else it
+                                }))
+                            }
+                        }
+                ) {
+                    // This is a real, touch-draggable channel fader, not a fake signal meter.
+                    val railWidth = (size.width * 0.18f).coerceAtLeast(5f)
+                    val railLeft = (size.width - railWidth) / 2f
+                    val railTop = size.height * 0.06f
+                    val railBottom = size.height * 0.94f
+                    drawRoundRect(
+                        Color(0xFF111315),
+                        Offset(railLeft, railTop),
+                        Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
+                    )
+                    val fraction = track.volume.coerceIn(0f, 1.5f) / 1.5f
+                    val thumbY = railBottom - fraction * (railBottom - railTop)
+                    drawRoundRect(
+                        Mint.copy(alpha = 0.7f),
+                        Offset(railLeft, thumbY),
+                        Size(railWidth, (railBottom - thumbY).coerceAtLeast(0f)),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
+                    )
+                    drawRoundRect(
+                        Color(0xFFE4E8EF),
+                        Offset(size.width * 0.18f, thumbY - 3f),
+                        Size(size.width * 0.64f, 6f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
+                    )
+                }
                 Spacer(Modifier.height(3.dp))
                 val panLabel = when {
                     track.pan <= -0.95f -> "L"
@@ -2495,17 +2526,6 @@ private fun MixerWorkspace(
                     modifier = Modifier.fillMaxWidth().height(24.dp)
                 )
                 Spacer(Modifier.height(4.dp))
-                Canvas(Modifier.fillMaxWidth().weight(1f)) {
-                    drawRoundRect(Color(0xFF131518), Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                    val h = size.height * track.volume.coerceIn(0f, 1.5f) / 1.5f
-                    drawRoundRect(
-                        if (track.muted) Red else Mint,
-                        Offset(size.width * 0.34f, size.height - h),
-                        Size(size.width * 0.32f, h),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f)
-                    )
-                }
                 Text(
                     if (track.muted) "MUTED" else if (track.solo) "SOLO" else track.kind.uppercase(),
                     color = if (track.muted) Red else MutedText,
