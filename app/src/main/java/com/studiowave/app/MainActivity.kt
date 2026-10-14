@@ -887,26 +887,6 @@ private fun TransportBar(
                 }
             }
         }
-
-
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("P ${peakDbfs.toInt()} dBFS", color = LocalStudioWavePalette.current.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text("${momentaryLufs.toInt()} LUFS", color = LocalStudioWavePalette.current.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                }
-                val transportMeterPalette = LocalStudioWavePalette.current
-                Canvas(Modifier.fillMaxWidth().height(9.dp)) {
-                    drawLine(transportMeterPalette.grid, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
-                    peakHistory.forEachIndexed { index, level ->
-                        val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
-                        val x = index * size.width / peakHistory.size.coerceAtLeast(1)
-                        drawLine(transportMeterPalette.accent.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
-                            (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
-                    }
-                }
-                Text("RMS ${rmsDbfs.toInt()} dBFS", color = p.muted, fontSize = 6.sp, maxLines = 1)
-            }
-        }
-    }
 }
 
 @Composable
