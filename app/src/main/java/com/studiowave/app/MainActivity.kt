@@ -2596,7 +2596,7 @@ private fun PianoRollWorkspace(
                 Column(Modifier.width(55.dp).fillMaxHeight().background(Color(0xFF202328))) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
-                        val keyVisibleRows = (constraints.maxHeight / keyRowHeightPx.coerceAtLeast(1f)).coerceIn(12, 120)
+                        val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                         val keyMaxTopPitch = (119 - keyVisibleRows + 1).coerceAtLeast(0)
                         val keyTopPitch = topPitch.coerceIn(keyMaxTopPitch, 119)
                         Column(Modifier.verticalScroll(rememberScrollState(((119 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0)))
@@ -2783,7 +2783,7 @@ private fun MixerWorkspace(
     ) {
         val trackCount = project.tracks.size.coerceAtLeast(1)
         val availableWidth = maxWidth - 114.dp
-        val channelWidth = ((availableWidth - (trackCount - 1).coerceAtLeast(0).toFloat() * 5f).div(trackCount.toFloat()))
+        val channelWidth = ((availableWidth - (trackCount - 1).coerceAtLeast(0).toFloat() * 5f.dp) / trackCount.toFloat())
             .coerceIn(104.dp, 180.dp)
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
