@@ -52,4 +52,13 @@ class MidiNoteGestureTest {
         assertEquals(2100L, result.startTick)
         assertEquals(300L, result.durationTicks)
     }
+
+    @Test
+    fun malformedNoteStartIsClampedBeforeResize() {
+        val original = MidiNote(pitch = 67, startTick = 2390L, durationTicks = 240L)
+        val result = transformMidiNoteFromGesture(original, 2400L, 240L, 100, 0, true)
+        assertEquals(2160L, result.startTick)
+        assertEquals(240L, result.durationTicks)
+        assertEquals(2400L, result.startTick + result.durationTicks)
+    }
 }
