@@ -63,10 +63,14 @@ This implementation uses the Ableton Live 12 Reference Manual as a workflow and 
 - https://www.ableton.com/en/live-manual/12/live-concepts/
 
 
-## Integration status after the next workspace pass
+## Integration status after the latest workspace pass
 
-- Piano Roll: the note grid is semitone-based (36 visible pitches), uses project PPQ for sixteenth-note timing, and exposes a velocity lane whose edits update the selected clip's persisted MIDI notes.
-- Clip View: selected clips can be shifted by one bar, shortened/extended by one bar, and audio source-in trim can be nudged by one beat. All actions update the existing project model and therefore flow through current autosave.
-- Mixer: existing channel volume, pan, mute, solo, master gain and meter UI remain in place and continue using the existing mix model.
-- Device and rack processing: this repository does not yet expose a serializable effect/device chain or DSP processors for warp/time-stretch. The UI must not present nonfunctional effect or warp controls as if they process audio. Those need an engine/model implementation before being marked complete.
-- Arrangement: preserve the existing shared TimelineViewport/timebase and playback-follow logic; avoid a parallel time-to-pixel mapping.
+- **Arrangement previews:** MIDI mini-notes are clipped to their own clip rectangle; drum previews display persisted active steps; audio thumbnails decode cached source peaks asynchronously. Do not infer source frame offsets from musical ticks: exact source slicing needs duration/warp metadata.
+- **Piano Roll:** 120 MIDI pitches remain reachable through the pitch ruler and vertical scrolling. Horizontal/vertical pinch zoom and drag-scroll are retained; note events are clipped to pattern duration when patterns are shortened. Note selection, move/pitch drag, right-edge resize, delete, copy/paste and velocity updates modify the real project model. The visible range calculation must remain shared by toolbar zoom and gestures.
+- **Clip View:** selected clips expose model-backed start-bar controls; MIDI/drum patterns expose length-by-bar controls. Shortened pattern notes are clipped/dropped safely. Audio trim sliders update source offset and length in the existing model and show the selected trim range in the waveform.
+- **Mixer:** channel fader, pan, mute/solo and master gain are model-backed; track meters read independent left/right peak and RMS snapshots from the playback engine. Preserve engine meter publication and do not fake stereo values.
+- **Browser:** project search/category controls and track/clip open actions must use the currently selected category's result list. Audio import invokes the system picker. Device Library remains an honest empty state until a real instrument/processor registry is connected.
+- **Theme/layout:** Live Light is the new-install default; Compose Material uses the chosen light/dark scheme, while native-drawn surfaces use the matching palette. Keep landscape-first compact spacing and the main arrangement viewport intact.
+- **Device and rack processing:** no serializable device/effect chain, sample instrument registry or warp/time-stretch processor exists yet. Do not mark unavailable effects or warp controls as working; model and audio-engine implementation are required first.
+- **Validation:** CI run #506 passed the audio waveform mapping revision, run #505 passed the shared Piano Roll step formula, and run #504 passed the corrected clip-bound waveform mapping. The newest Browser category-filter commit has run #508 in progress; do not call the full branch green until it finishes.
+- **References:** retain the official Live 12 manual links below and use the interface as a reference, not as a source for redistributing proprietary images/fonts/assets.
