@@ -2766,6 +2766,7 @@ private fun PianoRollWorkspace(
 @Composable
 private fun Float.format(digits: Int): String = "%.${digits}f".format(java.util.Locale.US, this)
 
+@Composable
 private fun MixerWorkspace(
     project: StudioProject,
     master: Float,
