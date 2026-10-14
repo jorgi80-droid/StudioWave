@@ -123,13 +123,17 @@ internal fun calculatePinchZoomFrame(
 ): PinchZoomFrame {
     val ratio = if (baseSpanPx > 1f && currentSpanPx.isFinite() && currentSpanPx > 1f)
         currentSpanPx / baseSpanPx else 1f
-    val zoom = (baseZoom * ratio).coerceIn(0.1f, 16f)
-    val scale = TimelineViewport(timebase, baseBarWidthPx * zoom, baseScrollTicks, 0f).effectivePixelsPerBar
-    val scroll = TimelineViewport(timebase, scale, baseScrollTicks, 0f)
+    val requestedZoom = (baseZoom * ratio).coerceIn(0.1f, 16f)
+    val viewportScale = TimelineViewport(
+        timebase, baseBarWidthPx * requestedZoom, baseScrollTicks, 0f
+    ).effectivePixelsPerBar
+    val effectiveZoom = viewportScale / baseBarWidthPx
+    // Pinch anchor is stored as a fractional tick, so returning to the start scale must
+    // return the start scroll without an integer-tick snap.
+    val scroll = TimelineViewport(timebase, viewportScale, baseScrollTicks, 0f)
         .placeTickAtViewportX(anchorTick, centroidX).scrollTimeTicks
-    return PinchZoomFrame(zoom, scroll)
+    return PinchZoomFrame(effectiveZoom, scroll)
 }
-
 /** Split a clip at an absolute arrangement tick while keeping both halves tied to source time. */
 internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Long): Pair<com.studiowave.app.data.WaveClip, com.studiowave.app.data.WaveClip>? {
     val start = clip.startTick.coerceAtLeast(0L)
