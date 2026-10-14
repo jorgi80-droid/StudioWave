@@ -36,6 +36,15 @@ class ArrangementTimingTest {
         assertTrue(ArrangementTiming.framesToTicks(Long.MAX_VALUE, 40, 3840) > 0L)
     }
 
+    @Test fun oneHourAt120BpmFitsThe1800BarArrangementLimit() {
+        val ticksPerBar = 3_840L
+        val endOfBar1800 = ticksPerBar * 1_800L
+        val frames = ArrangementTiming.ticksToFrames(endOfBar1800, 120, 960)
+        val oneHourFrames = 44_100L * 60L * 60L
+        assertEquals(oneHourFrames, frames)
+        assertTrue(frames <= oneHourFrames)
+    }
+
     @Test fun soloAndMuteRulesAreDeterministic() {
         assertTrue(ArrangementTiming.trackIsAudible(false, false, false))
         assertFalse(ArrangementTiming.trackIsAudible(true, true, false))
