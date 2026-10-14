@@ -1047,7 +1047,7 @@ private fun ArrangementWorkspace(
                 FloatingTimelineControl("FIT", "Fit clips to view") {
                     onZoom(fitZoom)
                     onVerticalZoom(1f)
-                    onScroll(0f)
+                    onScroll(0.0)
                     onScrollTracks(0f)
                 }
                 FloatingTimelineControl(if (snapEnabled) "SN" else "SN×", if (snapEnabled) "Snap on" else "Snap off") {
