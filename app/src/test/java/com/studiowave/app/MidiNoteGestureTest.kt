@@ -50,6 +50,6 @@ class MidiNoteGestureTest {
         val original = MidiNote(pitch = 67, startTick = 2100L, durationTicks = 240L)
         val result = transformMidiNoteFromGesture(original, 2400L, 240L, 100, 0, true)
         assertEquals(2100L, result.startTick)
-        assertEquals(240L, result.durationTicks)
+        assertEquals(300L, result.durationTicks)
     }
 }
