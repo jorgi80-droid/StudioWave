@@ -2813,71 +2813,91 @@ private fun MixerWorkspace(
                 Spacer(Modifier.height(4.dp))
                 Text("VOL  " + (track.volume * 100).toInt() + "%", color = mixerPalette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 val latestProject by rememberUpdatedState(project)
-                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Canvas(Modifier.weight(1f).fillMaxHeight()) {
-                        // Dedicated stereo meter lane, visually separate from the channel fader.
+                Row(
+                    Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Narrow, discrete stereo meter with clear peak and RMS indicators.
+                    Canvas(Modifier.weight(0.55f).fillMaxHeight()) {
                         val peak = trackMeterReadings[track.id]?.first ?: 0f
                         val rms = trackMeterReadings[track.id]?.second ?: 0f
-                        val lane = (size.width * 0.72f).coerceAtLeast(3f)
-                        for (segment in 0 until 18) {
-                            val segmentHeight = size.height / 18f
+                        val lane = (size.width * 0.78f).coerceAtLeast(3f)
+                        for (segment in 0 until 24) {
+                            val segmentHeight = size.height / 24f
                             val y = size.height - (segment + 1) * segmentHeight
-                            val active = segment / 18f <= peak
-                            drawRoundRect(
-                                color = if (!active) mixerPalette.room else if (segment >= 15) mixerPalette.danger else if (segment >= 11) mixerPalette.warning else mixerPalette.accent,
-                                topLeft = Offset((size.width - lane) / 2f, y + 1f),
-                                size = Size(lane, (segmentHeight - 2f).coerceAtLeast(1f)),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
-                            )
+                            val active = segment / 24f <= peak
+                            val color = when {
+                                !active -> mixerPalette.room
+                                segment >= 20 -> mixerPalette.danger
+                                segment >= 16 -> mixerPalette.warning
+                                else -> mixerPalette.accent
+                            }
+                            drawRect(color, Offset((size.width - lane) / 2f, y + 0.7f),
+                                Size(lane, (segmentHeight - 1.4f).coerceAtLeast(1f)))
                         }
-                        drawLine(mixerPalette.text.copy(alpha = 0.82f),
-                            Offset((size.width - lane) / 2f, size.height * (1f - rms)),
-                            Offset((size.width + lane) / 2f, size.height * (1f - rms)), 1f)
+                        drawLine(mixerPalette.text.copy(alpha = 0.9f),
+                            Offset((size.width - lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)),
+                            Offset((size.width + lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)), 1.2f)
                     }
+                    // A clear vertical mixer fader with a wide touch target, ticks, and an Ableton-like cap.
                     Canvas(
-                        Modifier.weight(1.8f).fillMaxHeight()
+                        Modifier.weight(1.6f).fillMaxHeight()
                             .pointerInput(track.id) {
-                                detectDragGestures { change, _ ->
-                                    change.consume()
+                                detectDragGestures(
+                                    onDragStart = { start ->
+                                        val height = size.height.coerceAtLeast(1).toFloat()
+                                        val value = (1f - start.y / height).coerceIn(0f, 1f) * 1.5f
+                                        val current = latestProject
+                                        onProjectChange(current.copy(tracks = current.tracks.map {
+                                            if (it.id == track.id) it.copy(volume = value) else it
+                                        }))
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        val height = size.height.coerceAtLeast(1).toFloat()
+                                        val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
+                                        val current = latestProject
+                                        onProjectChange(current.copy(tracks = current.tracks.map {
+                                            if (it.id == track.id) it.copy(volume = value) else it
+                                        }))
+                                    }
+                                )
+                            }
+                            .pointerInput(track.id) {
+                                detectTapGestures(onTap = { position ->
                                     val height = size.height.coerceAtLeast(1).toFloat()
-                                    val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
+                                    val value = (1f - position.y / height).coerceIn(0f, 1f) * 1.5f
                                     val current = latestProject
                                     onProjectChange(current.copy(tracks = current.tracks.map {
                                         if (it.id == track.id) it.copy(volume = value) else it
                                     }))
-                                }
+                                })
                             }
                     ) {
-                        // Touch-drag channel gain fader.
-
-                    val railWidth = (size.width * 0.18f).coerceAtLeast(5f)
-                    val railLeft = (size.width - railWidth) / 2f
-                    val railTop = size.height * 0.06f
-                    val railBottom = size.height * 0.94f
-                    drawRoundRect(
-                        mixerPalette.room,
-                        Offset(railLeft, railTop),
-                        Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
-                    )
-                    for (tick in 0..10) {
-                        val y = railTop + (railBottom - railTop) * tick / 10f
-                        drawLine(mixerPalette.grid.copy(alpha = 0.68f),
-                            Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
-                    }
-                    val fraction = track.volume.coerceIn(0f, 1.5f) / 1.5f
-                    val thumbY = railBottom - fraction * (railBottom - railTop)
-                    val handleLeft = size.width * 0.12f
-                    val handleWidth = size.width * 0.76f
-                    drawRoundRect(mixerPalette.control,
-                        Offset(handleLeft, thumbY - 7f), Size(handleWidth, 14f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f))
-                    drawRoundRect(mixerPalette.border,
-                        Offset(handleLeft, thumbY - 7f), Size(handleWidth, 14f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
-                    drawLine(mixerPalette.accent, Offset(handleLeft + 3f, thumbY),
-                        Offset(handleLeft + handleWidth - 3f, thumbY), 2f)
+                        val railWidth = (size.width * 0.18f).coerceAtLeast(5f)
+                        val railLeft = (size.width - railWidth) / 2f
+                        val railTop = size.height * 0.045f
+                        val railBottom = size.height * 0.955f
+                        drawRoundRect(mixerPalette.room, Offset(railLeft, railTop),
+                            Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
+                        for (tick in 0..12) {
+                            val y = railTop + (railBottom - railTop) * tick / 12f
+                            drawLine(mixerPalette.grid.copy(alpha = 0.72f),
+                                Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
+                        }
+                        val fraction = track.volume.coerceIn(0f, 1.5f) / 1.5f
+                        val thumbY = railBottom - fraction * (railBottom - railTop)
+                        val capLeft = size.width * 0.08f
+                        val capWidth = size.width * 0.84f
+                        drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 9f),
+                            Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                        drawRoundRect(mixerPalette.border, Offset(capLeft, thumbY - 9f),
+                            Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
+                        drawLine(mixerPalette.text, Offset(capLeft + 3f, thumbY),
+                            Offset(capLeft + capWidth - 3f, thumbY), 2f)
                     }
                 }
                 Spacer(Modifier.height(3.dp))
