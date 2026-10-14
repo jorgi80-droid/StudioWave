@@ -35,9 +35,9 @@ internal val LocalStudioWaveGridOpacity = compositionLocalOf { 0.72f }
 
 internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolean): StudioWavePalette {
     val base = when (theme) {
-        "Live Light" -> StudioWavePalette(Color(0xFFE2E3E6), Color(0xFFF1F2F4), Color(0xFFD2D4D9), Color(0xFFC2C5CB),
-            Color(0xFFB7BBC2), Color(0xFF17191C), Color(0xFF555B64), Color(0xFF007F70), Color(0xFFC84F30),
-            Color(0xFFB7BBC2), Color(0xFF9EA3AC), Color(0xFF167447), Color(0xFF835900), Color(0xFFB51F38))
+        "Live Light" -> StudioWavePalette(Color(0xFFC5C9D0), Color(0xFFE7E9ED), Color(0xFFD5D9DF), Color(0xFFC9CED6),
+            Color(0xFFB5BBC4), Color(0xFF17191C), Color(0xFF4D535D), Color(0xFF007F70), Color(0xFFBD4D2F),
+            Color(0xFFAAB1BB), Color(0xFF818A96), Color(0xFF167447), Color(0xFF835900), Color(0xFFB51F38))
         "Live Mid" -> StudioWavePalette(Color(0xFF282B30), Color(0xFF34383F), Color(0xFF3D424A), Color(0xFF474D56),
             Color(0xFF515761), Color(0xFFF0F1F3), Color(0xFFB6BBC3), Color(0xFF21D1B0), Color(0xFFFF865E),
             Color(0xFF555B64), Color(0xFF616873), Color(0xFF40D68A), Color(0xFFFFCD66), Color(0xFFFF6177))
