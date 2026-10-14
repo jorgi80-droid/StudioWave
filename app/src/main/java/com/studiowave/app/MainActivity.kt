@@ -107,6 +107,39 @@ private fun Modifier.timelineClipWidthPx(widthPx: Float): Modifier = layout { me
 
 private data class TrackRowLayout(val topDp: Float, val heightDp: Float)
 
+/** Split a clip at an absolute arrangement tick while keeping both halves tied to source time. */
+internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Long): Pair<com.studiowave.app.data.WaveClip, com.studiowave.app.data.WaveClip>? {
+    val start = clip.startTick.coerceAtLeast(0L)
+    val length = clip.lengthTicks.coerceAtLeast(1L)
+    val end = if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
+    if (splitTick <= start || splitTick >= end) return null
+    val leftLength = splitTick - start
+    val rightLength = end - splitTick
+    val sourceOffset = clip.sourceOffsetTicks.coerceAtLeast(0L)
+    val rightSourceOffset = if (sourceOffset > Long.MAX_VALUE - leftLength) Long.MAX_VALUE else sourceOffset + leftLength
+    fun clippedNotes(offset: Long, windowLength: Long, newIds: Boolean) = clip.midiNotes.mapNotNull { note ->
+        val noteStart = note.startTick.coerceAtLeast(0L)
+        val noteEnd = if (noteStart > Long.MAX_VALUE - note.durationTicks.coerceAtLeast(1L)) Long.MAX_VALUE
+            else noteStart + note.durationTicks.coerceAtLeast(1L)
+        val from = noteStart.coerceAtLeast(offset)
+        val to = noteEnd.coerceAtMost(offset + windowLength)
+        if (to <= from) null else note.copy(
+            id = if (newIds) java.util.UUID.randomUUID().toString() else note.id,
+            startTick = from - offset, durationTicks = to - from
+        )
+    }
+    val splitIndex = if (clip.drumSteps.isEmpty()) 0 else
+        kotlin.math.floor(clip.drumSteps.size.toDouble() * leftLength.toDouble() / length.toDouble())
+            .toInt().coerceIn(0, clip.drumSteps.size)
+    val left = clip.copy(lengthTicks = leftLength, midiNotes = clippedNotes(0L, leftLength, false), drumSteps = clip.drumSteps.take(splitIndex))
+    val right = clip.copy(
+        id = java.util.UUID.randomUUID().toString(), name = clip.name + " (2)", startTick = splitTick,
+        lengthTicks = rightLength, sourceOffsetTicks = rightSourceOffset,
+        midiNotes = clippedNotes(leftLength, rightLength, true), drumSteps = clip.drumSteps.drop(splitIndex)
+    )
+    return left to right
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -702,9 +735,19 @@ private fun ArrangementWorkspace(
         when (action) {
             "Open editor" -> onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id)
             "Cut" -> {
-                copiedClip = track to clip
-                onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item -> if (index == trackIndex) item.copy(clips = item.clips.filterNot { it.id == clipId }) else item }))
-                statusMessage = "Clip cut"
+                // Arrangement Cut splits at the playhead; it must not delete the entire clip.
+                val split = splitWaveClip(clip, playheadTick)
+                when {
+                    split == null -> statusMessage = "Place the playhead inside the clip to split it"
+                    track.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK -> statusMessage = "Clip limit reached for this track"
+                    else -> {
+                        val (left, right) = split
+                        onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item ->
+                            if (index == trackIndex) item.copy(clips = (item.clips.filterNot { it.id == clipId } + left + right).sortedBy { it.startTick }) else item
+                        }))
+                        statusMessage = "Clip split at playhead"
+                    }
+                }
             }
             "Copy" -> { copiedClip = track to clip; statusMessage = "Clip copied" }
             "Duplicate" -> {
@@ -955,7 +998,12 @@ private fun ArrangementWorkspace(
                                 clip.copy(
                                     startTick = safeStart,
                                     lengthTicks = safeLength,
-                                    sourceOffsetTicks = (clip.sourceOffsetTicks + safeDelta).coerceAtLeast(0L),
+                                    sourceOffsetTicks = if (safeDelta >= 0L) {
+                                        val oldOffset = clip.sourceOffsetTicks.coerceAtLeast(0L)
+                                        if (oldOffset > Long.MAX_VALUE - safeDelta) Long.MAX_VALUE else oldOffset + safeDelta
+                                    } else {
+                                        (clip.sourceOffsetTicks.coerceAtLeast(0L) + safeDelta).coerceAtLeast(0L)
+                                    },
                                     midiNotes = nextNotes,
                                     drumSteps = nextDrumSteps
                                 )
@@ -963,9 +1011,8 @@ private fun ArrangementWorkspace(
                         })
                     })
                     onProjectChange(resizedProject)
-                    // Playback uses a prepared arrangement snapshot. Rebuild it at the current
-                    // playhead after an edge-resize commit so the new clip end is honored.
-                    onPlaybackRestart(resizedProject)
+                    // Do not flush/recreate AudioTrack just to commit an edge edit; this
+                    // causes an audible gap. A fresh plan is built on the next explicit Play/seek.
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
                     val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
