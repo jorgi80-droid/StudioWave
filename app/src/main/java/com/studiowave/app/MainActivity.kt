@@ -2485,11 +2485,13 @@ private fun PianoRollWorkspace(
 
     val safePpq = project.ppq.coerceIn(24, 3840).toLong()
     val ticksPerQuarter = safePpq
+    // The editor grid divisions are note values relative to a quarter note, independent
+    // of the displayed meter denominator; the beat ruler itself follows the time signature.
     val stepTicks = (ticksPerQuarter * 4L / snapDenominator.toLong()).coerceAtLeast(1L)
     val beatTicks = (ticksPerQuarter * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
-    val stepsPerBeat = (beatTicks.toDouble() / stepTicks.toDouble()).roundToInt().coerceAtLeast(1)
+    val stepsPerBeat = kotlin.math.ceil(beatTicks.toDouble() / stepTicks.toDouble()).toInt().coerceAtLeast(1)
     val ticksPerBar = (beatTicks * project.numerator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
-    val stepsPerBar = (ticksPerBar.toDouble() / stepTicks.toDouble()).roundToInt().coerceAtLeast(1)
+    val stepsPerBar = kotlin.math.ceil(ticksPerBar.toDouble() / stepTicks.toDouble()).toInt().coerceAtLeast(1)
     val rowHeight = (18f * zoomY).coerceIn(10f, 44f)
     val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
     // Base the visible musical span on the selected clip duration, like Arrangement zoom:
