@@ -2569,11 +2569,14 @@ private fun PianoRollWorkspace(
             SmallAction("+ LEN") {
                 val selected = notes.firstOrNull { it.id == selectedNoteId }
                 if (selected != null) {
-                    updateNotes(notes.map { note ->
+                    val updated = notes.map { note ->
                         if (note.id == selected.id) {
                             note.copy(durationTicks = (note.durationTicks + stepTicks).coerceAtMost(project.ppq.toLong() * 4L * 4096L))
-                        } else note
-                    })
+                        } else {
+                            note
+                        }
+                    }
+                    updateNotes(updated)
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -2757,6 +2760,7 @@ private fun PianoRollWorkspace(
     }
 }
 
+@Composable
 @Composable
 private fun Float.format(digits: Int): String = "%.${digits}f".format(java.util.Locale.US, this)
 
@@ -3052,6 +3056,7 @@ private fun DeviceDock(
     }
 }
 
+@Composable
 @Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
