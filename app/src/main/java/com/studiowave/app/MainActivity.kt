@@ -664,8 +664,8 @@ private fun StudioWaveApp() {
             } else {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
                 if (audioError != null) {
-                    Surface(color = Color(0xFF4B2424), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
-                        Text(audioError!!, color = Color(0xFFFFD4D4), fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), maxLines = 2)
+                    Surface(color = LocalStudioWavePalette.current.danger.copy(alpha = 0.22f), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
+                        Text(audioError!!, color = LocalStudioWavePalette.current.text, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), maxLines = 2)
                     }
                 }
                 TransportBar(
@@ -708,7 +708,7 @@ private fun StudioWaveApp() {
                         if (selectedWorkspace != "ARRANGEMENT") {
                             Row(
                                 Modifier.fillMaxWidth().height(25.dp)
-                                    .background(Color(0xFF292B30), RoundedCornerShape(5.dp))
+                                    .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp))
                                     .padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -930,9 +930,9 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
     ) {
         Text(title, fontSize = 9.sp, color = AbletonOrange, fontWeight = FontWeight.Black, maxLines = 1)
         Spacer(Modifier.width(8.dp))
-        Text(subtitle, fontSize = 8.sp, color = Color(0xFFB0B3BB), maxLines = 1)
+        Text(subtitle, fontSize = 8.sp, color = LocalStudioWavePalette.current.muted, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        Surface(color = Color(0xFF383B41), shape = RoundedCornerShape(5.dp),
+        Surface(color = LocalStudioWavePalette.current.control, shape = RoundedCornerShape(5.dp),
             modifier = Modifier.size(width = 38.dp, height = 23.dp)
                 .clickable(onClickLabel = "Return to Arrangement", onClick = onBack)) {
             Box(contentAlignment = Alignment.Center) { Text("BACK", fontSize = 7.sp, fontWeight = FontWeight.Bold) }
@@ -1152,7 +1152,7 @@ private fun ArrangementWorkspace(
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
                 .toFloat().coerceIn(0.1f, 16f)
         }
-        Column(Modifier.fillMaxSize().background(Color(0xFF17181B), RoundedCornerShape(7.dp)).padding(1.dp)) {
+        Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(104.dp)) {
@@ -1414,7 +1414,7 @@ private fun ArrangementWorkspace(
                 color = Color(0xF21B1D21),
                 contentColor = Color.White,
                 shape = RoundedCornerShape(9.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF454950)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, LocalStudioWavePalette.current.border),
                 shadowElevation = 8.dp,
                 modifier = Modifier.align(Alignment.BottomStart).padding(start = 110.dp, bottom = 8.dp)
                     .widthIn(min = 220.dp, max = 300.dp)
@@ -1517,7 +1517,7 @@ private fun ArrangementWorkspace(
                 }
                 if (isError) {
                     Surface(
-                        color = Color(0xFF3D2929).copy(alpha = 0.94f),
+                        color = LocalStudioWavePalette.current.danger.copy(alpha = 0.22f),
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.padding(4.dp).clickable { statusMessage = null }
                     ) {
@@ -1591,7 +1591,7 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
     val clip = track?.clips?.firstOrNull()
     val rawSteps = clip?.drumSteps ?: emptyList()
     val steps = rawSteps.take(16) + List((16 - rawSteps.size).coerceAtLeast(0)) { false }
-    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(7.dp)) {
+    Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room).padding(7.dp)) {
         WorkspaceTitleBar("DRUM RACK  /  STEP SEQUENCER", track?.name ?: "No drum track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("16 STEPS", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
@@ -1613,7 +1613,7 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
                 val isActive = steps[step]
                 val accent = step % 4 == 0
                 Surface(
-                    color = if (isActive) Mint else if (accent) Color(0xFF343A43) else Color(0xFF222428),
+                    color = if (isActive) Mint else if (accent) LocalStudioWavePalette.current.control else LocalStudioWavePalette.current.room,
                     shape = RoundedCornerShape(3.dp),
                     modifier = Modifier.weight(1f).fillMaxHeight().clickable {
                         if (track != null && clip != null) {
@@ -1624,7 +1624,7 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
                         }
                     }
                 ) {
-                    Box(contentAlignment = Alignment.Center) { Text((step + 1).toString(), color = if (isActive) Color(0xFF141619) else Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold) }
+                    Box(contentAlignment = Alignment.Center) { Text((step + 1).toString(), color = if (isActive) LocalStudioWavePalette.current.room else LocalStudioWavePalette.current.text, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
                 }
             }
         }
@@ -1719,7 +1719,7 @@ private fun AudioEditorWorkspace(
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
         }
-        Box(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF27292E), RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().weight(1f).background(LocalStudioWavePalette.current.canvas, RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
             if (waveform.isNotEmpty()) {
                 Canvas(Modifier.fillMaxSize().padding(12.dp)) {
                     val mid = size.height / 2f
@@ -1766,12 +1766,12 @@ private fun TrackHeader(
     Row(
         Modifier.fillMaxWidth().offset(y = ((rowTopDp - scrollTracks) * verticalZoom).dp)
             .height((rowHeightDp * verticalZoom).dp).padding(bottom = 2.dp)
-            .background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
+            .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
         Column(Modifier.weight(1f).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
-            Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(track.name, fontSize = 9.sp, color = LocalStudioWavePalette.current.text, fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("M", fontSize = 8.sp, color = if (track.muted) Red else MutedText, modifier = Modifier.clickable { onMuteToggle() })
@@ -1779,7 +1779,7 @@ private fun TrackHeader(
                 if (track.kind == "audio") {
                     Box(
                         Modifier.size(width = 24.dp, height = 19.dp)
-                            .background(Color(0xFF17443D), RoundedCornerShape(5.dp))
+                            .background(LocalStudioWavePalette.current.accent.copy(alpha = 0.2f), RoundedCornerShape(5.dp))
                             .pointerInput(track.id) {
                                 detectHorizontalDragGestures(
                                     onDragStart = { scratchDelta = 0f },
@@ -2059,7 +2059,7 @@ private fun TimelineGrid(
              for (bar in firstVisibleBar..lastVisibleBar) {
                  val x = canvasViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
                  if (x >= -barWidth && x <= size.width + barWidth) {
-                     drawLine(if (bar % 4 == 0) Color(0xFF51555D) else Color(0xFF32363D),
+                     drawLine(if (bar % 4 == 0) LocalStudioWavePalette.current.grid else LocalStudioWavePalette.current.grid.copy(alpha = 0.65f),
                          Offset(x, rulerHeightPx), Offset(x, size.height),
                          if (bar % 4 == 0) 1.5f else 0.7f)
                      val beatTicks = timebase.ticksPerBeat
@@ -2070,7 +2070,7 @@ private fun TimelineGrid(
                      for (beat in 0 until timebase.safeNumerator) {
                          val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
                          val beatX = canvasViewport.timeToViewportX(beatTick)
-                         if (beat > 0) drawLine(Color(0xFF292D33), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
+                         if (beat > 0) drawLine(LocalStudioWavePalette.current.grid.copy(alpha = 0.55f), Offset(beatX, rulerHeightPx), Offset(beatX, size.height), 0.8f)
                          if (subdivision > 0L) {
                              var tickOffset = subdivision
                              while (tickOffset < beatTicks) {
@@ -2080,7 +2080,7 @@ private fun TimelineGrid(
                                      beatTicks / 4L -> 0.38f
                                      else -> 0.24f
                                  }
-                                 drawLine(Color(0xFF30343B).copy(alpha = alpha),
+                                 drawLine(LocalStudioWavePalette.current.grid.copy(alpha = alpha),
                                      Offset(subX, rulerHeightPx), Offset(subX, size.height), 0.55f)
                                  tickOffset += subdivision
                              }
@@ -2093,7 +2093,7 @@ private fun TimelineGrid(
                     ((row.topDp - scrollTracks) * verticalZoom).dp.toPx()
                 }
                 if (rowTopPx >= rulerHeightPx && rowTopPx <= size.height) {
-                    drawLine(Color(0xFF3A3D44), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
+                    drawLine(LocalStudioWavePalette.current.grid.copy(alpha = 0.8f), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
                 }
             }
         }
@@ -2101,7 +2101,7 @@ private fun TimelineGrid(
         // Arrangement Overview mirrors Live's whole-song map and its current viewport.
         Row(
             Modifier.fillMaxWidth().height(18.dp)
-                .background(Color(0xFF232529), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
                 .padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2183,12 +2183,12 @@ private fun TimelineGrid(
                          center = Offset(x, size.height * 0.55f))
                  }
             }
-            drawRect(Color(0xFF2B2E34), size = Size(size.width, with(density) { 2.dp.toPx() }))
+            drawRect(LocalStudioWavePalette.current.grid, size = Size(size.width, with(density) { 2.dp.toPx() }))
             val playheadX = rulerViewport.timeToViewportX(playheadTick)
             if (playheadX >= 0f && playheadX <= size.width) {
                 val markerRadius = with(density) { 3.dp.toPx() }
-                drawLine(Color(0xFFFF4F64), Offset(playheadX, 0f), Offset(playheadX, size.height), 1.6f)
-                drawCircle(Color(0xFFFF4F64), markerRadius, Offset(playheadX, markerRadius))
+                drawLine(LocalStudioWavePalette.current.danger, Offset(playheadX, 0f), Offset(playheadX, size.height), 1.6f)
+                drawCircle(LocalStudioWavePalette.current.danger, markerRadius, Offset(playheadX, markerRadius))
             }
         }
 
@@ -2503,7 +2503,7 @@ private fun TimelineGrid(
             Column(
                 Modifier.offset(x = x, y = y)
                     .width(menuWidth)
-                    .background(Color(0xFF30343A), RoundedCornerShape(12.dp))
+                    .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(12.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -2516,7 +2516,7 @@ private fun TimelineGrid(
                         rowActions.forEach { action ->
                             val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
                             Surface(
-                                color = if (action == "Open editor") Mint.copy(alpha = 0.18f) else Color(0xFF23262B),
+                                color = if (action == "Open editor") LocalStudioWavePalette.current.accent.copy(alpha = 0.18f) else LocalStudioWavePalette.current.room,
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f).height(29.dp).clickable {
                                     if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
@@ -2599,7 +2599,7 @@ private fun PianoRollWorkspace(
         }
         Row(
             Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 3.dp)
-                .background(Color(0xFF202226), RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+                .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
@@ -2655,7 +2655,7 @@ private fun PianoRollWorkspace(
 
         Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
             if (keyboardVisible) {
-                Column(Modifier.width(55.dp).fillMaxHeight().background(Color(0xFF202328))) {
+                Column(Modifier.width(55.dp).fillMaxHeight().background(LocalStudioWavePalette.current.panel)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
@@ -2668,7 +2668,7 @@ private fun PianoRollWorkspace(
                                 val isC = pitch % 12 == 0
                                 Box(
                                     Modifier.fillMaxWidth().height(rowHeight.dp)
-                                        .background(if (isBlack) Color(0xFF17191C) else Color(0xFF343840))
+                                        .background(if (isBlack) LocalStudioWavePalette.current.room else LocalStudioWavePalette.current.control)
                                         .clickable { topPitch = (pitch + keyVisibleRows - 1).coerceIn(0, keyMaxTopPitch) },
                                     contentAlignment = Alignment.CenterStart
                                 ) {
@@ -2683,7 +2683,7 @@ private fun PianoRollWorkspace(
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF1B1D21))) {
+                BoxWithConstraints(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.canvas)) {
                     val viewportWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
                     val viewportHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxHeight.toPx() }
                     val rowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
@@ -2788,7 +2788,7 @@ private fun PianoRollWorkspace(
                             for (row in 0..rowsVisible) {
                                 val pitch = currentTopPitch - row
                                 val isC = pitch >= 0 && pitch % 12 == 0
-                                drawLine(if (isC) Color(0xFF69717D) else Color(0xFF343840),
+                                drawLine(if (isC) LocalStudioWavePalette.current.border else LocalStudioWavePalette.current.grid,
                                     Offset(0f, row * localRowHeight), Offset(size.width, row * localRowHeight),
                                     if (isC) 1.2f else 0.45f)
                             }
@@ -2796,7 +2796,7 @@ private fun PianoRollWorkspace(
                                 val stepAbsolute = pageStartStep + col
                                 val bar = stepAbsolute % stepsPerBar == 0
                                 val beat = stepAbsolute % stepsPerBeat == 0
-                                drawLine(when { bar -> Color(0xFF89919D); beat -> Color(0xFF69717D); else -> Color(0xFF343840) },
+                                drawLine(when { bar -> LocalStudioWavePalette.current.border; beat -> LocalStudioWavePalette.current.grid; else -> LocalStudioWavePalette.current.grid.copy(alpha = 0.65f) },
                                     Offset(col * localColWidth, 0f), Offset(col * localColWidth, size.height),
                                     when { bar -> 1.4f; beat -> 0.9f; else -> 0.45f })
                             }
@@ -2807,7 +2807,7 @@ private fun PianoRollWorkspace(
                                 val width = (note.durationTicks.toDouble() / stepTicks.toDouble() * localColWidth).toFloat().coerceAtLeast(3f)
                                 if (note.pitch in 0..119 && x < size.width && x + width > 0 && y + localRowHeight > 0 && y < size.height) {
                                     drawRoundRect(
-                                        color = if (note.id == selectedNoteId) Color(0xFFFF764D) else Mint,
+                                        color = if (note.id == selectedNoteId) LocalStudioWavePalette.current.orange else LocalStudioWavePalette.current.accent,
                                         topLeft = Offset(x.toFloat(), y + 1f),
                                         size = Size(width, (localRowHeight - 2f).coerceAtLeast(2f)),
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
@@ -2873,7 +2873,7 @@ private fun MixerWorkspace(
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                Text("VOL  " + (track.volume * 100).toInt() + "%", color = Color(0xFFB6B9C0), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                Text("VOL  " + (track.volume * 100).toInt() + "%", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 val latestProject by rememberUpdatedState(project)
                 Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Canvas(Modifier.weight(1f).fillMaxHeight()) {
@@ -2886,7 +2886,7 @@ private fun MixerWorkspace(
                             val y = size.height - (segment + 1) * segmentHeight
                             val active = segment / 18f <= peak
                             drawRoundRect(
-                                color = if (!active) Color(0xFF131518) else if (segment >= 15) Color(0xFFCC5B55) else if (segment >= 11) Color(0xFFE4B45E) else Mint,
+                                color = if (!active) LocalStudioWavePalette.current.room else if (segment >= 15) LocalStudioWavePalette.current.danger else if (segment >= 11) LocalStudioWavePalette.current.warning else LocalStudioWavePalette.current.accent,
                                 topLeft = Offset((size.width - lane) / 2f, y + 1f),
                                 size = Size(lane, (segmentHeight - 2f).coerceAtLeast(1f)),
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
@@ -2991,13 +2991,13 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
     Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(10.dp)) {
         Text("BROWSER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
         Spacer(Modifier.height(8.dp))
-        Button(onClick = onImportAudio, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF18443F))) {
+        Button(onClick = onImportAudio, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalStudioWavePalette.current.accent.copy(alpha = 0.18f), contentColor = LocalStudioWavePalette.current.accent)) {
             Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Mint, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text("IMPORT AUDIO", fontSize = 10.sp, color = Color.White)
         }
         Spacer(Modifier.height(8.dp))
-        Surface(color = Color(0xFF25282D), shape = RoundedCornerShape(7.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Surface(color = LocalStudioWavePalette.current.panel, shape = RoundedCornerShape(7.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Column(Modifier.padding(10.dp)) {
                 Text("LOCAL AUDIO", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Mint)
                 Text("Choose an audio file from Android storage. It will be placed on the audio track in Arrangement.",
@@ -3020,7 +3020,7 @@ private fun DeviceDock(
     var page by remember { mutableStateOf("MIX") }
     Column(
         Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp)
-            .background(Color(0xFF25272B), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
+            .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3136,8 +3136,8 @@ private fun DeviceDock(
 @Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
-        color = Color(0xFF353A42),
-        contentColor = Color(0xFFE4E8EF),
+        color = LocalStudioWavePalette.current.control,
+        contentColor = LocalStudioWavePalette.current.text,
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.height(40.dp).defaultMinSize(minWidth = 44.dp)
             .clickable(onClickLabel = description, onClick = onClick)
