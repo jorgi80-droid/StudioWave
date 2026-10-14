@@ -2485,13 +2485,33 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Text(
-                                clip.name,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = timelinePalette.text,
-                                maxLines = 1
-                            )
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    clip.name,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = timelinePalette.text,
+                                    maxLines = 1
+                                )
+                                val clipBadge = when (track.kind) {
+                                    "midi" -> "MIDI · ${clip.midiNotes.size} N"
+                                    "drum" -> "DRUM · ${clip.drumSteps.count { it }}"
+                                    "audio" -> "AUDIO"
+                                    else -> track.kind.uppercase()
+                                }
+                                Text(
+                                    clipBadge,
+                                    fontSize = 6.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = timelinePalette.text.copy(alpha = 0.82f),
+                                    maxLines = 1
+                                )
+                            }
                             if (track.kind == "drum") {
                                 // Step-sequencer thumbnail: 16 equal steps, stronger beat accents, active hits clearly visible.
                                 Row(
