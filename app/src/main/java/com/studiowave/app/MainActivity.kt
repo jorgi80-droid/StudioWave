@@ -642,6 +642,30 @@ private fun StudioWaveApp() {
                     onToggleDevices = { showDock = !showDock }
                     )
                     Spacer(Modifier.width(4.dp))
+                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        if (selectedWorkspace != "ARRANGEMENT") {
+                            Row(
+                                Modifier.fillMaxWidth().height(25.dp)
+                                    .background(Color(0xFF292B30), RoundedCornerShape(5.dp))
+                                    .padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    when (selectedWorkspace) {
+                                        "PIANO ROLL" -> "CLIP VIEW  /  MIDI NOTE EDITOR"
+                                        "AUDIO EDITOR" -> "CLIP VIEW  /  AUDIO"
+                                        "DRUM SEQUENCER" -> "DRUM RACK  /  STEP SEQUENCER"
+                                        "MIXER" -> "MIXER"
+                                        "BROWSER" -> "BROWSER  /  SAMPLES"
+                                        else -> selectedWorkspace
+                                    },
+                                    color = AbletonOrange, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1
+                                )
+                                Spacer(Modifier.weight(1f))
+                                Text(project.name.take(18), color = MutedText, fontSize = 8.sp, maxLines = 1)
+                            }
+                        }
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (selectedWorkspace) {
                         "MIXER" -> MixerWorkspace(
                             project,
@@ -684,21 +708,21 @@ private fun StudioWaveApp() {
                             isPlaying = playing,
                             onSeekTick = { tick -> seekToTick(tick) })
                     }
+                        }
+                    }
                 }
                 AnimatedVisibility(
-                    visible = showDock,
-                    enter = fadeIn(tween(150)) + slideInVertically(tween(180), initialOffsetY = { it / 3 }),
-                    exit = fadeOut(tween(100)) + slideOutVertically(tween(120), targetOffsetY = { it / 4 })
+                    visible = showDock && selectedWorkspace == "ARRANGEMENT",
+                    enter = fadeIn(tween(120)) + slideInVertically(tween(150), initialOffsetY = { it / 4 }),
+                    exit = fadeOut(tween(80)) + slideOutVertically(tween(100), targetOffsetY = { it / 4 })
                 ) {
-                    Box(Modifier.fillMaxWidth().height(105.dp)) {
-                        DeviceDock(
-                            project = project,
-                            selectedTrackId = editorTrackId,
-                            onSelectTrack = { editorTrackId = it },
-                            onProjectChange = { changeProject(it) },
-                            onToggle = { showDock = false }
-                        )
-                    }
+                    DeviceDock(
+                        project = project,
+                        selectedTrackId = editorTrackId,
+                        onSelectTrack = { editorTrackId = it },
+                        onProjectChange = { changeProject(it) },
+                        onToggle = { showDock = false }
+                    )
                 }
             }
         }
@@ -833,7 +857,8 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
         Text(subtitle, fontSize = 8.sp, color = Color(0xFFB0B3BB), maxLines = 1)
         Spacer(Modifier.weight(1f))
         Surface(color = Color(0xFF383B41), shape = RoundedCornerShape(5.dp),
-            modifier = Modifier.size(width = 38.dp, height = 23.dp).clickable(onClickLabel = "Return to Arrangement", onClick = onBack)) {
+            modifier = Modifier.size(width = 38.dp, height = 23.dp)
+                .clickable(onClickLabel = "Return to Arrangement", onClick = onBack)) {
             Box(contentAlignment = Alignment.Center) { Text("BACK", fontSize = 7.sp, fontWeight = FontWeight.Bold) }
         }
     }
@@ -1048,7 +1073,49 @@ private fun ArrangementWorkspace(
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
                 .toFloat().coerceIn(0.1f, 16f)
         }
-        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
+        Column(Modifier.fillMaxSize().background(Color(0xFF17181B), RoundedCornerShape(7.dp)).padding(1.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(18.dp)
+                .background(Color(0xFF24262A), RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
+                .padding(horizontal = 3.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("OVERVIEW", color = MutedText, fontSize = 7.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(48.dp))
+            Canvas(
+                Modifier.weight(1f).fillMaxHeight()
+                    .pointerInput(project.tracks, scrollTicks, zoom, maxEndTick) {
+                        detectTapGestures { point ->
+                            val projectEnd = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
+                            onScroll((point.x / size.width.coerceAtLeast(1).toDouble() * projectEnd)
+                                .coerceIn(0.0, maxArrangementTick(fitTimebase).toDouble()))
+                        }
+                    }
+            ) {
+                val endTick = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
+                val rowHeight = size.height / project.tracks.size.coerceAtLeast(1)
+                project.tracks.forEachIndexed { index, track ->
+                    track.clips.forEach { clip ->
+                        val left = (clip.startTick.toDouble() / endTick * size.width).toFloat()
+                        val width = (clip.lengthTicks.toDouble() / endTick * size.width).toFloat().coerceAtLeast(1f)
+                        drawRoundRect(
+                            Color(track.colorArgb.toInt()).copy(alpha = 0.9f),
+                            Offset(left, index * rowHeight),
+                            Size(width, rowHeight.coerceAtLeast(1f)),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
+                        )
+                    }
+                }
+                val viewportStart = (scrollTicks / endTick * size.width).toFloat().coerceIn(0f, size.width)
+                val visibleTicks = with(density) { (maxWidth - 8.dp - 104.dp).coerceAtLeast(1.dp).toPx() } /
+                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, 1f).pixelsPerTick
+                val viewportWidth = (visibleTicks / endTick * size.width).toFloat().coerceIn(2f, size.width)
+                drawRoundRect(
+                    Color.White.copy(alpha = 0.2f), Offset(viewportStart, 0f),
+                    Size(viewportWidth, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
+                )
+            }
+        }
         Box(Modifier.fillMaxWidth().weight(1f)) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(104.dp)) {
@@ -2326,37 +2393,40 @@ private fun PianoRollWorkspace(
 ) {
     val clip = track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
-    // The snap selector changes the real musical step size used by note placement and the grid.
     var snapDenominator by remember(track?.id, clip?.id) { mutableStateOf(16) }
+    var pageOffsetSteps by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
+    var keyboardVisible by remember(track?.id) { mutableStateOf(true) }
     val stepTicks = (project.ppq.toLong() * 4L / snapDenominator.toLong()).coerceAtLeast(1L)
     val beatTicks = (project.ppq.toLong() * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
     val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
-    val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks)
-        .toInt().coerceAtLeast(1)
+    val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks).toInt().coerceAtLeast(1)
     val visibleSteps = 32
-    val highestPitch = 83
-    val lowestPitch = 48
+    val highestPitch = 95
+    val lowestPitch = 36
     val pitchRows = highestPitch - lowestPitch + 1
+    val clipLengthSteps = ((clip?.lengthTicks ?: stepTicks * visibleSteps) / stepTicks).toInt().coerceAtLeast(visibleSteps)
+    val maxPageOffset = (clipLengthSteps - visibleSteps).coerceAtLeast(0)
+    val pageStartStep = pageOffsetSteps.coerceIn(0, maxPageOffset)
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(5.dp)) {
-        WorkspaceTitleBar("CLIP VIEW / MIDI EDITOR", track?.name ?: "Choose a MIDI track", onBack)
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Surface(color = Color(0xFF29453D), shape = RoundedCornerShape(4.dp)) {
-                Text("NOTES", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
-            }
-            SmallAction("SNAP 1/${snapDenominator}") {
-                snapDenominator = when (snapDenominator) {
-                    16 -> 8
-                    8 -> 4
-                    else -> 16
-                }
+        WorkspaceTitleBar("CLIP VIEW  /  MIDI NOTE EDITOR", "${track?.name ?: "No MIDI track"}  ·  ${clip?.name ?: "No clip"}", onBack)
+        Row(
+            Modifier.fillMaxWidth().padding(vertical = 3.dp)
+                .background(Color(0xFF222428), RoundedCornerShape(5.dp))
+                .padding(horizontal = 5.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
+        ) {
+            SmallAction(if (keyboardVisible) "NOTES" else "VEL") { keyboardVisible = !keyboardVisible }
+            SmallAction("−") { pageOffsetSteps = (pageStartStep - visibleSteps).coerceAtLeast(0) }
+            Text("BAR ${pageStartStep / stepsPerBar + 1}", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            SmallAction("+") { pageOffsetSteps = (pageStartStep + visibleSteps).coerceAtMost(maxPageOffset) }
+            SmallAction("1/${snapDenominator}") {
+                snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; else -> 16 }
             }
             Spacer(Modifier.weight(1f))
-            Text("TAP GRID: ADD / REMOVE NOTE", color = MutedText, fontSize = 8.sp)
+            Text(if (keyboardVisible) "ADD / REMOVE NOTES" else "EDIT VELOCITY", color = MutedText, fontSize = 7.sp, maxLines = 1)
         }
         Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
-            Canvas(Modifier.width(38.dp).fillMaxHeight().background(Color(0xFF202328))) {
+            if (keyboardVisible) Canvas(Modifier.width(54.dp).fillMaxHeight().background(Color(0xFF202328))) {
                 val rowH = size.height / pitchRows.toFloat()
                 for (row in 0 until pitchRows) {
                     val pitch = highestPitch - row
@@ -2374,7 +2444,7 @@ private fun PianoRollWorkspace(
             }
             Canvas(
                 Modifier.weight(1f).fillMaxHeight().background(Color(0xFF1B1D21))
-                    .pointerInput(track?.id, clip?.id, notes, stepTicks) {
+                    .pointerInput(track?.id, clip?.id, notes, stepTicks, pageStartStep) {
                         detectTapGestures { point ->
                             if (track == null || clip == null) return@detectTapGestures
                             val rowH = size.height / pitchRows.toFloat()
@@ -2382,7 +2452,7 @@ private fun PianoRollWorkspace(
                             val row = (point.y / rowH).toInt().coerceIn(0, pitchRows - 1)
                             val col = (point.x / colW).toInt().coerceIn(0, visibleSteps - 1)
                             val pitch = (highestPitch - row).coerceIn(lowestPitch, highestPitch)
-                            val startTick = col * stepTicks
+                            val startTick = (pageStartStep + col) * stepTicks
                             val existing = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
                             val updatedNotes = if (existing != null) notes.filterNot { it.id == existing.id }
                                 else notes + com.studiowave.app.data.MidiNote(
@@ -2426,7 +2496,7 @@ private fun PianoRollWorkspace(
                 }
                 notes.forEach { note ->
                     if (note.pitch !in lowestPitch..highestPitch) return@forEach
-                    val x = note.startTick.toDouble() / stepTicks.toDouble() * colW
+                    val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * colW
                     val y = (highestPitch - note.pitch).toFloat() * rowH
                     val width = note.durationTicks.toDouble() / stepTicks.toDouble() * colW
                     if (x < size.width && x + width > 0.0) {
@@ -2439,16 +2509,16 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(48.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (!keyboardVisible) Row(Modifier.fillMaxWidth().height(58.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("VEL", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(38.dp))
+                modifier = Modifier.width(54.dp))
             Canvas(
                 Modifier.weight(1f).fillMaxHeight().background(Color(0xFF202328), RoundedCornerShape(3.dp))
                     .pointerInput(track?.id, clip?.id, notes, stepTicks) {
                         detectTapGestures { point ->
                             if (track == null || clip == null || notes.isEmpty()) return@detectTapGestures
                             val colW = size.width / visibleSteps.toFloat()
-                            val targetTick = ((point.x / colW).toInt().coerceIn(0, visibleSteps - 1) * stepTicks)
+                            val targetTick = ((pageStartStep + (point.x / colW).toInt().coerceIn(0, visibleSteps - 1)) * stepTicks)
                             val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) } ?: return@detectTapGestures
                             val velocity = (127f * (1f - point.y / size.height.coerceAtLeast(1))).roundToInt().coerceIn(1, 127)
                             val updatedNotes = notes.map { if (it.id == nearest.id) it.copy(velocity = velocity) else it }
@@ -2474,8 +2544,8 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        Text("Velocity: tap below a note to edit its value • autosaved with the project",
-            color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(start = 38.dp, top = 3.dp))
+        Text("Touch grid to add/remove notes • use −/+ to move by one page • project autosave",
+            color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(start = 54.dp, top = 3.dp))
     }
 }
 
@@ -2488,13 +2558,13 @@ private fun MixerWorkspace(
 ) {
     Row(
         Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp))
-            .horizontalScroll(rememberScrollState()).padding(5.dp),
+            .horizontalScroll(rememberScrollState()).padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         project.tracks.forEach { track ->
             Column(
-                Modifier.width(112.dp).fillMaxHeight()
-                    .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
+                Modifier.width(104.dp).fillMaxHeight()
+                    .background(Color(0xFF25272B), RoundedCornerShape(5.dp)).padding(horizontal = 5.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -2512,7 +2582,7 @@ private fun MixerWorkspace(
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                Text("VOL " + (track.volume * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
+                Text("VOL  " + (track.volume * 100).toInt() + "%", color = Color(0xFFB6B9C0), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 val latestProject by rememberUpdatedState(project)
                 Canvas(
                     Modifier.fillMaxWidth().weight(1f)
@@ -2560,7 +2630,7 @@ private fun MixerWorkspace(
                     track.pan >= 0.95f -> "R"
                     else -> (track.pan * 100).toInt().toString()
                 }
-                Text("PAN " + panLabel, color = MutedText, fontSize = 8.sp)
+                Text("PAN  " + panLabel, color = Color(0xFFB6B9C0), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 Slider(
                     value = track.pan.coerceIn(-1f, 1f),
                     onValueChange = { value ->
@@ -2581,8 +2651,8 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(122.dp).fillMaxHeight()
-                .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
+            Modifier.width(110.dp).fillMaxHeight()
+                .background(Color(0xFF292B30), RoundedCornerShape(5.dp)).padding(6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
@@ -2632,23 +2702,24 @@ private fun DeviceDock(
 ) {
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     Column(
-        Modifier.fillMaxWidth().height(105.dp)
-            .background(Raised, RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 5.dp),
+        Modifier.fillMaxWidth().height(92.dp)
+            .background(Color(0xFF25272B), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("TRACK INSPECTOR", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+            Text("DEVICE VIEW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = AbletonOrange)
             Spacer(Modifier.width(8.dp))
-            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 8.sp, color = Mint, maxLines = 1)
+            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 8.sp, color = Color(0xFFE4E8EF), maxLines = 1)
+            Text("  ·  MIX / DEVICES", fontSize = 7.sp, color = MutedText, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            SmallAction("HIDE") { onToggle() }
+            SmallAction("× CLOSE") { onToggle() }
         }
         if (project.tracks.isEmpty()) {
             Text("Tambahkan track di Arrangement untuk mengatur volume, pan, mute, dan solo.",
                 color = MutedText, fontSize = 8.sp, maxLines = 1)
         } else {
             Row(
-                Modifier.fillMaxWidth().height(23.dp).horizontalScroll(rememberScrollState()),
+                Modifier.fillMaxWidth().height(21.dp).horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -2686,7 +2757,7 @@ private fun DeviceDock(
                                 }))
                             },
                             valueRange = 0f..1.5f,
-                            modifier = Modifier.fillMaxWidth().height(21.dp)
+                            modifier = Modifier.fillMaxWidth().height(19.dp)
                         )
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
