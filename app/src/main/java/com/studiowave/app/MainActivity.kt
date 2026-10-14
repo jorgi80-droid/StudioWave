@@ -2638,15 +2638,16 @@ private fun PianoRollWorkspace(
                 BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
                     val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
                     val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
-                    val currentStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
+                    val gridStepsPerBar = stepsPerBar.coerceAtLeast(1)
+                    val currentStepsOnScreen = (gridStepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
                     val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
                     val rowHeightPx = with(pianoDensity) { currentRowHeight.dp.toPx() }
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                     val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
                     val currentTopPitch = gestureTopPitch.value.coerceIn(maxTopPitch, 119)
                     val colWidthPx = (viewportWidthPx / currentStepsOnScreen.toFloat()).coerceAtLeast(2f)
+                    val currentStart = gestureStartStep.value.coerceIn(0, (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0))
                     val maxHorizontalScroll = (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0)
-                    val currentStart = gestureStartStep.value
                     val contentModifier = Modifier
                         .fillMaxSize()
                         .pointerInput(track?.id, clip?.id, snapDenominator, keyboardVisible, viewportWidthPx, viewportHeightPx) {
@@ -2686,7 +2687,9 @@ private fun PianoRollWorkspace(
                                                 .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(newSteps)
                                             val newStart = (anchorStep - midpoint.x / newColWidth).roundToInt()
                                                 .coerceIn(0, (newClipSteps - newSteps).coerceAtLeast(0))
-                                            val newTop = (anchorPitch + midpoint.y / newRowHeight).roundToInt().coerceIn(0, 119)
+                                            val visibleRowsAfterZoom = (viewportHeightPx / newRowHeight).roundToInt().coerceIn(12, 120)
+                                            val newTop = (anchorPitch + midpoint.y / newRowHeight).roundToInt()
+                                                .coerceIn((visibleRowsAfterZoom - 1).coerceAtMost(119), 119)
                                             if (kotlin.math.abs(newZoomX - gestureZoomX.value) > 0.0005f) zoomX = newZoomX
                                             if (kotlin.math.abs(newZoomY - gestureZoomY.value) > 0.0005f) zoomY = newZoomY
                                             if (newStart != gestureStartStep.value) startStep = newStart
