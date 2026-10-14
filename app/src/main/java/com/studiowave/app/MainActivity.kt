@@ -2477,7 +2477,12 @@ private fun TimelineGrid(
                                     }
                                 }
                             } else if (track.kind == "audio") {
-                                AudioClipWaveform(clip.sourceUri, clipInk)
+                                AudioClipWaveform(
+                                    sourceUri = clip.sourceUri,
+                                    accent = clipInk,
+                                    sourceOffsetTicks = clip.sourceOffsetTicks,
+                                    visibleLengthTicks = clip.lengthTicks
+                                )
                             }
                                 }
                                 var leftResizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
@@ -3953,8 +3958,15 @@ private object WaveformPeakCache {
 }
 
 @Composable
-private fun AudioClipWaveform(sourceUri: String?, accent: Color) {
+private fun AudioClipWaveform(
+    sourceUri: String?,
+    accent: Color,
+    sourceOffsetTicks: Long = 0L,
+    visibleLengthTicks: Long = 1L
+) {
     val context = LocalContext.current
+    val safeOffset = sourceOffsetTicks.coerceAtLeast(0L)
+    val safeLength = visibleLengthTicks.coerceAtLeast(1L)
     var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
     LaunchedEffect(sourceUri) {
         peaks = emptyList()
@@ -3962,9 +3974,9 @@ private fun AudioClipWaveform(sourceUri: String?, accent: Color) {
         try {
             peaks = withContext(Dispatchers.IO) {
                 val decodeJob = currentCoroutineContext()[Job]
-                WaveformPeakCache.get(sourceUri, 48) ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 48) {
+                WaveformPeakCache.get(sourceUri, 240) ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 240) {
                     decodeJob?.ensureActive()
-                }.also { WaveformPeakCache.put(sourceUri, 48, it) }
+                }.also { WaveformPeakCache.put(sourceUri, 240, it) }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -3973,15 +3985,28 @@ private fun AudioClipWaveform(sourceUri: String?, accent: Color) {
         }
     }
     Canvas(Modifier.fillMaxSize()) {
+        val accentColor = accent
         if (peaks.isEmpty()) {
-            drawLine(accent.copy(alpha = 0.25f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 1f)
+            drawLine(accentColor.copy(alpha = 0.3f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 1f)
         } else {
             val mid = size.height / 2f
-            val dx = size.width / peaks.size.coerceAtLeast(1)
-            peaks.forEachIndexed { index, peak ->
-                val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.48f
+            val offset = safeOffset.toDouble()
+            val span = safeLength.toDouble()
+            // The model stores source offset/clip length in musical ticks; map that range
+            // proportionally into the cached source peak array rather than stretching the full
+            // source into every trimmed or resized arrangement clip.
+            val sourceEnd = offset + span
+            val peakCount = peaks.size
+            val startIndex = kotlin.math.floor(offset / (offset + span).coerceAtLeast(1.0) * peakCount)
+                .toInt().coerceIn(0, peakCount - 1)
+            val endIndex = kotlin.math.ceil(sourceEnd / (offset + span).coerceAtLeast(1.0) * peakCount)
+                .toInt().coerceIn(startIndex + 1, peakCount)
+            val visiblePeaks = peaks.subList(startIndex, endIndex)
+            val dx = size.width / visiblePeaks.size.coerceAtLeast(1)
+            visiblePeaks.forEachIndexed { index, peak ->
+                val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.46f
                 val x = (index + 0.5f) * dx
-                drawLine(accent, Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 2f))
+                drawLine(accentColor.copy(alpha = 0.95f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
             }
         }
     }
