@@ -2514,7 +2514,7 @@ private fun PianoRollWorkspace(
                 modifier = Modifier.width(54.dp))
             Canvas(
                 Modifier.weight(1f).fillMaxHeight().background(Color(0xFF202328), RoundedCornerShape(3.dp))
-                    .pointerInput(track?.id, clip?.id, notes, stepTicks) {
+                    .pointerInput(track?.id, clip?.id, notes, stepTicks, pageStartStep) {
                         detectTapGestures { point ->
                             if (track == null || clip == null || notes.isEmpty()) return@detectTapGestures
                             val colW = size.width / visibleSteps.toFloat()
@@ -2535,7 +2535,7 @@ private fun PianoRollWorkspace(
                     drawLine(Color(0xFF343840), Offset(col * colW, 0f), Offset(col * colW, size.height), 0.5f)
                 }
                 notes.forEach { note ->
-                    val x = note.startTick.toDouble() / stepTicks.toDouble() * colW
+                    val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * colW
                     if (x in 0.0..size.width.toDouble()) {
                         val barHeight = size.height * note.velocity.coerceIn(1, 127) / 127f
                         drawRoundRect(Mint.copy(alpha = 0.9f), Offset(x.toFloat() + 2f, size.height - barHeight),
