@@ -2507,12 +2507,12 @@ private fun PianoRollWorkspace(
         .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
-    val currentTopPitch = topPitch.coerceIn(0, 119)
-    val highestPitch = currentTopPitch
-    val lowestPitch = (highestPitch - 119 + 1).coerceAtLeast(0)
     val visiblePitchRows = (600f / rowHeight).roundToInt().coerceIn(12, 120)
     val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
-    val currentVisibleTop = currentTopPitch.coerceIn(maxTopPitch, 119)
+    val currentTopPitch = topPitch.coerceIn(maxTopPitch, 119)
+    val highestPitch = currentTopPitch
+    val lowestPitch = (highestPitch - visiblePitchRows + 1).coerceAtLeast(0)
+    val currentVisibleTop = currentTopPitch
     val verticalScroll = rememberScrollState(((119 - currentVisibleTop) * rowHeight).roundToInt().coerceAtLeast(0))
 
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
