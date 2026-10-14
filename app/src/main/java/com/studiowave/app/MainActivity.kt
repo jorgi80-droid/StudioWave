@@ -930,8 +930,9 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 
 @Composable
 private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Unit) {
+    val p = LocalStudioWavePalette.current
     Row(
-        Modifier.fillMaxWidth().height(29.dp).background(Color(0xFF292B30), RoundedCornerShape(5.dp))
+        Modifier.fillMaxWidth().height(29.dp).background(p.panel, RoundedCornerShape(5.dp))
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
