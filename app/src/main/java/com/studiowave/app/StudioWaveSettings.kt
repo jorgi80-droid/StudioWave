@@ -202,10 +202,21 @@ internal fun StudioWaveSettingsScreen(
 
 @Composable internal fun StudioWaveFaderPreview(p: StudioWavePalette) {
     Canvas(Modifier.fillMaxWidth().height(62.dp)) {
-        val midY = size.height * 0.5f; val left = 5.dp.toPx(); val width = size.width - 10.dp.toPx()
-        drawRoundRect(p.control, topLeft = Offset(left, midY - 3.dp.toPx()), size = Size(width, 6.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
-        drawRoundRect(p.accent, topLeft = Offset(left, midY - 3.dp.toPx()), size = Size(width * 0.62f, 6.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
-        val x = left + width * 0.62f
-        drawRoundRect(p.text, topLeft = Offset(x - 2.dp.toPx(), midY - 11.dp.toPx()), size = Size(4.dp.toPx(), 22.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.dp.toPx()))
+        val leftRail = size.width * 0.40f
+        val railWidth = (size.width * 0.20f).coerceAtLeast(5.dp.toPx())
+        val railTop = 5.dp.toPx()
+        val railBottom = size.height - 5.dp.toPx()
+        for (tick in 0..8) {
+            val y = railTop + (railBottom - railTop) * tick / 8f
+            drawLine(p.grid.copy(alpha = 0.7f), Offset(size.width * 0.08f, y), Offset(size.width * 0.34f, y), 1.dp.toPx())
+        }
+        drawRoundRect(p.control, Offset(leftRail, railTop), Size(railWidth, railBottom - railTop),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
+        val fraction = 0.62f
+        val thumbY = railBottom - fraction * (railBottom - railTop)
+        drawRoundRect(p.accent.copy(alpha = 0.8f), Offset(leftRail, thumbY), Size(railWidth, railBottom - thumbY),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
+        drawRoundRect(p.text, Offset(size.width * 0.16f, thumbY - 3.dp.toPx()), Size(size.width * 0.68f, 6.dp.toPx()),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
     }
 }

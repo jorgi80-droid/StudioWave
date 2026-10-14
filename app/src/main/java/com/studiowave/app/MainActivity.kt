@@ -3118,24 +3118,55 @@ private fun DeviceDock(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text("VOLUME  ·  ${(selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt()}%",
-                                color = devicePalette.muted, fontSize = 9.sp)
-                            Slider(
-                                value = selectedTrack.volume.coerceIn(0f, 1.5f),
-                                onValueChange = { value ->
-                                    onProjectChange(project.copy(tracks = project.tracks.map {
-                                        if (it.id == selectedTrack.id) it.copy(volume = value) else it
-                                    }))
-                                },
-                                valueRange = 0f..1.5f,
-                                modifier = Modifier.fillMaxWidth().height(30.dp),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = devicePalette.text,
-                                    activeTrackColor = devicePalette.accent,
-                                    inactiveTrackColor = devicePalette.control
-                                )
-                            )
+                        Column(Modifier.weight(0.85f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("VOL  ${(selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt()}%",
+                                color = devicePalette.muted, fontSize = 9.sp, maxLines = 1)
+                            val latestProject by rememberUpdatedState(project)
+                            Canvas(
+                                Modifier.fillMaxWidth().weight(1f)
+                                    .pointerInput(selectedTrack.id) {
+                                        detectDragGestures { change, _ ->
+                                            change.consume()
+                                            val height = size.height.coerceAtLeast(1).toFloat()
+                                            val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
+                                            val current = latestProject
+                                            onProjectChange(current.copy(tracks = current.tracks.map {
+                                                if (it.id == selectedTrack.id) it.copy(volume = value) else it
+                                            }))
+                                        }
+                                    }
+                                    .pointerInput(selectedTrack.id) {
+                                        detectTapGestures(onTap = { offset ->
+                                            val height = size.height.coerceAtLeast(1).toFloat()
+                                            val value = (1f - offset.y / height).coerceIn(0f, 1f) * 1.5f
+                                            val current = latestProject
+                                            onProjectChange(current.copy(tracks = current.tracks.map {
+                                                if (it.id == selectedTrack.id) it.copy(volume = value) else it
+                                            }))
+                                        })
+                                    }
+                            ) {
+                                val railWidth = (size.width * 0.18f).coerceAtLeast(5f)
+                                val railLeft = (size.width - railWidth) / 2f
+                                val railTop = size.height * 0.06f
+                                val railBottom = size.height * 0.94f
+                                for (tick in 0..10) {
+                                    val y = railTop + (railBottom - railTop) * tick / 10f
+                                    drawLine(devicePalette.grid.copy(alpha = 0.65f),
+                                        Offset(size.width * 0.08f, y), Offset(size.width * 0.25f, y), 1f)
+                                }
+                                drawRoundRect(devicePalette.room, Offset(railLeft, railTop),
+                                    Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
+                                val fraction = selectedTrack.volume.coerceIn(0f, 1.5f) / 1.5f
+                                val thumbY = railBottom - fraction * (railBottom - railTop)
+                                drawRoundRect(devicePalette.accent.copy(alpha = 0.78f), Offset(railLeft, thumbY),
+                                    Size(railWidth, (railBottom - thumbY).coerceAtLeast(0f)),
+                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
+                                drawRoundRect(devicePalette.text, Offset(size.width * 0.16f, thumbY - 3f),
+                                    Size(size.width * 0.68f, 6f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                            }
                         }
                         Column(Modifier.weight(1f)) {
                             val pan = selectedTrack.pan.coerceIn(-1f, 1f)
