@@ -2458,15 +2458,19 @@ private fun TimelineGrid(
                                     clip.midiNotes.forEach { note ->
                                         val safeStart = note.startTick.coerceAtLeast(0L).toDouble()
                                         val safeDuration = note.durationTicks.coerceAtLeast(1L).toDouble()
-                                        val left = (safeStart / duration * size.width).toFloat()
-                                        val noteWidth = (safeDuration / duration * size.width).toFloat()
+                                        val rawLeft = (safeStart / duration * size.width).toFloat()
+                                        val rawRight = ((safeStart + safeDuration) / duration * size.width).toFloat()
+                                        // A clip thumbnail must never draw note tails outside its own bounds.
+                                        val left = rawLeft.coerceIn(0f, size.width)
+                                        val right = rawRight.coerceIn(left, size.width)
+                                        val noteWidth = right - left
                                         val normalizedPitch = (note.pitch.coerceIn(0, 127).toFloat() / 127f)
                                         val y = (1f - normalizedPitch) * (size.height - rowHeight)
-                                        if (left < size.width && left + noteWidth > 0f) {
+                                        if (rawLeft < size.width && rawRight > 0f && noteWidth > 0f) {
                                             drawRoundRect(
                                                 color = accent.copy(alpha = (0.48f + note.velocity.coerceIn(1, 127) / 254f).coerceIn(0.5f, 0.98f)),
                                                 topLeft = Offset(left, y),
-                                                size = Size(noteWidth.coerceAtLeast(2f), rowHeight.coerceAtMost(size.height)),
+                                                size = Size(noteWidth.coerceAtLeast(1f), rowHeight.coerceAtMost(size.height)),
                                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
                                             )
                                         }
