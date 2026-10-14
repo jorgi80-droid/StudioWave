@@ -549,6 +549,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
+                    val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     // Read the atomic scrub offset once per audio event/block, not per sample.
                     val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
@@ -570,7 +571,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val rightSample = sourceRight * liveMasterGain
                         mix[outIndex] += leftSample
                         mix[outIndex + 1] += rightSample
-                        val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                         channelBuffer[outIndex] += sourceLeft
                         channelBuffer[outIndex + 1] += sourceRight
                     }
@@ -582,23 +582,25 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
-                    val gain = channelMix.volume * liveMasterGain * (note.velocity / 127f) * 0.19f
+                    val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
+                    val gain = channelGain * liveMasterGain
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
+                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     for (absolute in from until to) {
                         val elapsed = absolute - note.startFrame
                         val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
                         val attack = min(1f, elapsed.toFloat() / (sampleRate * 0.008f))
                         val release = min(1f, (noteLength - elapsed).toFloat() / (sampleRate * 0.035f))
                         val envelope = min(attack, release)
-                        val wave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * gain * envelope
+                        val channelWave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * channelGain * envelope
+                        val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
-                        val sourceLeft = wave * leftPan / liveMasterGain.coerceAtLeast(0.000001f)
-                        val sourceRight = wave * rightPan / liveMasterGain.coerceAtLeast(0.000001f)
+                        val sourceLeft = channelWave * leftPan
+                        val sourceRight = channelWave * rightPan
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
-                        val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                         channelBuffer[outIndex] += sourceLeft
                         channelBuffer[outIndex + 1] += sourceRight
                     }
@@ -610,20 +612,22 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val hitEnd = drum.startFrame + DRUM_DURATION_FRAMES
                     val from = max(position, drum.startFrame)
                     val to = min(blockEnd, hitEnd)
-                    val gain = channelMix.volume * liveMasterGain * 0.38f
+                    val channelGain = channelMix.volume * 0.38f
+                    val gain = channelGain * liveMasterGain
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
+                    val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     for (absolute in from until to) {
                         val t = (absolute - drum.startFrame).toDouble() / sampleRate
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
-                        val wave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * gain
+                        val channelWave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * channelGain
+                        val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
-                        val sourceLeft = channelMix.volume * 0.38f * sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * leftPan
-                        val sourceRight = channelMix.volume * 0.38f * sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * rightPan
+                        val sourceLeft = channelWave * leftPan
+                        val sourceRight = channelWave * rightPan
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
-                        val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                         channelBuffer[outIndex] += sourceLeft
                         channelBuffer[outIndex + 1] += sourceRight
                     }
