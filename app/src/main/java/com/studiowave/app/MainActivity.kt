@@ -737,10 +737,10 @@ private fun StudioWaveApp() {
                                         "BROWSER" -> "BROWSER  /  SAMPLES"
                                         else -> selectedWorkspace
                                     },
-                                    color = AbletonOrange, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1
+                                    color = LocalStudioWavePalette.current.orange, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1
                                 )
                                 Spacer(Modifier.weight(1f))
-                                Text(project.name.take(18), color = MutedText, fontSize = 8.sp, maxLines = 1)
+                                Text(project.name.take(18), color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, maxLines = 1)
                             }
                         }
                         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -832,11 +832,11 @@ private fun TransportBar(
                 color = Color.Transparent, shape = RoundedCornerShape(4.dp),
                 modifier = Modifier.clickable(onClickLabel = "Open Settings", onClick = onSettings)
             ) {
-                Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = AbletonOrange,
+                Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = LocalStudioWavePalette.current.orange,
                     maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp))
             }
             Text("LIVE SET", color = LocalStudioWavePalette.current.muted.copy(alpha = 0.72f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text("BPM", color = MutedText, fontSize = 8.sp)
+            Text("BPM", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp)
             SmallAction("−") { onBpm(bpm - 1) }
             Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(4.dp)) {
                 Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
@@ -959,7 +959,7 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontSize = 9.sp, color = AbletonOrange, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(title, fontSize = 9.sp, color = LocalStudioWavePalette.current.orange, fontWeight = FontWeight.Black, maxLines = 1)
         Spacer(Modifier.width(8.dp))
         Text(subtitle, fontSize = 8.sp, color = p.muted, maxLines = 1)
         Spacer(Modifier.weight(1f))
@@ -1188,8 +1188,8 @@ private fun ArrangementWorkspace(
         Box(Modifier.fillMaxWidth().weight(1f)) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(104.dp)) {
-                Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
-                    Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
+                Row(Modifier.fillMaxWidth().height(22.dp).background(LocalStudioWavePalette.current.raised), verticalAlignment = Alignment.CenterVertically) {
+                    Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = LocalStudioWavePalette.current.muted, modifier = Modifier.padding(start = 5.dp))
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                     val headerViewportHeightDp = maxHeight.value
@@ -1244,7 +1244,7 @@ private fun ArrangementWorkspace(
                         addAnchorY >= 0f && addAnchorY + 44f <= headerViewportHeightDp
                     if (showBottomAddTrack) {
                         Surface(
-                            color = Mint,
+                            color = LocalStudioWavePalette.current.accent,
                             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp),
                             shadowElevation = 5.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
@@ -1266,7 +1266,7 @@ private fun ArrangementWorkspace(
                     }
                     if (showBottomAddTrack && addTrackMenu) {
                         Surface(
-                            color = Raised,
+                            color = LocalStudioWavePalette.current.raised,
                             shape = RoundedCornerShape(10.dp),
                             shadowElevation = 8.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
@@ -1274,14 +1274,14 @@ private fun ArrangementWorkspace(
                                 .padding(end = 40.dp)
                         ) {
                             Column(Modifier.width(174.dp).padding(5.dp)) {
-                                Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                                Text("ADD TRACK", color = LocalStudioWavePalette.current.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                                 listOf(
                                     "MIDI / Instrument track" to "midi",
                                     "Audio track" to "audio",
                                     "Drum track" to "drum"
                                 ).forEach { pair ->
                                     Text(
-                                        pair.first, color = Color.White, fontSize = 11.sp,
+                                        pair.first, color = LocalStudioWavePalette.current.text, fontSize = 11.sp,
                                         modifier = Modifier.fillMaxWidth().clickable {
                                             addTrack(pair.second, openEditor = pair.second != "audio")
                                             addTrackMenu = false
@@ -1454,11 +1454,11 @@ private fun ArrangementWorkspace(
             ) {
                 Column(Modifier.padding(horizontal = 9.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("CLIP VIEW", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Text("CLIP VIEW", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(7.dp))
-                        Text(selectedClipTrack.name, color = MutedText, fontSize = 8.sp, maxLines = 1)
+                        Text(selectedClipTrack.name, color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, maxLines = 1)
                         Spacer(Modifier.weight(1f))
-                        Text("×", color = MutedText, fontSize = 14.sp, modifier = Modifier.clickable { showClipView = false }.padding(horizontal = 3.dp))
+                        Text("×", color = LocalStudioWavePalette.current.muted, fontSize = 14.sp, modifier = Modifier.clickable { showClipView = false }.padding(horizontal = 3.dp))
                     }
                     Text(clip.name, color = clipPalette.text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
                     when (selectedClipTrack.kind) {
@@ -1486,7 +1486,7 @@ private fun ArrangementWorkspace(
                     }
                     Text(
                         "${selectedClipTrack.kind.uppercase()}  •  BAR ${firstBar}–${lastBar}  •  ${String.format(java.util.Locale.US, "%.2f", clip.lengthTicks.toDouble() / timebase.ticksPerBar)} bars",
-                        color = MutedText, fontSize = 8.sp, maxLines = 1
+                        color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, maxLines = 1
                     )
                     Row(
                         Modifier.horizontalScroll(rememberScrollState()),
@@ -1582,17 +1582,17 @@ private fun ArrangementWorkspace(
                     }
                 }
             }
-            if (showTimelineMenu) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showTimelineMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(150.dp).padding(5.dp)) {
-                    Text("TIMELINE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                    Text("Add track", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
+                    Text("TIMELINE", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                    Text("Add track", color = LocalStudioWavePalette.current.text, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
                         showAddTrack = true
                         showTimelineMenu = false
                         addTrackMenu = false
                         clipMenu = null
                     }.padding(9.dp))
-                    Text("Paste clip", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { pasteClip() }.padding(9.dp))
-                    Text("Import audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
+                    Text("Paste clip", color = LocalStudioWavePalette.current.text, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { pasteClip() }.padding(9.dp))
+                    Text("Import audio", color = LocalStudioWavePalette.current.text, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
                         showTimelineMenu = false
                         showAddTrack = false
                         addTrackMenu = false
@@ -1600,11 +1600,11 @@ private fun ArrangementWorkspace(
                     }.padding(9.dp))
                 }
             }
-            if (showAddTrack && !addTrackMenu) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showAddTrack && !addTrackMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(155.dp).padding(5.dp)) {
-                    Text("ADD TRACK", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                    Text("ADD TRACK", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
-                        Text(pair.first, color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second, openEditor = pair.second != "audio") }.padding(9.dp))
+                        Text(pair.first, color = LocalStudioWavePalette.current.text, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { addTrack(pair.second, openEditor = pair.second != "audio") }.padding(9.dp))
                     }
                 }
             }
@@ -1650,7 +1650,7 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
     Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room).padding(7.dp)) {
         WorkspaceTitleBar("DRUM RACK  /  STEP SEQUENCER", track?.name ?: "No drum track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("16 STEPS", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+            Text("16 STEPS", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 5.dp))
             SmallAction("CLEAR") {
                 if (track != null && clip != null) onProjectChange(project.copy(tracks = project.tracks.map { item ->
@@ -1684,7 +1684,7 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
                 }
             }
         }
-        Text("Tap steps to toggle triggers. CLEAR and ALL modify this clip’s 16-step pattern.", color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp))
+        Text("Tap steps to toggle triggers. CLEAR and ALL modify this clip’s 16-step pattern.", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
@@ -1756,7 +1756,7 @@ private fun AudioEditorWorkspace(
     Column(Modifier.fillMaxSize().background(audioPalette.room).padding(7.dp)) {
         WorkspaceTitleBar("CLIP VIEW  /  SAMPLE EDITOR", track?.name ?: "No audio track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (clip?.sourceUri != null) "AUDIO SOURCE" else "NO AUDIO CLIP", color = AbletonOrange, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            Text(if (clip?.sourceUri != null) "AUDIO SOURCE" else "NO AUDIO CLIP", color = LocalStudioWavePalette.current.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.weight(1f))
             SmallAction("RESET RANGE") {
                 startFraction = 0f
@@ -1765,12 +1765,12 @@ private fun AudioEditorWorkspace(
             }
         }
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("START", color = MutedText, fontSize = 7.sp)
+            Text("START", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp)
             Slider(value = startFraction, onValueChange = { value ->
                 startFraction = value.coerceIn(0f, (endFraction - 0.01f).coerceAtLeast(0f))
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
-            Text("END", color = MutedText, fontSize = 7.sp)
+            Text("END", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp)
             Slider(value = endFraction, onValueChange = { value ->
                 endFraction = value.coerceIn((startFraction + 0.01f).coerceAtMost(1f), 1f)
                 applyTrim(startFraction, endFraction)
@@ -1794,7 +1794,7 @@ private fun AudioEditorWorkspace(
                         loadError != null -> loadError!!
                         else -> "Waveform tidak tersedia"
                     },
-                    color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(12.dp)
+                    color = LocalStudioWavePalette.current.muted, fontSize = 10.sp, modifier = Modifier.padding(12.dp)
                 )
             }
         }
@@ -1804,7 +1804,7 @@ private fun AudioEditorWorkspace(
                 loading -> "READING SOURCE WAVEFORM…"
                 else -> loadError ?: "IMPORT AN AUDIO CLIP TO BEGIN"
             },
-            color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp)
+            color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
@@ -1848,7 +1848,7 @@ private fun TrackHeader(
                                 )
                             },
                         contentAlignment = Alignment.Center
-                    ) { Text("DJ", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Black) }
+                    ) { Text("DJ", color = LocalStudioWavePalette.current.accent, fontSize = 8.sp, fontWeight = FontWeight.Black) }
                 }
             }
         }
@@ -1865,7 +1865,7 @@ private fun TrackHeader(
                         )
                     },
                 contentAlignment = Alignment.Center
-            ) { Text("⠿", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("⠿", color = LocalStudioWavePalette.current.text, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
             Box(
                 Modifier.size(width = 23.dp, height = 18.dp)
                     .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
@@ -1878,7 +1878,7 @@ private fun TrackHeader(
                         )
                     },
                 contentAlignment = Alignment.Center
-            ) { Text("↕", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("↕", color = LocalStudioWavePalette.current.text, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
@@ -2328,12 +2328,12 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
+                            Text(clip.name, fontSize = 8.sp, color = if (timelinePalette.text.luminance() > 0.5f) Color(0xFF111315) else Color.White, maxLines = 1)
                             if (track.kind == "drum") {
                                 Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
                                     (0 until 16).forEach { step ->
                                         val active = clip.drumSteps.getOrNull(step) ?: false
-                                        Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.88f else 0.24f).background(if (active) accent.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.16f), RoundedCornerShape(1.dp)))
+                                        Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.88f else 0.24f).background(if (active) accent.copy(alpha = 0.95f) else timelinePalette.text.copy(alpha = 0.18f), RoundedCornerShape(1.dp)))
                                     }
                                 }
                             } else if (track.kind == "midi") {
@@ -2343,7 +2343,7 @@ private fun TimelineGrid(
                                         val noteW = note.durationTicks.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
                                         val y = (127 - note.pitch).toFloat() / 127f * size.height
                                         drawRoundRect(
-                                            Color.White.copy(alpha = 0.8f),
+                                            timelinePalette.text.copy(alpha = 0.82f),
                                             Offset(noteX, y),
                                             Size(noteW.coerceAtLeast(2f), 3.dp.toPx()),
                                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
@@ -2409,7 +2409,7 @@ private fun TimelineGrid(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("↔", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("↔", color = LocalStudioWavePalette.current.text, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                 }
                                 var resizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
                                 Box(
@@ -2464,7 +2464,7 @@ private fun TimelineGrid(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("↔", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("↔", color = LocalStudioWavePalette.current.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -2528,7 +2528,7 @@ private fun TimelineGrid(
                                 }
                             ) {
                                 Box(Modifier.fillMaxSize().padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
-                                    Text(label, color = if (action == "Open editor") Mint else Color.White,
+                                    Text(label, color = if (action == "Open editor") timelinePalette.accent else timelinePalette.text,
                                         fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                             }
@@ -2598,7 +2598,7 @@ private fun PianoRollWorkspace(
                 .padding(horizontal = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("MIDI", color = AbletonOrange, fontSize = 10.sp, fontWeight = FontWeight.Black)
+            Text("MIDI", color = LocalStudioWavePalette.current.orange, fontSize = 10.sp, fontWeight = FontWeight.Black)
             Text("${track?.name ?: "NO TRACK"}  /  ${clip?.name ?: "NO CLIP"}",
                 color = pianoPalette.text, fontSize = 9.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
@@ -2612,7 +2612,7 @@ private fun PianoRollWorkspace(
             SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
             SmallAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.35f, 8f) }
             SmallAction("BAR ◀") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
-            Text("${pageStartStep / stepsPerBar + 1}", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text("${pageStartStep / stepsPerBar + 1}", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             SmallAction("▶ BAR") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
             SmallAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.35f, 8f) }
             SmallAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
@@ -2656,7 +2656,7 @@ private fun PianoRollWorkspace(
                     } else editMessage = "Select a note first"
                 }
                 Spacer(Modifier.weight(1f))
-                Text(if (keyboardVisible) "TAP GRID: ADD / REMOVE" else "VELOCITY EDIT", color = MutedText, fontSize = 8.sp, maxLines = 1)
+                Text(if (keyboardVisible) "TAP GRID: ADD / REMOVE" else "VELOCITY EDIT", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, maxLines = 1)
             }
         }
 
@@ -2829,9 +2829,9 @@ private fun PianoRollWorkspace(
             }
         }
         Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(editMessage, color = MutedText, fontSize = 8.sp, maxLines = 1)
+            Text(editMessage, color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = Mint, fontSize = 8.sp)
+            Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = LocalStudioWavePalette.current.accent, fontSize = 8.sp)
         }
     }
 }
@@ -3029,7 +3029,7 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
         Text("BROWSER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
         Spacer(Modifier.height(8.dp))
         Button(onClick = onImportAudio, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalStudioWavePalette.current.accent.copy(alpha = 0.18f), contentColor = LocalStudioWavePalette.current.accent)) {
-            Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Mint, modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = LocalStudioWavePalette.current.accent, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text("IMPORT AUDIO", fontSize = 10.sp, color = LocalStudioWavePalette.current.text)
         }
