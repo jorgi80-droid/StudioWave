@@ -835,8 +835,8 @@ private fun TransportBar(
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
             }
             SmallAction("+") { onBpm(bpm + 1) }
-            Surface(color = Color(0xFF111315), shape = RoundedCornerShape(4.dp)) {
-                Text(timeSignatureLabel, fontSize = 9.sp, color = MutedText,
+            Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(4.dp)) {
+                Text(timeSignatureLabel, fontSize = 9.sp, color = LocalStudioWavePalette.current.muted,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp))
             }
             Spacer(Modifier.weight(1f))
@@ -870,7 +870,7 @@ private fun TransportBar(
             Column(Modifier.width(112.dp), verticalArrangement = Arrangement.Center) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("P ${peakDbfs.toInt()} dBFS", color = LocalStudioWavePalette.current.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text("${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("${momentaryLufs.toInt()} LUFS", color = LocalStudioWavePalette.current.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
                 val transportMeterPalette = LocalStudioWavePalette.current
                 Canvas(Modifier.fillMaxWidth().height(9.dp)) {
@@ -882,7 +882,7 @@ private fun TransportBar(
                             (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
                     }
                 }
-                Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 7.sp, maxLines = 1)
+                Text("RMS ${rmsDbfs.toInt()} dBFS", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp, maxLines = 1)
             }
         }
     }
