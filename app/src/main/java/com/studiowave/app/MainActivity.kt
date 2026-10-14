@@ -961,7 +961,7 @@ private fun ArrangementWorkspace(
     onOpenEditor: (String, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
     onPlaybackRestart: (StudioProject) -> Unit = {},
-    onScratchTrack: (String, Float) -> Unit = { _, _ -> },
+    onScratchTrack: (String, Float) -> Unit,
     playheadTick: Long = 0L,
     isPlaying: Boolean = false,
     showDevices: Boolean = false,
@@ -1422,8 +1422,8 @@ private fun ArrangementWorkspace(
                 else clip.startTick + clip.lengthTicks.coerceAtLeast(1L) - 1L
             val lastBar = lastTick / timebase.ticksPerBar + 1L
             Surface(
-                color = arrangementPalette.panel.copy(alpha = 0.96f),
-                contentColor = arrangementPalette.text,
+                color = LocalStudioWavePalette.current.panel.copy(alpha = 0.96f),
+                contentColor = LocalStudioWavePalette.current.text,
                 shape = RoundedCornerShape(9.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, LocalStudioWavePalette.current.border),
                 shadowElevation = 8.dp,
