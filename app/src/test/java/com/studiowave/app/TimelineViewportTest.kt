@@ -287,4 +287,27 @@ class TimelineViewportTest {
         }
     }
 
+    @Test fun repeatedPinchZoomKeepsFractionalAnchorStableWithoutTickRoundingDrift() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        var viewport = TimelineViewport(timebase, 74f, 123_456.375, 900f, 104f)
+        val anchorX = 417.25f
+        val originalAnchorTick = viewport.scrollTimeTicks + anchorX.toDouble() / viewport.pixelsPerTick
+        val scales = listOf(80f, 96f, 72f, 120f, 60f, 148f, 74f, 200f, 74f)
+        scales.forEach { scale ->
+            viewport = viewport.zoomKeepingAnchor(scale, 104f + anchorX)
+        }
+        val finalAnchorTick = viewport.scrollTimeTicks + anchorX.toDouble() / viewport.pixelsPerTick
+        assertEquals(originalAnchorTick, finalAnchorTick, 1e-7)
+    }
+
+    @Test fun repeatedAnchoredZoomNeverProducesNegativeScrollAtSongStart() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        var viewport = TimelineViewport(timebase, 74f, 0.0, 900f, 104f)
+        repeat(100) { index ->
+            val scale = if (index % 2 == 0) 150f else 38f
+            viewport = viewport.zoomKeepingAnchor(scale, 104f + 450f)
+            assertTrue(viewport.scrollTimeTicks >= 0.0)
+        }
+    }
+
 }
