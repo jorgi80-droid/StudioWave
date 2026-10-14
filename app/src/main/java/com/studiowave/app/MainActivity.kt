@@ -1515,7 +1515,6 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
     val clip = track?.clips?.firstOrNull()
     val rawSteps = clip?.drumSteps ?: emptyList()
     val steps = rawSteps.take(16) + List((16 - rawSteps.size).coerceAtLeast(0)) { false }
-    var selectedPad by remember(track?.id) { mutableIntStateOf(0) }
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(7.dp)) {
         WorkspaceTitleBar("DRUM RACK  /  STEP SEQUENCER", track?.name ?: "No drum track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1532,21 +1531,6 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
                 }))
             }
             Spacer(Modifier.weight(1f))
-            Text("PAD " + (selectedPad + 1), color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-        }
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            (0..15).forEach { pad ->
-                Surface(
-                    color = if (selectedPad == pad) Color(0xFF4A2D24) else Color(0xFF292B30),
-                    shape = RoundedCornerShape(5.dp),
-                    modifier = Modifier.weight(1f).fillMaxHeight(0.72f).clickable { selectedPad = pad }
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                        Text(if (pad == selectedPad) "●" else "○", color = if (selectedPad == pad) AbletonOrange else MutedText, fontSize = 12.sp)
-                        Text((pad + 1).toString().padStart(2, '0'), color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
         }
         Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             (0..15).forEach { step ->
@@ -1568,7 +1552,7 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
                 }
             }
         }
-        Text("Select a pad, then tap steps to toggle triggers. Pattern changes update the project.", color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp))
+        Text("Tap steps to toggle triggers. CLEAR and ALL modify this clip’s 16-step pattern.", color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
