@@ -678,7 +678,7 @@ private fun StudioWaveApp() {
                     }
                 }
                 TransportBar(
-                    compact = selectedWorkspace == "ARRANGEMENT",
+                    compact = selectedWorkspace == "ARRANGEMENT" || selectedWorkspace == "PIANO ROLL",
                     playing = playing || playbackLoading,
                     bpm = bpm,
                     master = master,
