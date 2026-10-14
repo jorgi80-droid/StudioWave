@@ -251,8 +251,8 @@ class TimelineViewportTest {
 
     @Test fun placeTickAtViewportXIgnoresNonFiniteAnchor() {
         val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 74f, 1200.0, 900f)
-        assertEquals(viewport, viewport.placeTickAtViewportX(3840L, Float.NaN))
-        assertEquals(viewport, viewport.placeTickAtViewportX(3840L, Float.POSITIVE_INFINITY))
+        assertTrue(viewport == viewport.placeTickAtViewportX(3840L, Float.NaN))
+        assertTrue(viewport == viewport.placeTickAtViewportX(3840L, Float.POSITIVE_INFINITY))
     }
 
 }
