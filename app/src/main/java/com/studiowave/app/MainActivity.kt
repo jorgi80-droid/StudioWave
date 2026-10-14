@@ -2585,7 +2585,7 @@ private fun PianoRollWorkspace(
                             Box(
                                 Modifier.fillMaxWidth().height(rowHeight.dp)
                                     .background(if (isBlack) Color(0xFF17191C) else Color(0xFF343840))
-                                    .clickable { topPitch = (pitch + visiblePitchRows - 1).coerceIn(23, 119) },
+                                    .clickable { topPitch = (pitch + visiblePitchRows - 1).coerceIn(0, 119) },
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 if (isC || pitch % 12 == 4 || pitch % 12 == 7) {
@@ -2643,7 +2643,7 @@ private fun PianoRollWorkspace(
                                                 startStep = (startStep - (delta.x / colWidthPx).roundToInt()).coerceIn(0, maxStartStep)
                                             }
                                             if (kotlin.math.abs(delta.y) > 1f) {
-                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(23, 119)
+                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(0, 119)
                                             }
                                             lastDistance = newSpan
                                             lastMid = mid
