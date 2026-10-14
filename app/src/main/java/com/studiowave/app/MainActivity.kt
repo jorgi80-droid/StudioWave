@@ -940,9 +940,9 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
     ) {
         Text(title, fontSize = 9.sp, color = AbletonOrange, fontWeight = FontWeight.Black, maxLines = 1)
         Spacer(Modifier.width(8.dp))
-        Text(subtitle, fontSize = 8.sp, color = LocalStudioWavePalette.current.muted, maxLines = 1)
+        Text(subtitle, fontSize = 8.sp, color = p.muted, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        Surface(color = LocalStudioWavePalette.current.control, shape = RoundedCornerShape(5.dp),
+        Surface(color = p.control, shape = RoundedCornerShape(5.dp),
             modifier = Modifier.size(width = 38.dp, height = 23.dp)
                 .clickable(onClickLabel = "Return to Arrangement", onClick = onBack)) {
             Box(contentAlignment = Alignment.Center) { Text("BACK", fontSize = 7.sp, fontWeight = FontWeight.Bold) }
