@@ -824,16 +824,16 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 @Composable
 private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF25282D), RoundedCornerShape(5.dp))
+        Modifier.fillMaxWidth().height(29.dp).background(Color(0xFF292B30), RoundedCornerShape(5.dp))
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontSize = 10.sp, color = AbletonOrange, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(title, fontSize = 9.sp, color = AbletonOrange, fontWeight = FontWeight.Black, maxLines = 1)
         Spacer(Modifier.width(8.dp))
-        Text(subtitle, fontSize = 9.sp, color = MutedText, maxLines = 1)
+        Text(subtitle, fontSize = 8.sp, color = Color(0xFFB0B3BB), maxLines = 1)
         Spacer(Modifier.weight(1f))
-        Surface(color = Color(0xFF363B43), shape = RoundedCornerShape(5.dp),
-            modifier = Modifier.size(width = 34.dp, height = 24.dp).clickable(onClick = onBack)) {
+        Surface(color = Color(0xFF383B41), shape = RoundedCornerShape(5.dp),
+            modifier = Modifier.size(width = 38.dp, height = 23.dp).clickable(onClickLabel = "Return to Arrangement", onClick = onBack)) {
             Box(contentAlignment = Alignment.Center) { Text("BACK", fontSize = 7.sp, fontWeight = FontWeight.Bold) }
         }
     }
