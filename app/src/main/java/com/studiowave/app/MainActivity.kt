@@ -159,6 +159,27 @@ internal fun calculatePinchZoomFrame(
     return PinchZoomFrame(effectiveZoom, scroll)
 }
 /**
+ * Keep note events inside a clip's relative musical duration.
+ * Notes fully beyond the new end are removed; crossing notes are shortened.
+ */
+internal fun fitMidiNotesToClip(
+    notes: List<com.studiowave.app.data.MidiNote>,
+    clipLengthTicks: Long
+): List<com.studiowave.app.data.MidiNote> {
+    val safeLength = clipLengthTicks.coerceAtLeast(1L)
+    return notes.mapNotNull { note ->
+        val start = note.startTick.coerceAtLeast(0L)
+        if (start >= safeLength) {
+            null
+        } else {
+            val duration = note.durationTicks.coerceAtLeast(1L)
+                .coerceAtMost(safeLength - start)
+            note.copy(startTick = start, durationTicks = duration)
+        }
+    }
+}
+
+/**
  * Apply a horizontal/vertical Piano Roll gesture to an existing MIDI note.
  * Timeline positions are clip-relative ticks; resizing always keeps a note inside the clip.
  */
@@ -1397,7 +1418,7 @@ private fun ArrangementWorkspace(
                                     } else {
                                         (clip.sourceOffsetTicks.coerceAtLeast(0L) + safeDelta).coerceAtLeast(0L)
                                     },
-                                    midiNotes = nextNotes,
+                                    midiNotes = fitMidiNotesToClip(nextNotes, safeLength),
                                     drumSteps = nextDrumSteps
                                 )
                             }
@@ -1528,7 +1549,10 @@ private fun ArrangementWorkspace(
                             val newLength = (latest.lengthTicks - oneBarTicks).coerceAtLeast(oneBarTicks).coerceAtMost(maxLength)
                             onProjectChange(project.copy(tracks = project.tracks.map { track ->
                                 if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
-                                    if (clip.id == inspectorClip.id) clip.copy(lengthTicks = newLength) else clip
+                                    if (clip.id == inspectorClip.id) clip.copy(
+                                        lengthTicks = newLength,
+                                        midiNotes = fitMidiNotesToClip(clip.midiNotes, newLength)
+                                    ) else clip
                                 }) else track
                             }))
                         }
@@ -1538,7 +1562,10 @@ private fun ArrangementWorkspace(
                             val newLength = (latest.lengthTicks.coerceAtLeast(1L) + oneBarTicks).coerceAtMost(maxLength)
                             onProjectChange(project.copy(tracks = project.tracks.map { track ->
                                 if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
-                                    if (clip.id == inspectorClip.id) clip.copy(lengthTicks = newLength) else clip
+                                    if (clip.id == inspectorClip.id) clip.copy(
+                                        lengthTicks = newLength,
+                                        midiNotes = fitMidiNotesToClip(clip.midiNotes, newLength)
+                                    ) else clip
                                 }) else track
                             }))
                         }
