@@ -2490,7 +2490,7 @@ private fun TimelineGrid(
             )
             val x = playheadViewport.timeToViewportX(playheadTick)
             if (x >= 0f && x <= size.width) {
-                drawLine(Color(0xFFFF4F64), Offset(x, 0f), Offset(x, size.height), 1.5f)
+                drawLine(LocalStudioWavePalette.current.danger, Offset(x, 0f), Offset(x, size.height), 1.5f)
             }
         }
         val menuTrack = project.tracks.firstOrNull { t -> t.clips.any { it.id == clipMenuClipId } }
@@ -2986,7 +2986,7 @@ private fun MixerWorkspace(
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             Canvas(Modifier.fillMaxWidth().weight(1f)) {
-                drawRoundRect(Color(0xFF131518), Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
+                drawRoundRect(mixerPalette.room, Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
                 val h = size.height * master.coerceIn(0f, 1f)
                 drawRoundRect(mixerPalette.accent, Offset(size.width * 0.34f, size.height - h), Size(size.width * 0.32f, h),
@@ -3015,7 +3015,7 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
             Column(Modifier.padding(10.dp)) {
                 Text("LOCAL AUDIO", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Mint)
                 Text("Choose an audio file from Android storage. It will be placed on the audio track in Arrangement.",
-                    color = Color(0xFFD5D9E0), fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
+                    color = pianoPalette.text, fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
