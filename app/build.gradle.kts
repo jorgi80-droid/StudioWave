@@ -43,7 +43,7 @@ android {
 }
 
 dependencies {
-    implementation("com.google.oboe:oboe:1.10.0")
+    implementation("com.google.oboe:oboe:1.11.0")
     val composeBom = platform("androidx.compose:compose-bom:2025.05.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)

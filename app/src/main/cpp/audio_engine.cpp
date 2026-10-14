@@ -16,7 +16,7 @@ std::atomic<uint32_t> readIndex{0}, writeIndex{0}, playedFrames{0}, underruns{0}
 std::atomic<bool> ready{false};
 std::atomic<float> frequency{440.f}, gain{0.f};
 std::atomic<int> waveform{0}, sampleRate{44100};
-std::atomic<double> phase{0.0};
+std::atomic<float> phase{0.0f};
 std::mutex streamMutex;
 std::shared_ptr<oboe::AudioStream> stream;
 float oscillator(double p,int w) {
