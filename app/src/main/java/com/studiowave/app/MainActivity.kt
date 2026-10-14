@@ -1999,6 +1999,58 @@ private fun TimelineGrid(
             }
         }
 
+        // Arrangement Overview mirrors Live's whole-song map and its current viewport.
+        Row(
+            Modifier.fillMaxWidth().height(18.dp)
+                .background(Color(0xFF232529), RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("OVERVIEW", color = MutedText, fontSize = 7.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(50.dp))
+            Canvas(
+                Modifier.weight(1f).fillMaxHeight()
+                    .pointerInput(project.tracks, scrollTicks, zoom) {
+                        detectTapGestures { position ->
+                            val endTick = maxOf(
+                                project.tracks.flatMap { it.clips }.maxOfOrNull { it.startTick + it.lengthTicks.coerceAtLeast(1L) } ?: timebase.ticksPerBar,
+                                timebase.ticksPerBar
+                            ).coerceAtMost(maxArrangementTick(timebase))
+                            val fraction = (position.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            currentOnScroll((endTick.toDouble() * fraction).coerceAtLeast(0.0))
+                        }
+                    }
+            ) {
+                val endTick = maxOf(
+                    project.tracks.flatMap { it.clips }.maxOfOrNull { it.startTick + it.lengthTicks.coerceAtLeast(1L) } ?: timebase.ticksPerBar,
+                    timebase.ticksPerBar
+                ).coerceAtMost(maxArrangementTick(timebase)).coerceAtLeast(1L)
+                val rows = project.tracks.size.coerceAtLeast(1)
+                val rowHeight = size.height / rows
+                project.tracks.forEachIndexed { rowIndex, track ->
+                    track.clips.forEach { clip ->
+                        val left = clip.startTick.toDouble() / endTick.toDouble() * size.width
+                        val width = clip.lengthTicks.toDouble() / endTick.toDouble() * size.width
+                        drawRoundRect(
+                            Color(track.colorArgb.toInt()).copy(alpha = 0.88f),
+                            Offset(left.toFloat(), rowIndex * rowHeight),
+                            Size(width.toFloat().coerceAtLeast(1f), rowHeight.coerceAtLeast(1f)),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
+                        )
+                    }
+                }
+                val pxPerTick = viewport.pixelsPerTick
+                val viewportStart = (scrollTicks / endTick.toDouble() * size.width).toFloat().coerceIn(0f, size.width)
+                val viewportTicks = size.width.toDouble() / pxPerTick.toDouble()
+                val visibleWidth = (viewportTicks / endTick.toDouble() * size.width).toFloat().coerceIn(2f, size.width)
+                drawRoundRect(
+                    Color.White.copy(alpha = 0.2f), Offset(viewportStart, 0f),
+                    Size(visibleWidth, size.height),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
+                )
+            }
+        }
+
         // Draw ruler labels only for bars that are currently visible.
         Canvas(
             Modifier
