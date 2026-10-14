@@ -36,13 +36,13 @@ class ArrangementTimingTest {
         assertTrue(ArrangementTiming.framesToTicks(Long.MAX_VALUE, 40, 3840) > 0L)
     }
 
-    @Test fun 1800BarsAt120BpmFourFourFitExactlyOneHour() {
+    @Test fun barsAt120BpmFourFourFitExactlyOneHour() {
         val endTick = ArrangementTiming.maxArrangementTick(4, 4, 960, 1_800)
         val frames = ArrangementTiming.ticksToFrames(endTick, 120, 960)
         assertEquals(44_100L * 60L * 60L, frames)
     }
 
-    @Test fun 1800BarPlaybackLimitFollowsTempoAndTimeSignature() {
+    @Test fun playbackLimitFollowsTempoAndTimeSignature() {
         val slowFourFourTicks = ArrangementTiming.maxArrangementTick(4, 4, 960, 1_800)
         val slowFourFourFrames = ArrangementTiming.ticksToFrames(slowFourFourTicks, 40, 960)
         assertEquals(44_100L * 60L * 60L * 3L, slowFourFourFrames)
