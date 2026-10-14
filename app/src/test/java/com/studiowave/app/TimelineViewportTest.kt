@@ -395,4 +395,20 @@ class TimelineViewportTest {
         }
     }
 
+    @Test fun followPlayheadKeepsTransportVisibleAndDoesNotJitterBeforeThreshold() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewport = TimelineViewport(timebase, 100f, 0.0, 800f)
+        val stillVisible = viewport.followPlayhead(timebase.ticksPerBar * 6L)
+        assertEquals(0.0, stillVisible.scrollTimeTicks, 0.001)
+
+        val beyondEdge = viewport.followPlayhead(timebase.ticksPerBar * 9L)
+        val playheadX = (timebase.ticksPerBar * 9L - beyondEdge.scrollTimeTicks) * beyondEdge.pixelsPerTick
+        assertTrue("playhead must be pulled back from the right edge", playheadX in 500.0..600.0)
+        assertTrue("scroll remains non-negative", beyondEdge.scrollTimeTicks >= 0.0)
+
+        val leftOfViewport = beyondEdge.followPlayhead(0L)
+        val startX = (0.0 - leftOfViewport.scrollTimeTicks) * leftOfViewport.pixelsPerTick
+        assertTrue("a sought playhead left of the viewport becomes visible", startX >= -0.01)
+    }
+
 }

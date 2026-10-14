@@ -163,6 +163,21 @@ data class TimelineViewport(
         copy(scrollTimeTicks = (scrollTimeTicks - deltaX.toDouble() / pixelsPerTick)
             .coerceIn(0.0, maxScrollTicks()))
 
+    /** Keep the transport playhead visible during playback without moving the view on every frame. */
+    fun followPlayhead(
+        tick: Long,
+        followFraction: Float = 0.78f,
+        targetFraction: Float = 0.68f
+    ): TimelineViewport {
+        if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f || tick < 0L) return this
+        val width = viewportWidthPx
+        val x = (tick.toDouble() - scrollTimeTicks) * pixelsPerTick
+        val threshold = width * followFraction.coerceIn(0.2f, 0.95f)
+        if (x >= 0.0 && x <= threshold.toDouble()) return this
+        val targetX = (width * targetFraction.coerceIn(0.1f, 0.9f)).coerceIn(0f, width)
+        return placeTickAtViewportX(tick, targetX)
+    }
+
     private fun maxScrollTicks(): Double =
         (maxArrangementTick(timebase).toDouble() -
             viewportWidthPx.coerceAtLeast(0f).toDouble() / pixelsPerTick).coerceAtLeast(0.0)

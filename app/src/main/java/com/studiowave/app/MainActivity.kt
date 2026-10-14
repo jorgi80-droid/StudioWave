@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -290,6 +291,21 @@ private fun StudioWaveApp() {
     var showDock by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var scrollTicks by remember { mutableDoubleStateOf(0.0) }
+    val configuration = LocalConfiguration.current
+    // Follow playback inside the Arrangement viewport, keeping the playhead away from
+    // the right edge. Dimensions are in dp here, matching the 74.dp bar scale below.
+    LaunchedEffect(playing, playheadTick, zoom, scrollTicks, selectedWorkspace,
+        project.bpm, project.numerator, project.denominator, project.ppq, configuration.screenWidthDp) {
+        if (playing && selectedWorkspace == "ARRANGEMENT") {
+            val timebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+            val timelineWidthDp = (configuration.screenWidthDp - 44f - 104f - 30f).coerceAtLeast(1f)
+            val currentViewport = TimelineViewport(timebase, 74f * zoom, scrollTicks, timelineWidthDp)
+            val followed = currentViewport.followPlayhead(playheadTick)
+            if (kotlin.math.abs(followed.scrollTimeTicks - scrollTicks) > 0.5) {
+                scrollTicks = followed.scrollTimeTicks
+            }
+        }
+    }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
