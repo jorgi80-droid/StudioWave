@@ -73,7 +73,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.studiowave.app.audio.NativeAudioEngine
 import com.studiowave.app.audio.ArrangementPlaybackEngine
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioProjectFile
@@ -247,7 +246,6 @@ private fun suggestedSdawFileName(projectName: String): String {
 @Composable
 private fun StudioWaveApp() {
     val context = LocalContext.current
-    val engine = remember { NativeAudioEngine() }
     val arrangementPlayback = remember(context) { com.studiowave.app.audio.ArrangementPlaybackEngine(context) }
     val playbackScope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("studiowave_project", android.content.Context.MODE_PRIVATE) }
@@ -326,7 +324,6 @@ private fun StudioWaveApp() {
         playbackJob?.cancel()
         playbackJob = null
         runCatching { arrangementPlayback.stop() }
-        runCatching { engine.stop() }
         playing = false
         playbackLoading = false
         audioError = null
@@ -525,7 +522,6 @@ private fun StudioWaveApp() {
                     playbackJob?.cancel()
                     playbackJob = null
                     arrangementPlayback.stop()
-                    engine.stop()
                     playing = false
                     playbackLoading = false
                     changeProject(imported)
@@ -572,11 +568,10 @@ private fun StudioWaveApp() {
             // Autosave must not crash editing; the next project change will retry it.
         }
     }
-    DisposableEffect(engine, arrangementPlayback) {
+    DisposableEffect(arrangementPlayback) {
         onDispose {
             playbackJob?.cancel()
             arrangementPlayback.close()
-            engine.close()
         }
     }
 
@@ -652,7 +647,13 @@ private fun StudioWaveApp() {
                     exit = fadeOut(tween(100)) + slideOutVertically(tween(120), targetOffsetY = { it / 4 })
                 ) {
                     Box(Modifier.fillMaxWidth().height(105.dp)) {
-                        DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
+                        DeviceDock(
+                            project = project,
+                            selectedTrackId = editorTrackId,
+                            onSelectTrack = { editorTrackId = it },
+                            onProjectChange = { changeProject(it) },
+                            onToggle = { showDock = false }
+                        )
                         Surface(
                             color = Raised.copy(alpha = 0.96f),
                             shape = RoundedCornerShape(50),
@@ -1153,7 +1154,7 @@ private fun ArrangementWorkspace(
                 FloatingTimelineControl(snapDivision.label, "Change snap division") {
                     snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it }
                 }
-                FloatingTimelineControl(if (showDevices) "DEV×" else "DEV", if (showDevices) "Hide devices" else "Show devices") {
+                FloatingTimelineControl(if (showDevices) "TRK×" else "TRK", if (showDevices) "Hide track inspector" else "Show track inspector") {
                     onToggleDevices()
                 }
             }
@@ -2249,29 +2250,101 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
 }
 
 @Composable
-private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth().height(105.dp).background(Raised, RoundedCornerShape(8.dp)).padding(8.dp)) {
+private fun DeviceDock(
+    project: StudioProject,
+    selectedTrackId: String?,
+    onSelectTrack: (String) -> Unit,
+    onProjectChange: (StudioProject) -> Unit,
+    onToggle: () -> Unit
+) {
+    val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
+    Column(
+        Modifier.fillMaxWidth().height(105.dp)
+            .background(Raised, RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("OSCILLATOR TEST", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+            Text("TRACK INSPECTOR", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+            Spacer(Modifier.width(8.dp))
+            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 8.sp, color = Mint, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text(if (isPlaying) "PLAYBACK ACTIVE" else "READY", fontSize = 8.sp, color = if (isPlaying) Green else MutedText)
             SmallAction("HIDE") { onToggle() }
         }
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("OSC", "FILTER", "DELAY", "REVERB", "DRIVE").forEachIndexed { index, name ->
-                Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF202328), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
-                    Text(name, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = if (index == 0) Mint else Color(0xFFD5D9E0))
-                    if (index == 0) {
-                        var amount by remember { mutableFloatStateOf(0.3f) }
+        if (project.tracks.isEmpty()) {
+            Text("Tambahkan track di Arrangement untuk mengatur volume, pan, mute, dan solo.",
+                color = MutedText, fontSize = 8.sp, maxLines = 1)
+        } else {
+            Row(
+                Modifier.fillMaxWidth().height(23.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                project.tracks.forEach { track ->
+                    val isSelected = selectedTrack?.id == track.id
+                    val chipColor by androidx.compose.animation.animateColorAsState(
+                        targetValue = if (isSelected) Color(0xFF18443F) else Color(0xFF202328),
+                        animationSpec = tween(durationMillis = 120),
+                        label = "trackInspectorSelection"
+                    )
+                    Surface(
+                        color = chipColor,
+                        shape = RoundedCornerShape(5.dp),
+                        modifier = Modifier.clickable { onSelectTrack(track.id) }
+                    ) {
+                        Text(track.name.take(14), color = if (isSelected) Mint else Color(0xFFD5D9E0),
+                            fontSize = 8.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+                    }
+                }
+            }
+            if (selectedTrack != null) {
+                Row(
+                    Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                        Text("VOL " + (selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt() + "%",
+                            color = MutedText, fontSize = 7.sp, maxLines = 1)
                         Slider(
-                            value = amount,
-                            onValueChange = { amount = it; onTone(110f + it * 880f) },
-                            valueRange = 0f..1f,
-                            modifier = Modifier.height(20.dp)
+                            value = selectedTrack.volume.coerceIn(0f, 1.5f),
+                            onValueChange = { value ->
+                                onProjectChange(project.copy(tracks = project.tracks.map {
+                                    if (it.id == selectedTrack.id) it.copy(volume = value) else it
+                                }))
+                            },
+                            valueRange = 0f..1.5f,
+                            modifier = Modifier.fillMaxWidth().height(21.dp)
                         )
-                    } else {
-                        Text("NOT ACTIVE", color = MutedText, fontSize = 6.sp, maxLines = 1)
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                        val pan = selectedTrack.pan.coerceIn(-1f, 1f)
+                        Text("PAN " + when {
+                            pan <= -0.95f -> "L"
+                            pan >= 0.95f -> "R"
+                            else -> (pan * 100).toInt().toString()
+                        }, color = MutedText, fontSize = 7.sp, maxLines = 1)
+                        Slider(
+                            value = pan,
+                            onValueChange = { value ->
+                                onProjectChange(project.copy(tracks = project.tracks.map {
+                                    if (it.id == selectedTrack.id) it.copy(pan = value) else it
+                                }))
+                            },
+                            valueRange = -1f..1f,
+                            modifier = Modifier.fillMaxWidth().height(21.dp)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SmallAction(if (selectedTrack.muted) "M✓" else "M") {
+                            onProjectChange(project.copy(tracks = project.tracks.map {
+                                if (it.id == selectedTrack.id) it.copy(muted = !it.muted) else it
+                            }))
+                        }
+                        SmallAction(if (selectedTrack.solo) "S✓" else "S") {
+                            onProjectChange(project.copy(tracks = project.tracks.map {
+                                if (it.id == selectedTrack.id) it.copy(solo = !it.solo) else it
+                            }))
+                        }
                     }
                 }
             }
