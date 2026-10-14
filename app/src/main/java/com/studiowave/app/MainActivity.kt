@@ -821,13 +821,13 @@ private fun TransportBar(
     onUndo: () -> Unit, onRedo: () -> Unit,
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
-    Column(
-        Modifier.fillMaxWidth().background(LocalStudioWavePalette.current.panel, RoundedCornerShape(7.dp))
-            .padding(horizontal = 7.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+    val p = LocalStudioWavePalette.current
+    Row(
+        Modifier.fillMaxWidth().height(38.dp)
+            .background(p.panel, RoundedCornerShape(6.dp))
+            .padding(horizontal = 5.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp) ) {
             Surface(
                 color = Color.Transparent, shape = RoundedCornerShape(4.dp),
                 modifier = Modifier.clickable(onClickLabel = "Open Settings", onClick = onSettings)
@@ -850,32 +850,45 @@ private fun TransportBar(
             Spacer(Modifier.weight(1f))
             SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
             SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
-            SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
-            SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
-        }
-        Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            SmallIconButton(Icons.Default.Stop, MutedText, onStop)
+            SmallIconButton(Icons.Default.Undo, p.muted, onUndo)
+            SmallIconButton(Icons.Default.Redo, p.muted, onRedo)
+            SmallIconButton(Icons.Default.Stop, p.muted, onStop)
             Surface(
-                color = if (playing) LocalStudioWavePalette.current.accent.copy(alpha = 0.24f) else LocalStudioWavePalette.current.raised,
-                shape = RoundedCornerShape(7.dp),
-                modifier = Modifier.size(width = 42.dp, height = 32.dp).clickable(onClick = onPlay)
+                color = if (playing) p.accent.copy(alpha = 0.24f) else p.raised,
+                shape = RoundedCornerShape(5.dp),
+                modifier = Modifier.size(width = 30.dp, height = 29.dp).clickable(onClick = onPlay)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (playing) "Pause playback" else "Start playback",
-                        tint = if (playing) LocalStudioWavePalette.current.accent else LocalStudioWavePalette.current.orange, modifier = Modifier.size(22.dp))
+                        tint = if (playing) p.accent else p.orange, modifier = Modifier.size(19.dp))
                 }
             }
-            Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(5.dp)) {
-                Text(positionLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                    color = LocalStudioWavePalette.current.text, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), maxLines = 1)
+            Surface(color = p.room, shape = RoundedCornerShape(4.dp)) {
+                Text(positionLabel, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = p.text,
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 5.dp), maxLines = 1)
             }
-            Spacer(Modifier.weight(1f))
-            Text("MASTER", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-            Slider(value = master, onValueChange = onMaster,
-                modifier = Modifier.width(82.dp).height(30.dp), valueRange = 0f..1f)
-            Column(Modifier.width(112.dp), verticalArrangement = Arrangement.Center) {
+            Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(54.dp).height(26.dp),
+                valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = p.text, activeTrackColor = p.accent, inactiveTrackColor = p.control))
+            Column(Modifier.width(85.dp), verticalArrangement = Arrangement.Center) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("${peakDbfs.toInt()}dB", color = p.text, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("${momentaryLufs.toInt()}L", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+                Canvas(Modifier.fillMaxWidth().height(5.dp)) {
+                    drawLine(p.grid, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
+                    peakHistory.forEachIndexed { index, level ->
+                        val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
+                        val x = index * size.width / peakHistory.size.coerceAtLeast(1)
+                        drawLine(p.accent.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
+                            (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
+                    }
+                }
+            }
+        }
+
+
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("P ${peakDbfs.toInt()} dBFS", color = LocalStudioWavePalette.current.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text("${momentaryLufs.toInt()} LUFS", color = LocalStudioWavePalette.current.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -890,7 +903,7 @@ private fun TransportBar(
                             (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
                     }
                 }
-                Text("RMS ${rmsDbfs.toInt()} dBFS", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp, maxLines = 1)
+                Text("RMS ${rmsDbfs.toInt()} dBFS", color = p.muted, fontSize = 6.sp, maxLines = 1)
             }
         }
     }
@@ -2118,61 +2131,6 @@ private fun TimelineGrid(
                 if (rowTopPx >= rulerHeightPx && rowTopPx <= size.height) {
                     drawLine(timelinePalette.grid.copy(alpha = timelineGridOpacity * 0.8f), Offset(0f, rowTopPx), Offset(size.width, rowTopPx), 1f)
                 }
-            }
-        }
-
-        // Arrangement Overview mirrors Live's whole-song map and its current viewport.
-        Row(
-            Modifier.fillMaxWidth().height(18.dp)
-                .background(timelinePalette.panel, RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                .padding(horizontal = 4.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("OVERVIEW", color = MutedText, fontSize = 7.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(50.dp))
-            Canvas(
-                Modifier.weight(1f).fillMaxHeight()
-                    .pointerInput(project.tracks, scrollTicks, zoom) {
-                        detectTapGestures { position ->
-                            val endTick = maxOf(
-                                project.tracks.flatMap { it.clips }.maxOfOrNull { it.startTick + it.lengthTicks.coerceAtLeast(1L) } ?: timebase.ticksPerBar,
-                                timebase.ticksPerBar
-                            ).coerceAtMost(maxArrangementTick(timebase))
-                            val fraction = (position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
-                            val visibleTicks = size.width.toDouble() /
-                                TimelineViewport(timebase, 74f * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
-                            val maxScroll = (maxArrangementTick(timebase).toDouble() - visibleTicks).coerceAtLeast(0.0)
-                            currentOnScroll((endTick.toDouble() * fraction).coerceIn(0.0, maxScroll))
-                        }
-                    }
-            ) {
-                val endTick = maxOf(
-                    project.tracks.flatMap { it.clips }.maxOfOrNull { it.startTick + it.lengthTicks.coerceAtLeast(1L) } ?: timebase.ticksPerBar,
-                    timebase.ticksPerBar
-                ).coerceAtMost(maxArrangementTick(timebase)).coerceAtLeast(1L)
-                val rows = project.tracks.size.coerceAtLeast(1)
-                val rowHeight = size.height / rows
-                project.tracks.forEachIndexed { rowIndex, track ->
-                    track.clips.forEach { clip ->
-                        val left = clip.startTick.toDouble() / endTick.toDouble() * size.width
-                        val width = clip.lengthTicks.toDouble() / endTick.toDouble() * size.width
-                        drawRoundRect(
-                            Color(track.colorArgb.toInt()).copy(alpha = 0.88f),
-                            Offset(left.toFloat(), rowIndex * rowHeight),
-                            Size(width.toFloat().coerceAtLeast(1f), rowHeight.coerceAtLeast(1f)),
-                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
-                        )
-                    }
-                }
-                val pxPerTick = viewport.pixelsPerTick
-                val viewportStart = (scrollTicks / endTick.toDouble() * size.width).toFloat().coerceIn(0f, size.width)
-                val viewportTicks = size.width.toDouble() / pxPerTick.toDouble()
-                val visibleWidth = (viewportTicks / endTick.toDouble() * size.width).toFloat().coerceIn(2f, size.width)
-                drawRoundRect(
-                    Color.White.copy(alpha = 0.2f), Offset(viewportStart, 0f),
-                    Size(visibleWidth, size.height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
-                )
             }
         }
 
