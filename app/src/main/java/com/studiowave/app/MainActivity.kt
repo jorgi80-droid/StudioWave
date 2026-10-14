@@ -834,19 +834,19 @@ private fun TransportBar(
                 color = Color.Transparent, shape = RoundedCornerShape(4.dp),
                 modifier = Modifier.clickable(onClickLabel = "Open Settings", onClick = onSettings)
             ) {
-                Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = LocalStudioWavePalette.current.orange,
+                Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = p.orange,
                     maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp))
             }
             if (!compact) Text("LIVE SET", color = p.muted.copy(alpha = 0.72f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text("BPM", color = p.muted, fontSize = 7.sp)
             TransportAction("−") { onBpm(bpm - 1) }
-            Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(4.dp)) {
+            Surface(color = p.room, shape = RoundedCornerShape(4.dp)) {
                 Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
             }
             TransportAction("+") { onBpm(bpm + 1) }
             Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(4.dp)) {
-                Text(timeSignatureLabel, fontSize = 9.sp, color = LocalStudioWavePalette.current.muted,
+                Text(timeSignatureLabel, fontSize = 9.sp, color = p.muted,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp))
             }
             Spacer(Modifier.weight(1f))
