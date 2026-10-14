@@ -214,7 +214,7 @@ internal fun transformMidiNoteFromGesture(
     return note.copy(
         startTick = snappedStart,
         durationTicks = originalDuration,
-        pitch = (note.pitch + deltaPitch.coerceIn(-119, 119)).coerceIn(0, 119)
+        pitch = (note.pitch.coerceIn(0, 127) + deltaPitch.coerceIn(-127, 127)).coerceIn(0, 127)
     )
 }
 
@@ -2757,7 +2757,7 @@ private fun PianoRollWorkspace(
     var zoomY by remember(track?.id) { mutableFloatStateOf(1.0f) }
     var startStep by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
     var lastViewportWidthPx by remember(track?.id, clip?.id) { mutableFloatStateOf(0f) }
-    var topPitch by remember(track?.id) { mutableIntStateOf(108) } // Start near C8; all 120 notes remain reachable
+    var topPitch by remember(track?.id) { mutableIntStateOf(108) } // Start near C8; all 128 standard MIDI pitches remain reachable
     var selectedNoteId by remember(track?.id, clip?.id) { mutableStateOf<String?>(null) }
     var clipboard by remember(track?.id, clip?.id) { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
     var editMessage by remember(track?.id, clip?.id) { mutableStateOf("Pinch to zoom · drag empty grid to scroll") }
@@ -2918,16 +2918,16 @@ private fun PianoRollWorkspace(
                 Column(Modifier.width(54.dp).fillMaxHeight().background(pianoPalette.panel)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
-                        val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
-                        val keyMaxTopPitch = (119 - keyVisibleRows + 1).coerceAtLeast(0)
-                        val keyTopPitch = topPitch.coerceIn(keyMaxTopPitch, 119)
-                        val keyScrollPx = rememberScrollState(((119 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
+                        val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
+                        val keyMaxTopPitch = (127 - keyVisibleRows + 1).coerceAtLeast(0)
+                        val keyTopPitch = topPitch.coerceIn(keyMaxTopPitch, 127)
+                        val keyScrollPx = rememberScrollState(((127 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
                         LaunchedEffect(topPitch, keyRowHeightPx, constraints.maxHeight) {
-                            keyScrollPx.scrollTo(((119 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
+                            keyScrollPx.scrollTo(((127 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
                         }
                         Column(Modifier.verticalScroll(keyScrollPx)
-                            .height((rowHeight * 120f).dp)) {
-                            for (pitch in 119 downTo 0) {
+                            .height((rowHeight * 128f).dp)) {
+                            for (pitch in 127 downTo 0) {
                                 val isBlack = pitch % 12 in setOf(1, 3, 6, 8, 10)
                                 val isC = pitch % 12 == 0
                                 Box(
@@ -2964,9 +2964,9 @@ private fun PianoRollWorkspace(
                     val currentStepsOnScreen = (gridStepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
                     val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
                     val rowHeightPx = with(pianoDensity) { currentRowHeight.dp.toPx() }
-                    val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
-                    val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
-                    val currentTopPitch = gestureTopPitch.value.coerceIn(maxTopPitch, 119)
+                    val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
+                    val maxTopPitch = (127 - visiblePitchRows + 1).coerceAtLeast(0)
+                    val currentTopPitch = gestureTopPitch.value.coerceIn(maxTopPitch, 127)
                     val colWidthPx = (viewportWidthPx / currentStepsOnScreen.toFloat()).coerceAtLeast(2f)
                     val currentStart = gestureStartStep.value.coerceIn(0, (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0))
                     val maxHorizontalScroll = (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0)
@@ -3009,9 +3009,9 @@ private fun PianoRollWorkspace(
                                                 .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(newSteps)
                                             val newStart = (anchorStep - midpoint.x / newColWidth).roundToInt()
                                                 .coerceIn(0, (newClipSteps - newSteps).coerceAtLeast(0))
-                                            val visibleRowsAfterZoom = (viewportHeightPx / newRowHeight).roundToInt().coerceIn(12, 120)
+                                            val visibleRowsAfterZoom = (viewportHeightPx / newRowHeight).roundToInt().coerceIn(12, 128)
                                             val newTop = (anchorPitch + midpoint.y / newRowHeight).roundToInt()
-                                                .coerceIn((visibleRowsAfterZoom - 1).coerceAtMost(119), 119)
+                                                .coerceIn((visibleRowsAfterZoom - 1).coerceAtMost(127), 127)
                                             if (kotlin.math.abs(newZoomX - gestureZoomX.value) > 0.0005f) zoomX = newZoomX
                                             if (kotlin.math.abs(newZoomY - gestureZoomY.value) > 0.0005f) zoomY = newZoomY
                                             if (newStart != gestureStartStep.value) startStep = newStart
@@ -3033,7 +3033,7 @@ private fun PianoRollWorkspace(
                                         (down.position.x / gestureColWidth).toInt().coerceIn(0, currentStepsForGesture - 1))
                                         .coerceIn(0, (clipLengthSteps - 1).coerceAtLeast(0))
                                     val clickedPitch = (currentTopPitch -
-                                        (down.position.y / gestureRowHeight).toInt()).coerceIn(0, 119)
+                                        (down.position.y / gestureRowHeight).toInt()).coerceIn(0, 127)
                                     val notesAtDown = gestureNotes.value
                                     val touchedNote = if (keyboardVisible) notesAtDown.firstOrNull { note ->
                                         val noteStartStep = (note.startTick / stepTicks).toInt()
@@ -3079,7 +3079,7 @@ private fun PianoRollWorkspace(
                                                         horizontalRemainder -= stepDelta
                                                     }
                                                     if (pitchDelta != 0) {
-                                                        dragPitch = (dragPitch + pitchDelta).coerceIn(0, 119)
+                                                        dragPitch = (dragPitch + pitchDelta).coerceIn(0, 127)
                                                         topPitch = dragPitch
                                                         verticalRemainder -= pitchDelta
                                                     }
@@ -3095,7 +3095,7 @@ private fun PianoRollWorkspace(
                                         selectedNoteId = touchedNote.id
                                         if (dragged) {
                                             val stepDelta = (accumulatedDelta.x / gestureColWidth).roundToInt().coerceIn(-100_000, 100_000)
-                                            val pitchDelta = (-accumulatedDelta.y / gestureRowHeight).roundToInt().coerceIn(-119, 119)
+                                            val pitchDelta = (-accumulatedDelta.y / gestureRowHeight).roundToInt().coerceIn(-127, 127)
                                             val updatedNote = transformMidiNoteFromGesture(
                                                 note = touchedNote,
                                                 clipLengthTicks = clip.lengthTicks,
@@ -3174,7 +3174,7 @@ private fun PianoRollWorkspace(
                                 val row = currentTopPitch - note.pitch
                                 val y = row * localRowHeight
                                 val width = (note.durationTicks.toDouble() / stepTicks.toDouble() * localColWidth).toFloat().coerceAtLeast(3f)
-                                if (note.pitch in 0..119 && x < size.width && x + width > 0 && y + localRowHeight > 0 && y < size.height) {
+                                if (note.pitch in 0..127 && x < size.width && x + width > 0 && y + localRowHeight > 0 && y < size.height) {
                                     drawRoundRect(
                                         color = if (note.id == selectedNoteId) pianoPalette.orange else pianoPalette.accent,
                                         topLeft = Offset(x.toFloat(), y + 1f),
