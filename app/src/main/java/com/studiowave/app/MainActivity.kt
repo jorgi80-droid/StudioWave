@@ -976,7 +976,10 @@ private fun ArrangementWorkspace(
         val track = project.tracks[trackIndex]
         val clip = track.clips.first { it.id == clipId }
         when (action) {
-            "Open editor" -> onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id)
+            "Open editor" -> {
+                showClipView = true
+                onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id)
+            }
             "Cut" -> {
                 // Arrangement Cut splits at the playhead; it must not delete the entire clip.
                 val split = splitWaveClip(clip, playheadTick)
