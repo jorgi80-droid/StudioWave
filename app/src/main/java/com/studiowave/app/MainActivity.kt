@@ -1420,6 +1420,7 @@ private fun TimelineGrid(
                     var gestureBaseSpan = 0f
                     var gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
                     var gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                    var gestureBaseScrollTicks = currentScroll
                     var gestureAnchorTick = 0.0
                     var gestureAnchorTrackDp = 0f
                     do {
@@ -1439,9 +1440,11 @@ private fun TimelineGrid(
                                 val oldZoom = currentZoom.coerceIn(0.1f, 16f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
-                                val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
+                                val newBarWidth = TimelineViewport(
+                                    timebase, baseBarWidthPx * newZoom, gestureBaseScrollTicks, size.width.toFloat()
+                                ).effectivePixelsPerBar
                                 val newScroll = TimelineViewport(
-                                    timebase, newBarWidth, currentScroll, size.width.toFloat()
+                                    timebase, newBarWidth, gestureBaseScrollTicks, size.width.toFloat()
                                 ).placeTickAtViewportX(gestureAnchorTick, centroid.x).scrollTimeTicks
                                 val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
                                     (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
@@ -1454,9 +1457,11 @@ private fun TimelineGrid(
                                 gestureBaseSpan = span.coerceAtLeast(1f)
                                 gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
                                 gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                                gestureBaseScrollTicks = currentScroll
                                 val baseViewport = TimelineViewport(
-                                    timebase, baseBarWidthPx * gestureBaseZoom, currentScroll, size.width.toFloat()
+                                    timebase, baseBarWidthPx * gestureBaseZoom, gestureBaseScrollTicks, size.width.toFloat()
                                 )
+                                // Preserve a fractional tick anchor in the timeline's local coordinate space.
                                 gestureAnchorTick = baseViewport.scrollTimeTicks + centroid.x.toDouble() / baseViewport.pixelsPerTick
                                 gestureAnchorTrackDp = currentScrollTracks +
                                     (centroid.y - rulerHeightPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
