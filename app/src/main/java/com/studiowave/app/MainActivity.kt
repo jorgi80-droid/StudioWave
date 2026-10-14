@@ -2928,21 +2928,26 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(110.dp).fillMaxHeight()
-                .background(mixerPalette.panel, RoundedCornerShape(5.dp)).padding(6.dp),
+            Modifier.width(90.dp).fillMaxHeight()
+                .background(mixerPalette.panel, RoundedCornerShape(5.dp)).padding(5.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
+            Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = mixerPalette.text)
             val latestMasterChange by rememberUpdatedState(onMasterChange)
             Canvas(
                 Modifier.fillMaxWidth().weight(1f)
                     .pointerInput(Unit) {
-                        detectDragGestures { change, _ ->
-                            change.consume()
-                            val height = size.height.coerceAtLeast(1).toFloat()
-                            latestMasterChange((1f - change.position.y / height).coerceIn(0f, 1f))
-                        }
+                        detectDragGestures(
+                            onDragStart = { start ->
+                                val height = size.height.coerceAtLeast(1).toFloat()
+                                latestMasterChange((1f - start.y / height).coerceIn(0f, 1f))
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val height = size.height.coerceAtLeast(1).toFloat()
+                                latestMasterChange((1f - change.position.y / height).coerceIn(0f, 1f))
+                            }
+                        )
                     }
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { offset ->
@@ -2951,15 +2956,10 @@ private fun MixerWorkspace(
                         })
                     }
             ) {
-                val railWidth = size.width * 0.32f
+                val railWidth = size.width * 0.24f
                 val railLeft = (size.width - railWidth) / 2f
                 drawRoundRect(mixerPalette.room, Offset(railLeft, 0f), Size(railWidth, size.height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                for (tick in 0..10) {
-                    val y = size.height * tick / 10f
-                    drawLine(mixerPalette.grid.copy(alpha = 0.55f), Offset(size.width * 0.08f, y),
-                        Offset(size.width * 0.24f, y), 1f)
-                }
                 for (tick in 0..12) {
                     val y = size.height * tick / 12f
                     drawLine(mixerPalette.grid.copy(alpha = 0.68f),
@@ -2967,20 +2967,19 @@ private fun MixerWorkspace(
                 }
                 val gain = master.coerceIn(0f, 1f)
                 val thumbY = size.height * (1f - gain)
-                val handleLeft = size.width * 0.10f
-                val handleWidth = size.width * 0.80f
-                drawRoundRect(mixerPalette.control, Offset(handleLeft, thumbY - 7f),
-                    Size(handleWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f))
-                drawRoundRect(mixerPalette.border, Offset(handleLeft, thumbY - 7f),
-                    Size(handleWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f),
+                val capLeft = size.width * 0.08f
+                val capWidth = size.width * 0.84f
+                drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 9f),
+                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                drawRoundRect(mixerPalette.border, Offset(capLeft, thumbY - 9f),
+                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
-                drawLine(mixerPalette.accent, Offset(handleLeft + 3f, thumbY),
-                    Offset(handleLeft + handleWidth - 3f, thumbY), 2f)
+                drawLine(mixerPalette.text, Offset(capLeft + 3f, thumbY),
+                    Offset(capLeft + capWidth - 3f, thumbY), 2f)
             }
             val masterDbLabel = if (master <= 0.001f) "-∞ dB" else
                 String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(master))
-            Text("GAIN " + (master * 100).toInt() + "% · " + masterDbLabel,
-                color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
+            Text("\${(master * 100).toInt()}%  \$masterDbLabel", color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
         }
         }
     }
