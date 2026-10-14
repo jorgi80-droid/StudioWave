@@ -2309,30 +2309,58 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Text(clip.name, fontSize = 8.sp, color = if (clipFill.alpha > 0.01f && clipFill.red * 0.299f + clipFill.green * 0.587f + clipFill.blue * 0.114f > 0.52f) Color(0xFF111315) else Color.White, maxLines = 1)
+                            Text(
+                                clip.name,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = timelinePalette.text,
+                                maxLines = 1
+                            )
                             if (track.kind == "drum") {
-                                Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
+                                // A compact Live-style step lane: distinct cells show active hits instead of bars.
+                                Row(
+                                    Modifier.fillMaxSize().padding(top = 14.dp, bottom = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                                    verticalAlignment = Alignment.Bottom
+                                ) {
                                     (0 until 16).forEach { step ->
-                                        val active = clip.drumSteps.getOrNull(step) ?: false
-                                        Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.88f else 0.24f).background(if (active) accent.copy(alpha = 0.95f) else timelinePalette.text.copy(alpha = 0.18f), RoundedCornerShape(1.dp)))
+                                        val active = clip.drumSteps.getOrNull(step) == true
+                                        Box(
+                                            Modifier.weight(1f)
+                                                .fillMaxHeight()
+                                                .padding(top = if (active) 1.dp else 0.dp)
+                                                .background(
+                                                    if (active) accent.copy(alpha = 0.96f)
+                                                    else timelinePalette.room.copy(alpha = 0.5f),
+                                                    RoundedCornerShape(1.dp)
+                                                )
+                                        )
                                     }
                                 }
                             } else if (track.kind == "midi") {
-                                Canvas(Modifier.fillMaxSize()) {
+                                Canvas(Modifier.fillMaxSize().padding(top = 13.dp, bottom = 2.dp)) {
+                                    // Clip note lanes use the same musical tick ratio as the MIDI editor.
+                                    val duration = clip.lengthTicks.coerceAtLeast(1L).toDouble()
+                                    val rowHeight = (size.height / 12f).coerceAtLeast(2f)
+                                    for (beat in 1..3) {
+                                        val x = size.width * beat / 4f
+                                        drawLine(timelinePalette.text.copy(alpha = 0.16f), Offset(x, 0f), Offset(x, size.height), 1f)
+                                    }
                                     clip.midiNotes.forEach { note ->
-                                        val noteX = note.startTick.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
-                                        val noteW = note.durationTicks.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
-                                        val y = (127 - note.pitch).toFloat() / 127f * size.height
+                                        val left = (note.startTick.toDouble() / duration * size.width).toFloat()
+                                        val noteWidth = (note.durationTicks.coerceAtLeast(1L).toDouble() / duration * size.width).toFloat()
+                                        val y = ((127 - note.pitch.coerceIn(0,127)).toFloat() / 128f * size.height)
+                                            .coerceIn(0f, (size.height - rowHeight).coerceAtLeast(0f))
                                         drawRoundRect(
-                                            timelinePalette.text.copy(alpha = 0.82f),
-                                            Offset(noteX, y),
-                                            Size(noteW.coerceAtLeast(2f), 3.dp.toPx()),
-                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
+                                            color = timelinePalette.text.copy(alpha = 0.94f),
+                                            topLeft = Offset(left, y),
+                                            size = Size(noteWidth.coerceAtLeast(2f), rowHeight.coerceAtMost(size.height)),
+                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
                                         )
                                     }
                                 }
                             } else if (track.kind == "audio") {
-                                AudioClipWaveform(clip.sourceUri, accent)
+                                AudioClipWaveform(clip.sourceUri, timelinePalette.text)
                             }
                                 }
                                 var leftResizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
