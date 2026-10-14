@@ -2606,7 +2606,7 @@ private fun PianoRollWorkspace(
                 modifier = Modifier.widthIn(max = 100.dp))
             Spacer(Modifier.weight(1f))
             SmallAction(if (keyboardVisible) "KEYS" else "KEYS OFF") { keyboardVisible = !keyboardVisible }
-            SmallAction(if (virtualKeyboardVisible) "PLAY KEYS" else "KEYBOARD") { virtualKeyboardVisible = !virtualKeyboardVisible }
+            SmallAction(if (virtualKeyboardVisible) "NOTE INPUT ON" else "NOTE INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
             SmallAction(if (editToolsExpanded) "TOOLS" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
