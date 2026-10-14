@@ -222,7 +222,7 @@ private fun StudioWaveApp() {
     // Start with the device drawer collapsed so Arrangement gets the full vertical workspace.
     var showDock by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
-    var scrollTicks by remember { mutableFloatStateOf(0f) }
+    var scrollTicks by remember { mutableDoubleStateOf(0.0) }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
@@ -1321,8 +1321,8 @@ private fun TimelineGrid(
     onSeekTick: (Long) -> Unit,
     zoom: Float,
     onZoom: (Float) -> Unit,
-    scrollTicks: Float,
-    onScroll: (Float) -> Unit,
+    scrollTicks: Double,
+    onScroll: (Double) -> Unit,
     verticalZoom: Float,
     onVerticalZoom: (Float) -> Unit,
     snapEnabled: Boolean,
@@ -1403,7 +1403,7 @@ private fun TimelineGrid(
                         } else {
                             val hitViewport = TimelineViewport(
                                 timebase, baseBarWidthPx * currentZoom,
-                                currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx
+                                currentScroll, size.width.toFloat(), trackHeaderWidthPx
                             )
                             val pointerX = firstDown.position.x
                             hitTrack.clips.any { clip ->
@@ -1420,7 +1420,7 @@ private fun TimelineGrid(
                     var gestureBaseSpan = 0f
                     var gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
                     var gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
-                    var gestureAnchorTick = 0L
+                    var gestureAnchorTick = 0.0
                     var gestureAnchorTrackDp = 0f
                     do {
                         val event = awaitPointerEvent()
@@ -1439,10 +1439,10 @@ private fun TimelineGrid(
                                 val oldZoom = currentZoom.coerceIn(0.1f, 16f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
-                                val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
+                                val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
                                 val newScroll = TimelineViewport(
-                                    timebase, newBarWidth, currentScroll.toDouble(), size.width.toFloat()
-                                ).placeTickAtViewportX(gestureAnchorTick, centroid.x).scrollTimeTicks.toFloat()
+                                    timebase, newBarWidth, currentScroll, size.width.toFloat()
+                                ).placeTickAtViewportX(gestureAnchorTick, centroid.x).scrollTimeTicks
                                 val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
                                     (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
@@ -1455,9 +1455,9 @@ private fun TimelineGrid(
                                 gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
                                 gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val baseViewport = TimelineViewport(
-                                    timebase, baseBarWidthPx * gestureBaseZoom, currentScroll.toDouble(), size.width.toFloat()
+                                    timebase, baseBarWidthPx * gestureBaseZoom, currentScroll, size.width.toFloat()
                                 )
-                                gestureAnchorTick = baseViewport.viewportXToTime(centroid.x)
+                                gestureAnchorTick = baseViewport.scrollTimeTicks + centroid.x.toDouble() / baseViewport.pixelsPerTick
                                 gestureAnchorTrackDp = currentScrollTracks +
                                     (centroid.y - rulerHeightPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
                             }
@@ -1474,8 +1474,8 @@ private fun TimelineGrid(
                                 val delta = pointer.position - previousSinglePosition
                                 if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                                       val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
+                                       val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
+                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
@@ -1494,7 +1494,7 @@ private fun TimelineGrid(
             if (isPlaying && timelineWidthPx > 0f) {
                 while (isPlaying) {
                     val currentViewport = TimelineViewport(
-                        timebase, baseBarWidthPx * currentZoom, currentScroll.toDouble(),
+                        timebase, baseBarWidthPx * currentZoom, currentScroll,
                         timelineWidthPx, trackHeaderWidthPx
                     )
                     val currentX = currentViewport.timeToViewportX(playheadTick)
@@ -1687,7 +1687,7 @@ private fun TimelineGrid(
                                             val target = currentTracks.getOrNull(targetIndex)
                                             val barWidthPx = viewport.effectivePixelsPerBar
                                             val dragViewport = TimelineViewport(
-                                                timebase, barWidthPx, currentScroll.toDouble(),
+                                                timebase, barWidthPx, currentScroll,
                                                 timelineWidthPx, trackHeaderWidthPx
                                             )
                                             // Convert the total gesture delta to ticks from its original anchor.
