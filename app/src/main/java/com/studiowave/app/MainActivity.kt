@@ -884,8 +884,13 @@ private fun ArrangementWorkspace(
     var addTrackMenu by remember { mutableStateOf(false) }
 
     // Contextual overlays are mutually exclusive on compact screens.
-    LaunchedEffect(showTimelineMenu, showAddTrack, addTrackMenu) {
-        if (addTrackMenu) {
+    LaunchedEffect(showTimelineMenu, showAddTrack, addTrackMenu, clipMenu) {
+        // A clip context menu, the timeline menu and either Add Track menu may never overlap.
+        if (clipMenu != null) {
+            if (showTimelineMenu) showTimelineMenu = false
+            if (showAddTrack) showAddTrack = false
+            if (addTrackMenu) addTrackMenu = false
+        } else if (addTrackMenu) {
             if (showTimelineMenu) showTimelineMenu = false
             if (showAddTrack) showAddTrack = false
         } else if (showAddTrack && showTimelineMenu) {
@@ -1170,7 +1175,12 @@ private fun ArrangementWorkspace(
                         onOpenEditor(when (track?.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track?.id)
                     }
                 },
-                onClipLongPress = { clipMenu = it },
+                onClipLongPress = {
+                    clipMenu = it
+                    showTimelineMenu = false
+                    showAddTrack = false
+                    addTrackMenu = false
+                },
                 onTimelineLongPress = {
                     showTimelineMenu = true
                     showAddTrack = false
@@ -1287,9 +1297,6 @@ private fun ArrangementWorkspace(
                     } else {
                         showClipView = !showClipView
                     }
-                }
-                FloatingTimelineControl(if (showDevices) "DEV×" else "DEV", if (showDevices) "Hide device chain" else "Show device chain") {
-                    onToggleDevices()
                 }
             }
         if (showClipView && selectedClipTrack != null && selectedClipModel != null) {
