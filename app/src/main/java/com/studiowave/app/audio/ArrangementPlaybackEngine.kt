@@ -516,6 +516,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             else -> buffer.getShort(sampleIndex * 2) / 32768f
         }
 
+    /** Latest native output health snapshot; useful for diagnostics and device stress tests. */
+    data class OutputDiagnostics(val queuedFrames: Int, val playedFrames: Long, val underruns: Long)
+
+    fun outputDiagnostics(): OutputDiagnostics {
+        val current = output
+        return if (current == null) OutputDiagnostics(0, 0L, 0L)
+        else OutputDiagnostics(current.queuedFrames(), current.playedFrames(), current.underrunCount())
+    }
+
     private fun renderPlan(
         track: NativeAudioEngine,
         plan: Plan,
