@@ -32,6 +32,47 @@ import kotlin.math.pow
  * on Dispatchers.IO; the audio worker only mixes prepared PCM and synthesized notes.
  * This keeps content-provider/codec calls away from the realtime output thread.
  */
+/** Linear stereo peak/RMS for an interleaved L,R sample buffer. */
+internal data class StereoMeterLevels(
+    val peakLeft: Float,
+    val peakRight: Float,
+    val rmsLeft: Float,
+    val rmsRight: Float
+)
+
+/** Pure helper used by the realtime mixer and unit tests; it does not allocate sample buffers. */
+internal fun measureStereoMeterLevels(samples: FloatArray, sampleCount: Int = samples.size): StereoMeterLevels {
+    val count = sampleCount.coerceIn(0, samples.size)
+    var peakLeft = 0f
+    var peakRight = 0f
+    var squareLeft = 0.0
+    var squareRight = 0.0
+    var frames = 0
+    var i = 0
+    while (i + 1 < count) {
+        val left = samples[i].takeIf { it.isFinite() } ?: 0f
+        val right = samples[i + 1].takeIf { it.isFinite() } ?: 0f
+        peakLeft = maxOf(peakLeft, kotlin.math.abs(left))
+        peakRight = maxOf(peakRight, kotlin.math.abs(right))
+        squareLeft += left.toDouble() * left.toDouble()
+        squareRight += right.toDouble() * right.toDouble()
+        frames++
+        i += 2
+    }
+    if (i < count) {
+        val left = samples[i].takeIf { it.isFinite() } ?: 0f
+        peakLeft = maxOf(peakLeft, kotlin.math.abs(left))
+        squareLeft += left.toDouble() * left.toDouble()
+        frames++
+    }
+    val denominator = frames.coerceAtLeast(1).toDouble()
+    return StereoMeterLevels(
+        peakLeft.coerceIn(0f, 1f), peakRight.coerceIn(0f, 1f),
+        kotlin.math.sqrt(squareLeft / denominator).toFloat().coerceIn(0f, 1f),
+        kotlin.math.sqrt(squareRight / denominator).toFloat().coerceIn(0f, 1f)
+    )
+}
+
 class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
@@ -45,8 +86,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val masterLufsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(MasterLoudnessMeter.SILENCE_LUFS))
     private val loudnessMeter = MasterLoudnessMeter(OUTPUT_SAMPLE_RATE)
     private data class TrackMeterBits(
-        val peak: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
-        val rms: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
+        val peakLeft: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val peakRight: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val rmsLeft: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val rmsRight: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
     )
     private val trackMeterBits = java.util.concurrent.ConcurrentHashMap<String, TrackMeterBits>()
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
@@ -64,20 +107,35 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         return MasterMeterSnapshot(linearToDbfs(peak), linearToDbfs(rms), lufs)
     }
 
-    data class TrackMeterSnapshot(val peak: Float, val rms: Float)
+    data class TrackMeterSnapshot(
+        val peakLeft: Float,
+        val peakRight: Float,
+        val rmsLeft: Float,
+        val rmsRight: Float
+    ) {
+        val peak: Float get() = maxOf(peakLeft, peakRight)
+        val rms: Float get() = maxOf(rmsLeft, rmsRight)
+    }
 
     fun trackMeterSnapshot(trackId: String): TrackMeterSnapshot {
-        val meter = trackMeterBits[trackId] ?: return TrackMeterSnapshot(0f, 0f)
+        val meter = trackMeterBits[trackId]
+            ?: return TrackMeterSnapshot(0f, 0f, 0f, 0f)
         return TrackMeterSnapshot(
-            java.lang.Float.intBitsToFloat(meter.peak.get()).coerceIn(0f, 1f),
-            java.lang.Float.intBitsToFloat(meter.rms.get()).coerceIn(0f, 1f)
+            java.lang.Float.intBitsToFloat(meter.peakLeft.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.peakRight.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.rmsLeft.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.rmsRight.get()).coerceIn(0f, 1f)
         )
     }
 
-    private fun publishTrackMeter(trackId: String, peak: Float, rms: Float) {
+    private fun publishTrackMeter(
+        trackId: String, peakLeft: Float, peakRight: Float, rmsLeft: Float, rmsRight: Float
+    ) {
         val meter = trackMeterBits.computeIfAbsent(trackId) { TrackMeterBits() }
-        meter.peak.set(java.lang.Float.floatToRawIntBits(peak.coerceIn(0f, 1f)))
-        meter.rms.set(java.lang.Float.floatToRawIntBits(rms.coerceIn(0f, 1f)))
+        meter.peakLeft.set(java.lang.Float.floatToRawIntBits(peakLeft.coerceIn(0f, 1f)))
+        meter.peakRight.set(java.lang.Float.floatToRawIntBits(peakRight.coerceIn(0f, 1f)))
+        meter.rmsLeft.set(java.lang.Float.floatToRawIntBits(rmsLeft.coerceIn(0f, 1f)))
+        meter.rmsRight.set(java.lang.Float.floatToRawIntBits(rmsRight.coerceIn(0f, 1f)))
     }
 
     private fun publishMasterMeter(peak: Float, rms: Float, momentaryLufs: Float) {
@@ -648,18 +706,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val momentaryLufs = loudnessMeter.processBlock(mix, sampleCount)
                 publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat(), momentaryLufs)
                 perTrackMix.forEach { (id, channel) ->
-                    var peak = 0f
-                    var sumSquares = 0.0
-                    for (i in 0 until sampleCount) {
-                        val absolute = abs(channel[i])
-                        if (absolute > peak) peak = absolute
-                        sumSquares += channel[i].toDouble() * channel[i].toDouble()
-                    }
-                    publishTrackMeter(id, peak, kotlin.math.sqrt(sumSquares / sampleCount.coerceAtLeast(1)).toFloat())
+                    val levels = measureStereoMeterLevels(channel, sampleCount)
+                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight)
                 }
                 // A silent/muted channel should not leave an old level stuck on screen.
                 mixState.tracks.keys.forEach { id ->
-                    if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f)
+                    if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f)
                 }
                 var offset = 0
                 while (offset < sampleCount && running.get()) {
