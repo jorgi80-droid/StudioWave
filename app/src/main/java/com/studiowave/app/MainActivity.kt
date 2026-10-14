@@ -3165,8 +3165,9 @@ private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
         Icons.Default.Redo -> "Redo"
         else -> "Action"
     }
+    val p = LocalStudioWavePalette.current
     Button(onClick = onClick, modifier = Modifier.size(32.dp), contentPadding = PaddingValues(0.dp),
-        shape = RoundedCornerShape(5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF353940), contentColor = tint)) {
+        shape = RoundedCornerShape(5.dp), colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = tint)) {
         Icon(icon, contentDescription = description, modifier = Modifier.size(16.dp))
     }
 }
