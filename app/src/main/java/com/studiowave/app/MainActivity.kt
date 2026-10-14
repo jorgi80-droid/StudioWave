@@ -514,7 +514,7 @@ private fun StudioWaveApp() {
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 4f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
                             onPlaybackRestart = { updatedProject ->
                                 if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
                             },
@@ -1322,6 +1322,9 @@ private fun TimelineGrid(
     val currentOnSeekTick by rememberUpdatedState(onSeekTick)
     val currentTrackRows by rememberUpdatedState(trackRowLayout)
     var draggingClip by remember { mutableStateOf<String?>(null) }
+    var resizingClip by remember { mutableStateOf<String?>(null) }
+    var liveResizeStart by remember { mutableLongStateOf(0L) }
+    var liveResizeLength by remember { mutableLongStateOf(1L) }
     var dragFromTrack by remember { mutableIntStateOf(-1) }
     var dragOriginalTick by remember { mutableLongStateOf(0L) }
     var dragDx by remember { mutableFloatStateOf(0f) }
@@ -1372,9 +1375,9 @@ private fun TimelineGrid(
                             )
                             val span = pointers.map { (it.position - centroid).getDistance() }.average().toFloat() * 2f
                             if (initialized) {
-                                val zoomFactor = if (previousSpan > 1f && span > 1f) (span / previousSpan).coerceIn(0.85f, 1.18f) else 1f
-                                val oldZoom = currentZoom.coerceIn(0.1f, 4f)
-                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.1f, 4f)
+                                val zoomFactor = if (previousSpan > 1f && span > 1f) (span / previousSpan).coerceIn(0.70f, 1.40f) else 1f
+                                val oldZoom = currentZoom.coerceIn(0.1f, 16f)
+                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.1f, 16f)
                                 val oldBarWidth = TimelineViewport(timebase, baseBarWidthPx * oldZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
                                 val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
                                 val pinchViewport = TimelineViewport(
@@ -1550,11 +1553,13 @@ private fun TimelineGrid(
                     track.clips.forEach { clip ->
                         // Clip geometry is derived only from musical duration and the shared
                         // viewport scale; a fixed visual minimum makes clip lengths jump on zoom.
-                        val clipWidthPx = viewport.tickDeltaToPixels(clip.lengthTicks.coerceAtLeast(1L)).coerceAtLeast(1f)
+                        val effectiveClipStart = if (resizingClip == clip.id) liveResizeStart else clip.startTick
+                        val effectiveClipLength = if (resizingClip == clip.id) liveResizeLength else clip.lengthTicks
+                        val clipWidthPx = viewport.tickDeltaToPixels(effectiveClipLength.coerceAtLeast(1L)).coerceAtLeast(1f)
                         val clipWidthDp = with(density) { clipWidthPx.toDp().value }
                         val resizeGripWidthDp = minOf(18f, clipWidthDp * 0.38f).coerceAtLeast(0.01f)
                         val resizeGripWidthPx = with(density) { resizeGripWidthDp.dp.toPx() }
-                        val displayLeftPx = viewport.timeToViewportX(clip.startTick)
+                        val displayLeftPx = viewport.timeToViewportX(effectiveClipStart)
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
@@ -1690,28 +1695,39 @@ private fun TimelineGrid(
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
                                         .pointerInput(clip.id, zoom, clip.startTick, clip.lengthTicks, clip.sourceOffsetTicks) {
                                             detectDragGestures(
-                                                onDragStart = { leftResizeDeltaPx = 0f; onSelectClip(clip.id) },
-                                                onDrag = { change, amount -> change.consume(); leftResizeDeltaPx += amount.x },
-                                                onDragEnd = {
+                                                onDragStart = {
+                                                    leftResizeDeltaPx = 0f
+                                                    liveResizeStart = clip.startTick.coerceAtLeast(0L)
+                                                    liveResizeLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    resizingClip = clip.id
+                                                    onSelectClip(clip.id)
+                                                },
+                                                onDrag = { change, amount ->
+                                                    change.consume()
+                                                    leftResizeDeltaPx += amount.x
                                                     val originalStart = clip.startTick.coerceAtLeast(0L)
                                                     val originalLength = clip.lengthTicks.coerceAtLeast(1L)
                                                     val originalEnd = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
-                                                    val snapStep = snapDivision.ticks(timebase)
-                                                    val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
+                                                    val step = snapDivision.ticks(timebase)
+                                                    val minimumLength = if (snapToGrid && step > 0L) step else 1L
                                                     val earliestStart = (originalStart - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
                                                     val latestStart = (originalEnd - minimumLength).coerceAtLeast(earliestStart)
-                                                    val deltaTicks = viewport.pixelsToTickDelta(leftResizeDeltaPx)
-                                                    val rawStart = (originalStart.toDouble() + deltaTicks.toDouble())
+                                                    val raw = (originalStart.toDouble() + viewport.pixelsToTickDelta(leftResizeDeltaPx).toDouble())
                                                         .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong()
-                                                    val snappedStart = viewport.snapTick(rawStart, snapDivision, snapToGrid)
-                                                    val newStart = snappedStart.coerceIn(earliestStart, latestStart)
-                                                    val newLength = (originalEnd - newStart).coerceAtLeast(minimumLength)
-                                                    if (newStart != clip.startTick && newLength > 0L) {
-                                                        onResizeClip(clip.id, newStart, newLength)
+                                                    liveResizeStart = viewport.snapTick(raw, snapDivision, snapToGrid).coerceIn(earliestStart, latestStart)
+                                                    liveResizeLength = (originalEnd - liveResizeStart).coerceAtLeast(minimumLength)
+                                                },
+                                                onDragEnd = {
+                                                    if (resizingClip == clip.id) {
+                                                        onResizeClip(clip.id, liveResizeStart, liveResizeLength)
                                                     }
+                                                    resizingClip = null
                                                     leftResizeDeltaPx = 0f
                                                 },
-                                                onDragCancel = { leftResizeDeltaPx = 0f }
+                                                onDragCancel = {
+                                                    resizingClip = null
+                                                    leftResizeDeltaPx = 0f
+                                                }
                                             )
                                         },
                                     contentAlignment = Alignment.Center
@@ -1725,23 +1741,40 @@ private fun TimelineGrid(
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
                                         .pointerInput(clip.id, zoom, clip.lengthTicks) {
                                             detectDragGestures(
-                                                onDragStart = { resizeDeltaPx = 0f },
-                                                onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
-                                                onDragEnd = {
+                                                onDragStart = {
+                                                    resizeDeltaPx = 0f
+                                                    liveResizeStart = clip.startTick.coerceAtLeast(0L)
+                                                    liveResizeLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    resizingClip = clip.id
+                                                    onSelectClip(clip.id)
+                                                },
+                                                onDrag = { change, amount ->
+                                                    change.consume()
+                                                    resizeDeltaPx += amount.x
                                                     val originalStart = clip.startTick.coerceAtLeast(0L)
                                                     val originalLength = clip.lengthTicks.coerceAtLeast(1L)
-                                                    val originalEndTick = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
-                                                    val rawEndTick = (originalEndTick.toDouble() +
+                                                    val originalEnd = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
+                                                    val rawEnd = (originalEnd.toDouble() +
                                                         viewport.pixelsToTickDelta(resizeDeltaPx).toDouble())
                                                         .coerceIn((originalStart.toDouble() + 1.0).coerceAtMost(Long.MAX_VALUE.toDouble()), Long.MAX_VALUE.toDouble()).toLong()
-                                                    val snapStep = snapDivision.ticks(timebase)
-                                                    val snappedEndTick = viewport.snapTick(rawEndTick, snapDivision, snapToGrid)
-                                                    val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
-                                                    val newLength = (snappedEndTick - originalStart).coerceAtLeast(minimumLength)
-                                                    onResizeClip(clip.id, clip.startTick, newLength)
+                                                    val step = snapDivision.ticks(timebase)
+                                                    val minimumLength = if (snapToGrid && step > 0L) step else 1L
+                                                    val snappedEnd = viewport.snapTick(rawEnd, snapDivision, snapToGrid)
+                                                        .coerceAtLeast((originalStart + minimumLength).coerceAtMost(Long.MAX_VALUE))
+                                                    liveResizeStart = originalStart
+                                                    liveResizeLength = (snappedEnd - originalStart).coerceAtLeast(minimumLength)
+                                                },
+                                                onDragEnd = {
+                                                    if (resizingClip == clip.id) {
+                                                        onResizeClip(clip.id, liveResizeStart, liveResizeLength)
+                                                    }
+                                                    resizingClip = null
                                                     resizeDeltaPx = 0f
                                                 },
-                                                onDragCancel = { resizeDeltaPx = 0f }
+                                                onDragCancel = {
+                                                    resizingClip = null
+                                                    resizeDeltaPx = 0f
+                                                }
                                             )
                                         },
                                     contentAlignment = Alignment.Center
