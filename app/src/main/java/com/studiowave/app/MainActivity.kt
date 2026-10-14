@@ -3027,7 +3027,7 @@ private fun PianoRollWorkspace(
                                             val scale = span / initialSpan
                                             val newZoomX = (baseZoomX * scale).coerceIn(0.35f, 8f)
                                             val newZoomY = (baseZoomY * scale).coerceIn(0.45f, 3.5f)
-                                            val newSteps = (stepsPerBar.toFloat() * 2f / newZoomX).roundToInt().coerceIn(4, 96)
+                                            val newSteps = pianoRollVisibleSteps(stepsPerBar, newZoomX)
                                             val newColWidth = (viewportWidthPx / newSteps.toFloat()).coerceAtLeast(2f)
                                             val newRowHeight = with(pianoDensity) {
                                                 (18f * newZoomY).coerceIn(10f, 44f).dp.toPx()
