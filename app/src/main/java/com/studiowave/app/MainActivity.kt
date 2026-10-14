@@ -1500,6 +1500,51 @@ private fun ArrangementWorkspace(
                         Text("BAR $endBarNumber", color = arrangementPalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
                 }
+                val isPatternClip = inspectorTrack.kind == "midi" || inspectorTrack.kind == "drum"
+                val oneBarTicks = inspectorTimebase.ticksPerBar.coerceAtLeast(1L)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    SmallAction("START −") {
+                        val latest = inspectorTrack.clips.firstOrNull { it.id == inspectorClip.id } ?: return@SmallAction
+                        val newStart = (latest.startTick - oneBarTicks).coerceAtLeast(0L)
+                        onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                            if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
+                                if (clip.id == inspectorClip.id) clip.copy(startTick = newStart) else clip
+                            }) else track
+                        }))
+                    }
+                    SmallAction("START +") {
+                        val latest = inspectorTrack.clips.firstOrNull { it.id == inspectorClip.id } ?: return@SmallAction
+                        val maxStart = (maxArrangementTick(inspectorTimebase) - latest.lengthTicks.coerceAtLeast(1L)).coerceAtLeast(0L)
+                        val newStart = (latest.startTick + oneBarTicks).coerceAtMost(maxStart)
+                        onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                            if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
+                                if (clip.id == inspectorClip.id) clip.copy(startTick = newStart) else clip
+                            }) else track
+                        }))
+                    }
+                    if (isPatternClip) {
+                        SmallAction("LEN −") {
+                            val latest = inspectorTrack.clips.firstOrNull { it.id == inspectorClip.id } ?: return@SmallAction
+                            val newLength = (latest.lengthTicks - oneBarTicks).coerceAtLeast(oneBarTicks)
+                            val maxLength = (maxArrangementTick(inspectorTimebase) - latest.startTick.coerceAtLeast(0L)).coerceAtLeast(oneBarTicks)
+                            onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
+                                    if (clip.id == inspectorClip.id) clip.copy(lengthTicks = newLength.coerceAtMost(maxLength)) else clip
+                                }) else track
+                            }))
+                        }
+                        SmallAction("LEN +") {
+                            val latest = inspectorTrack.clips.firstOrNull { it.id == inspectorClip.id } ?: return@SmallAction
+                            val maxLength = (maxArrangementTick(inspectorTimebase) - latest.startTick.coerceAtLeast(0L)).coerceAtLeast(oneBarTicks)
+                            val newLength = (latest.lengthTicks.coerceAtLeast(oneBarTicks) + oneBarTicks).coerceAtMost(maxLength)
+                            onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                if (track.id == inspectorTrack.id) track.copy(clips = track.clips.map { clip ->
+                                    if (clip.id == inspectorClip.id) clip.copy(lengthTicks = newLength) else clip
+                                }) else track
+                            }))
+                        }
+                    }
+                }
                 val detailText = when (inspectorTrack.kind) {
                     "audio" -> if (inspectorClip.sourceUri != null) "SOURCE LOADED · trim offset ${inspectorClip.sourceOffsetTicks} ticks"
                         else "NO SOURCE · import audio to attach a waveform"
