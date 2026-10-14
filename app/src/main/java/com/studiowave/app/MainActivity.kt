@@ -87,6 +87,7 @@ private val CanvasSurface = Color(0xFF1E2024)
 private val Raised = Color(0xFF282B30)
 private val MutedText = Color(0xFFA4A8B0)
 private val Mint = Color(0xFF00D2B4)
+private val AbletonOrange = Color(0xFFFF764D)
 private val Green = Color(0xFF22C55E)
 private val Red = Color(0xFFEF4444)
 
@@ -631,7 +632,12 @@ private fun StudioWaveApp() {
                     onStop = { stopPlayback() })
                 Spacer(Modifier.height(3.dp))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
-                    WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
+                    WorkspaceRail(
+                        selected = selectedWorkspace,
+                        devicesOpen = showDock,
+                        onSelect = { selectedWorkspace = it },
+                        onToggleDevices = { showDock = !showDock }
+                    )
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
                         "MIXER" -> MixerWorkspace(
@@ -708,13 +714,14 @@ private fun TransportBar(
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     Column(
-        Modifier.fillMaxWidth().background(Color(0xFF202226), RoundedCornerShape(7.dp))
+        Modifier.fillMaxWidth().background(Color(0xFF242528), RoundedCornerShape(7.dp))
             .padding(horizontal = 7.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = Mint, maxLines = 1)
+            Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = AbletonOrange, maxLines = 1)
+            Text("LIVE SET", color = Color(0xFF777B82), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text("BPM", color = MutedText, fontSize = 8.sp)
             SmallAction("−") { onBpm(bpm - 1) }
             Surface(color = Color(0xFF111315), shape = RoundedCornerShape(4.dp)) {
@@ -736,14 +743,14 @@ private fun TransportBar(
             horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             SmallIconButton(Icons.Default.Stop, MutedText, onStop)
             Surface(
-                color = if (playing) Color(0xFF21483B) else Color(0xFF18443F),
+                color = if (playing) Color(0xFF553126) else Color(0xFF352722),
                 shape = RoundedCornerShape(7.dp),
                 modifier = Modifier.size(width = 42.dp, height = 32.dp).clickable(onClick = onPlay)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (playing) "Pause playback" else "Start playback",
-                        tint = if (playing) Green else Mint, modifier = Modifier.size(22.dp))
+                        tint = if (playing) AbletonOrange else Color(0xFFFF9A72), modifier = Modifier.size(22.dp))
                 }
             }
             Surface(color = Color(0xFF111315), shape = RoundedCornerShape(5.dp)) {
@@ -775,19 +782,25 @@ private fun TransportBar(
 }
 
 @Composable
-private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
+private fun WorkspaceRail(
+    selected: String,
+    devicesOpen: Boolean,
+    onSelect: (String) -> Unit,
+    onToggleDevices: () -> Unit
+) {
     Column(
-        Modifier.width(44.dp).fillMaxHeight().background(Color(0xFF202226), RoundedCornerShape(7.dp)).padding(3.dp),
+        Modifier.width(48.dp).fillMaxHeight().background(Color(0xFF242528), RoundedCornerShape(7.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
-        RailButton("CLIP", selected == "PIANO ROLL" || selected == "AUDIO EDITOR" || selected == "DRUM SEQUENCER", Icons.Default.Keyboard) {
+        RailButton("EDIT", selected == "PIANO ROLL" || selected == "AUDIO EDITOR" || selected == "DRUM SEQUENCER", Icons.Default.Keyboard) {
             when (selected) {
                 "PIANO ROLL", "AUDIO EDITOR", "DRUM SEQUENCER" -> onSelect("ARRANGEMENT")
                 else -> onSelect("PIANO ROLL")
             }
         }
         RailButton("MIX", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
+        RailButton("DEV", devicesOpen, Icons.Default.GraphicEq, onToggleDevices)
         RailButton("FILES", selected == "BROWSER", Icons.Default.LibraryMusic) { onSelect("BROWSER") }
     }
 }
@@ -795,8 +808,8 @@ private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
 @Composable
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Surface(
-        color = if (selected) Color(0xFF29453D) else Color(0xFF17191C),
-        contentColor = if (selected) Mint else MutedText,
+        color = if (selected) Color(0xFF4A2D24) else Color(0xFF191A1D),
+        contentColor = if (selected) AbletonOrange else MutedText,
         shape = RoundedCornerShape(6.dp),
         modifier = Modifier.fillMaxWidth().height(43.dp).clickable(onClick = onClick)
     ) {
@@ -814,7 +827,7 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(title, fontSize = 10.sp, color = Mint, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(title, fontSize = 10.sp, color = AbletonOrange, fontWeight = FontWeight.Black, maxLines = 1)
         Spacer(Modifier.width(8.dp))
         Text(subtitle, fontSize = 9.sp, color = MutedText, maxLines = 1)
         Spacer(Modifier.weight(1f))
