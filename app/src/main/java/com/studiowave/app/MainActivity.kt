@@ -871,18 +871,17 @@ private fun TransportBar(
             Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(54.dp).height(26.dp),
                 valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = p.text, activeTrackColor = p.accent, inactiveTrackColor = p.control))
-            Column(Modifier.width(85.dp), verticalArrangement = Arrangement.Center) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(Modifier.width(86.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                     Text("${peakDbfs.toInt()}dB", color = p.text, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text("${momentaryLufs.toInt()}L", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
-                Canvas(Modifier.fillMaxWidth().height(5.dp)) {
-                    drawLine(p.grid, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
-                    peakHistory.forEachIndexed { index, level ->
+                Canvas(Modifier.width(21.dp).height(17.dp)) {
+                    drawRect(p.room, size = size)
+                    peakHistory.takeLast(15).forEachIndexed { index, level ->
                         val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
-                        val x = index * size.width / peakHistory.size.coerceAtLeast(1)
-                        drawLine(p.accent.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
-                            (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
+                        val x = index * size.width / 15f
+                        drawLine(p.accent, Offset(x, size.height), Offset(x, size.height - bar), 1.2f)
                     }
                 }
             }
