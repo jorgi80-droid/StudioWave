@@ -1166,7 +1166,7 @@ private fun ArrangementWorkspace(
                 .toFloat().coerceIn(0.1f, 16f)
         }
         Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(7.dp)).padding(1.dp)) {
-        Box(Modifier.fillMaxWidth().weight(1f)) {
+        Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(104.dp)) {
                 Row(Modifier.fillMaxWidth().height(22.dp).background(LocalStudioWavePalette.current.raised), verticalAlignment = Alignment.CenterVertically) {
