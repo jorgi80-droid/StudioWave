@@ -210,8 +210,8 @@ class TimelineViewportTest {
         val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 148f, 7680.0, 900f, 104f)
         listOf(0L, 7680L, 9120L, 50000L).forEach { tick ->
             val paneX = viewport.timeToViewportX(tick)
-            assertEquals(tick, viewport.viewportXToTime(paneX), 1L)
-            assertEquals(tick, viewport.screenXToTime(viewport.timeToScreenX(tick)), 1L)
+            assertTrue(kotlin.math.abs(tick - viewport.viewportXToTime(paneX)) <= 1L)
+            assertTrue(kotlin.math.abs(tick - viewport.screenXToTime(viewport.timeToScreenX(tick))) <= 1L)
             assertEquals(paneX, viewport.timeToScreenX(tick) - viewport.trackHeaderWidthPx, 0.001f)
         }
     }
@@ -244,7 +244,7 @@ class TimelineViewportTest {
             val anchorX = 377f
             val anchorTick = initial.viewportXToTime(anchorX)
             val placed = initial.placeTickAtViewportX(anchorTick, anchorX)
-            assertEquals(anchorTick, placed.viewportXToTime(anchorX), 1L)
+            assertTrue(kotlin.math.abs(anchorTick - placed.viewportXToTime(anchorX)) <= 1L)
             assertEquals(scale, placed.effectivePixelsPerBar, 0.001f)
         }
     }
