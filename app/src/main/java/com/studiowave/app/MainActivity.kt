@@ -1459,6 +1459,7 @@ private fun TimelineGrid(
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
     val currentScroll by rememberUpdatedState(scrollTicks)
+    val currentPlayhead by rememberUpdatedState(playheadTick)
     val currentScrollTracks by rememberUpdatedState(scrollTracks)
     val currentVerticalZoom by rememberUpdatedState(verticalZoom)
     val currentOnVerticalZoom by rememberUpdatedState(onVerticalZoom)
@@ -1748,6 +1749,11 @@ private fun TimelineGrid(
                         if (boundedClipStart < arrangementEndTick &&
                             displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
+                        val clipFill by androidx.compose.animation.animateColorAsState(
+                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f),
+                            animationSpec = tween(durationMillis = 140),
+                            label = "clipSelectionFill"
+                        )
                         Column(
                             Modifier
                                 .offset(x = with(density) { displayLeftPx.toDp() }, y = 0.dp)
@@ -1758,7 +1764,7 @@ private fun TimelineGrid(
                                 .padding(top = 7.dp, bottom = 7.dp)
                                 .timelineClipWidthPx(clipWidthPx)
                                 .fillMaxHeight()
-                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
+                                .background(clipFill, RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
                                 .pointerInput(clip.id, trackIndex) {
                                     // The trailing grip owns resize gestures. Do not let the clip-body
