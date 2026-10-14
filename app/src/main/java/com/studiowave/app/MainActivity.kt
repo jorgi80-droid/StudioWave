@@ -2823,6 +2823,12 @@ private fun MixerWorkspace(
             ) {
                 Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1, color = mixerPalette.text)
                 Spacer(Modifier.height(3.dp))
+                val volumeDbLabel = if (track.volume <= 0.001f) "−∞ dB" else
+                    String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(track.volume))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("VOL", color = mixerPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    Text(volumeDbLabel, color = mixerPalette.text, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     MixerStateButton("M", track.muted, mixerPalette) {
                         onProjectChange(project.copy(tracks = project.tracks.map {
@@ -2836,7 +2842,6 @@ private fun MixerWorkspace(
                     }
                 }
                 Spacer(Modifier.height(4.dp))
-                Text("VOL  " + (track.volume * 100).toInt() + "%", color = mixerPalette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 val latestProject by rememberUpdatedState(project)
                 Row(
                     Modifier.fillMaxWidth().weight(1f),
