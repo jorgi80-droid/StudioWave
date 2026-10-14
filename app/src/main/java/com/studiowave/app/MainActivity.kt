@@ -161,6 +161,16 @@ internal fun calculatePinchZoomFrame(
     return PinchZoomFrame(effectiveZoom, scroll)
 }
 /**
+ * Shared Piano Roll viewport mapping. Every toolbar, pinch, grid and scroll calculation
+ * must use the same rounding rule so zoom cannot change the visible step count by one.
+ */
+internal fun pianoRollVisibleSteps(stepsPerBar: Int, zoomX: Float): Int {
+    val safeBarSteps = stepsPerBar.coerceAtLeast(1)
+    val safeZoom = zoomX.coerceIn(0.35f, 8f)
+    return (safeBarSteps.toFloat() * 2f / safeZoom).roundToInt().coerceIn(4, 96)
+}
+
+/**
  * Keep note events inside a clip's relative musical duration.
  * Notes fully beyond the new end are removed; crossing notes are shortened.
  */
@@ -2791,10 +2801,7 @@ private fun PianoRollWorkspace(
     val clipLengthSteps = kotlin.math.ceil(rawLengthTicks.toDouble() / stepTicks.toDouble())
         .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(1)
     // Keep zoom controls and gestures on one shared steps-per-screen mapping.
-    val stepsOnScreen = kotlin.math.ceil(
-        (ticksPerBar.toDouble() / stepTicks.toDouble()) *
-            2.0 / zoomX.coerceIn(0.35f, 8f)
-    ).toInt().coerceIn(4, 96)
+    val stepsOnScreen = pianoRollVisibleSteps(stepsPerBar, zoomX)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
     val gestureZoomX = rememberUpdatedState(zoomX)
@@ -2841,7 +2848,7 @@ private fun PianoRollWorkspace(
             SmallAction(if (editToolsExpanded) "TOOLS" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
-                val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
+                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
                 val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
                 val anchor = pageStartStep + oldVisible / 2
                 zoomX = nextZoom
@@ -2850,7 +2857,7 @@ private fun PianoRollWorkspace(
             Text("BAR ${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             TransportAction("+") {
                 val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
-                val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
+                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
                 val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
                 val anchor = pageStartStep + oldVisible / 2
                 zoomX = nextZoom
@@ -2974,7 +2981,7 @@ private fun PianoRollWorkspace(
                     LaunchedEffect(viewportWidthPx, clipLengthSteps, stepsPerBar, zoomX) {
                         if (lastViewportWidthPx > 0f && viewportWidthPx > 0f &&
                             kotlin.math.abs(viewportWidthPx - lastViewportWidthPx) > 1f) {
-                            val stepsVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
+                            val stepsVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
                             val anchor = pageStartStep + stepsVisible / 2
                             startStep = (anchor - stepsVisible / 2)
                                 .coerceIn(0, (clipLengthSteps - stepsVisible).coerceAtLeast(0))
@@ -2982,7 +2989,7 @@ private fun PianoRollWorkspace(
                         lastViewportWidthPx = viewportWidthPx
                     }
                     val gridStepsPerBar = stepsPerBar.coerceAtLeast(1)
-                    val currentStepsOnScreen = (gridStepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
+                    val currentStepsOnScreen = pianoRollVisibleSteps(gridStepsPerBar, gestureZoomX.value)
                     val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
                     val rowHeightPx = with(pianoDensity) { currentRowHeight.dp.toPx() }
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
@@ -3004,7 +3011,7 @@ private fun PianoRollWorkspace(
                                     val baseZoomY = gestureZoomY.value.coerceIn(0.45f, 3.5f)
                                     val baseStart = gestureStartStep.value
                                     val baseTop = gestureTopPitch.value
-                                    val baseStepsOnScreen = (stepsPerBar.toFloat() * 2f / baseZoomX).roundToInt().coerceIn(4, 96)
+                                    val baseStepsOnScreen = pianoRollVisibleSteps(stepsPerBar, baseZoomX)
                                     val baseColWidth = (viewportWidthPx / baseStepsOnScreen.toFloat()).coerceAtLeast(2f)
                                     val baseRowHeight = with(pianoDensity) {
                                         (18f * baseZoomY).coerceIn(10f, 44f).dp.toPx()
