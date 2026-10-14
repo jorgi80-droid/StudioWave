@@ -2485,27 +2485,22 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
+                            Column(Modifier.fillMaxWidth()) {
                                 Text(
                                     clip.name,
-                                    modifier = Modifier.weight(1f, fill = false),
                                     fontSize = 8.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = timelinePalette.text,
                                     maxLines = 1
                                 )
-                                val clipBadge = when (track.kind) {
-                                    "midi" -> "MIDI · ${clip.midiNotes.size} N"
-                                    "drum" -> "DRUM · ${clip.drumSteps.count { it }}"
-                                    "audio" -> "AUDIO"
+                                val clipDetail = when (track.kind) {
+                                    "midi" -> "MIDI · ${clip.midiNotes.size} NOTES"
+                                    "drum" -> "DRUM · ${clip.drumSteps.count { it }} ACTIVE"
+                                    "audio" -> clip.sourceUri?.substringAfterLast('/')?.take(26) ?: "NO SOURCE"
                                     else -> track.kind.uppercase()
                                 }
                                 Text(
-                                    clipBadge,
+                                    clipDetail,
                                     fontSize = 6.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = timelinePalette.text.copy(alpha = 0.82f),
