@@ -2534,7 +2534,7 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        if (false) Row(Modifier.fillMaxWidth().height(58.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Velocity editing is shown in the main note grid by switching NOTES/VEL. verticalAlignment = Alignment.CenterVertically) {
             Text("VEL", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
                 modifier = Modifier.width(54.dp))
             Canvas(
