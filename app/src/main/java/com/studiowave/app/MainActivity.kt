@@ -2443,6 +2443,7 @@ private fun PianoRollWorkspace(
     var snapDenominator by remember(track?.id, clip?.id) { mutableIntStateOf(16) }
     var keyboardVisible by remember(track?.id) { mutableStateOf(true) }
     var editToolsExpanded by remember(track?.id, clip?.id) { mutableStateOf(false) }
+    var virtualKeyboardVisible by remember(track?.id, clip?.id) { mutableStateOf(false) }
     var zoomX by remember(track?.id, clip?.id) { mutableFloatStateOf(1.0f) }
     var zoomY by remember(track?.id) { mutableFloatStateOf(1.0f) }
     var startStep by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
@@ -2502,7 +2503,8 @@ private fun PianoRollWorkspace(
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
                 modifier = Modifier.widthIn(max = 100.dp))
             Spacer(Modifier.weight(1f))
-            SmallAction(if (keyboardVisible) "KEYS ON" else "KEYS OFF") { keyboardVisible = !keyboardVisible }
+            SmallAction(if (keyboardVisible) "PIANO KEYS" else "PIANO KEYS OFF") { keyboardVisible = !keyboardVisible }
+            SmallAction(if (virtualKeyboardVisible) "KEYBOARD ON" else "KEYBOARD") { virtualKeyboardVisible = !virtualKeyboardVisible }
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
@@ -2783,8 +2785,46 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(editMessage, color = pianoPalette.muted, fontSize = 6.sp, maxLines = 1)
+        if (virtualKeyboardVisible) {
+            val keyboardNotes = listOf(
+                "C" to 48, "D" to 50, "E" to 52, "F" to 53,
+                "G" to 55, "A" to 57, "B" to 59, "C5" to 60
+            )
+            Row(
+                Modifier.fillMaxWidth().height(44.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(3.dp),
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                keyboardNotes.forEach { (label, pitch) ->
+                    Surface(
+                        color = pianoPalette.control,
+                        shape = RoundedCornerShape(3.dp),
+                        border = BorderStroke(1.dp, pianoPalette.border),
+                        modifier = Modifier.weight(1f).fillMaxHeight().clickable {
+                            val activeTrack = track
+                            val activeClip = clip
+                            if (activeTrack != null && activeClip != null) {
+                                val note = com.studiowave.app.data.MidiNote(
+                                    pitch = pitch, startTick = (pageStartStep * stepTicks),
+                                    durationTicks = stepTicks, velocity = 100
+                                )
+                                updateNotes(notes + note)
+                                selectedNoteId = note.id
+                                editMessage = "Added ${label} to clip"
+                            } else {
+                                editMessage = "Create a MIDI track and clip first"
+                            }
+                        }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(label, color = pianoPalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                SmallAction("HIDE") { virtualKeyboardVisible = false }
+            }
+        }
+        Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(editMessage, color = pianoPalette.muted, fontSize = 7.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = pianoPalette.accent, fontSize = 7.sp)
         }
