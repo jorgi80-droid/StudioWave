@@ -2487,6 +2487,7 @@ private fun PianoRollWorkspace(
     val notes = clip?.midiNotes ?: emptyList()
     var snapDenominator by remember(track?.id, clip?.id) { mutableIntStateOf(16) }
     var keyboardVisible by remember(track?.id) { mutableStateOf(true) }
+    var editToolsExpanded by remember(track?.id, clip?.id) { mutableStateOf(false) }
     var zoomX by remember(track?.id, clip?.id) { mutableFloatStateOf(1.0f) }
     var zoomY by remember(track?.id) { mutableFloatStateOf(1.0f) }
     var startStep by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
@@ -2499,15 +2500,14 @@ private fun PianoRollWorkspace(
     val beatTicks = (project.ppq.toLong() * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
     val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
     val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks).toInt().coerceAtLeast(1)
-    val pitchRows = 120
-    val rowHeight = (15f * zoomY).coerceIn(7f, 34f)
+    val rowHeight = (16f * zoomY).coerceIn(8f, 36f)
     val stepsOnScreen = (32f / zoomX.coerceIn(0.45f, 5f)).roundToInt().coerceIn(6, 72)
     val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
     val clipLengthSteps = ((rawLengthTicks + stepTicks - 1L) / stepTicks)
         .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
-    val visiblePitchRows = (600f / rowHeight).roundToInt().coerceIn(12, 120)
+    val visiblePitchRows = (720f / rowHeight).roundToInt().coerceIn(12, 120)
     val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
     val currentTopPitch = topPitch.coerceIn(maxTopPitch, 119)
     val highestPitch = currentTopPitch
@@ -2531,60 +2531,71 @@ private fun PianoRollWorkspace(
     }
 
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(5.dp)) {
-        WorkspaceTitleBar("CLIP VIEW  /  MIDI NOTE EDITOR", "${track?.name ?: "No MIDI track"}  ·  ${clip?.name ?: "No clip"}", onBack)
         Row(
-            Modifier.fillMaxWidth().padding(vertical = 3.dp)
-                .background(Color(0xFF222428), RoundedCornerShape(5.dp))
-                .padding(horizontal = 5.dp, vertical = 3.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().height(28.dp).background(Color(0xFF222428), RoundedCornerShape(5.dp))
+                .padding(horizontal = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("MIDI", color = AbletonOrange, fontSize = 10.sp, fontWeight = FontWeight.Black)
+            Text("${track?.name ?: "NO TRACK"}  /  ${clip?.name ?: "NO CLIP"}",
+                color = Color(0xFFE4E8EF), fontSize = 9.sp, maxLines = 1)
+            Spacer(Modifier.weight(1f))
+            SmallAction("BACK", onBack)
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 3.dp)
+                .background(Color(0xFF202226), RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
             SmallAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.45f, 5f) }
-            SmallAction("←") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
-            Text("BAR ${pageStartStep / stepsPerBar + 1}", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            SmallAction("→") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
+            SmallAction("BAR ◀") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
+            Text("${pageStartStep / stepsPerBar + 1}", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            SmallAction("▶ BAR") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
             SmallAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.45f, 5f) }
-            SmallAction("PITCH −") { zoomY = (zoomY / 1.2f).coerceIn(0.5f, 2.6f) }
-            SmallAction("PITCH +") { zoomY = (zoomY * 1.2f).coerceIn(0.5f, 2.6f) }
+            SmallAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.5f, 2.6f) }
+            SmallAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.5f, 2.6f) }
             SmallAction("1/${snapDenominator}") { snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 } }
-            SmallAction("COPY") {
-                clipboard = notes.firstOrNull { it.id == selectedNoteId }
-                editMessage = if (clipboard != null) "Note copied" else "Tap a note, then COPY"
-            }
-            SmallAction("PASTE") {
-                val source = clipboard
-                if (source != null && clip != null && track != null) {
-                    val pasted = source.copy(
-                        id = java.util.UUID.randomUUID().toString(),
-                        startTick = source.startTick + stepTicks,
-                        pitch = (source.pitch - 1).coerceIn(0, 119)
-                    )
-                    updateNotes(notes + pasted)
-                    selectedNoteId = pasted.id
-                    editMessage = "Note pasted"
+            SmallAction(if (editToolsExpanded) "LESS" else "NOTE TOOLS") { editToolsExpanded = !editToolsExpanded }
+        }
+        if (editToolsExpanded) {
+            Row(
+                Modifier.fillMaxWidth().padding(bottom = 3.dp)
+                    .background(Color(0xFF222428), RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
+            ) {
+                SmallAction("COPY") {
+                    clipboard = notes.firstOrNull { it.id == selectedNoteId }
+                    editMessage = if (clipboard != null) "Note copied" else "Select a note first"
                 }
-            }
-            SmallAction("− LEN") {
-                val selected = notes.firstOrNull { it.id == selectedNoteId }
-                if (selected != null) {
-                    updateNotes(notes.map { if (it.id == selected.id) it.copy(durationTicks = (it.durationTicks - stepTicks).coerceAtLeast(stepTicks)) else it })
+                SmallAction("PASTE") {
+                    val source = clipboard
+                    if (source != null && clip != null && track != null) {
+                        val pasted = source.copy(
+                            id = java.util.UUID.randomUUID().toString(),
+                            startTick = source.startTick + stepTicks,
+                            pitch = source.pitch
+                        )
+                        updateNotes(notes + pasted)
+                        selectedNoteId = pasted.id
+                        editMessage = "Note pasted"
+                    } else editMessage = "Copy a note first"
                 }
-            }
-            SmallAction("+ LEN") {
-                val selected = notes.firstOrNull { it.id == selectedNoteId }
-                if (selected != null) {
-                    val updated = notes.map { note ->
-                        if (note.id == selected.id) {
-                            note.copy(durationTicks = (note.durationTicks + stepTicks).coerceAtMost(project.ppq.toLong() * 4L * 4096L))
-                        } else {
-                            note
-                        }
-                    }
-                    updateNotes(updated)
+                SmallAction("− LEN") {
+                    val selected = notes.firstOrNull { it.id == selectedNoteId }
+                    if (selected != null) {
+                        updateNotes(notes.map { if (it.id == selected.id) it.copy(durationTicks = (it.durationTicks - stepTicks).coerceAtLeast(stepTicks)) else it })
+                    } else editMessage = "Select a note first"
                 }
+                SmallAction("+ LEN") {
+                    val selected = notes.firstOrNull { it.id == selectedNoteId }
+                    if (selected != null) {
+                        updateNotes(notes.map { if (it.id == selected.id) it.copy(durationTicks = (it.durationTicks + stepTicks).coerceAtMost(project.ppq.toLong() * 4L * 4096L)) else it })
+                    } else editMessage = "Select a note first"
+                }
+                Spacer(Modifier.weight(1f))
+                Text(if (keyboardVisible) "TAP GRID: ADD / REMOVE" else "VELOCITY EDIT", color = MutedText, fontSize = 8.sp, maxLines = 1)
             }
-            Spacer(Modifier.weight(1f))
-            Text(if (keyboardVisible) "SELECT / DRAW" else "VELOCITY", color = MutedText, fontSize = 7.sp, maxLines = 1)
         }
 
         Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
@@ -2610,24 +2621,16 @@ private fun PianoRollWorkspace(
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                Row(
-                    Modifier.fillMaxWidth().height(20.dp).background(Color(0xFF24262A)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("BAR / BEAT", color = MutedText, fontSize = 7.sp, modifier = Modifier.padding(start = 5.dp))
-                    Spacer(Modifier.weight(1f))
-                    Text("C1 — C10", color = Mint, fontSize = 7.sp, modifier = Modifier.padding(end = 6.dp))
-                }
                 BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF1B1D21))) {
                     val viewportWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
                     val viewportHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxHeight.toPx() }
+                    val rowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
+                    val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
+                    val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
+                    val currentTopPitch = topPitch.coerceIn(maxTopPitch, 119)
                     val colWidthPx = (viewportWidthPx / stepsOnScreen.toFloat()).coerceAtLeast(5f)
-                    val contentWidthPx = (clipLengthSteps.coerceAtLeast(stepsOnScreen) * colWidthPx).coerceAtMost(8_000_000f)
-                    val contentHeightDp = 120f * rowHeight
-                    val maxHorizontalScroll = (contentWidthPx - viewportWidthPx).coerceAtLeast(0f)
-                    val currentStart = if (maxHorizontalScroll <= 0f) 0 else {
-                        (pageStartStep / clipLengthSteps.toFloat() * maxHorizontalScroll).roundToInt().coerceIn(0, maxHorizontalScroll.roundToInt())
-                    }
+                    val maxHorizontalScroll = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
+                    val currentStart = pageStartStep
                     val contentModifier = Modifier
                         .fillMaxSize()
                         .pointerInput(track?.id, clip?.id, notes, snapDenominator, zoomX, zoomY, currentStart, currentTopPitch, keyboardVisible) {
@@ -2655,7 +2658,7 @@ private fun PianoRollWorkspace(
                                                 startStep = (startStep - (delta.x / colWidthPx).roundToInt()).coerceIn(0, maxStartStep)
                                             }
                                             if (kotlin.math.abs(delta.y) > 1f) {
-                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(0, maxTopPitch)
+                                                topPitch = (topPitch + (delta.y / rowHeightPx).roundToInt()).coerceIn(0, 119)
                                             }
                                             lastDistance = newSpan
                                             lastMid = mid
@@ -2673,15 +2676,15 @@ private fun PianoRollWorkspace(
                                             if (kotlin.math.abs(delta.x) > 2f || kotlin.math.abs(delta.y) > 2f) {
                                                 dragged = true
                                                 startStep = (startStep - (delta.x / colWidthPx).roundToInt()).coerceIn(0, maxStartStep)
-                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(0, 119)
+                                                topPitch = (topPitch + (delta.y / rowHeightPx).roundToInt()).coerceIn(0, 119)
                                                 change.consume()
                                             }
                                             previous = change.position
                                         }
                                     } while (event.changes.any { it.pressed })
                                     if (!dragged && track != null && clip != null && keyboardVisible) {
-                                        val step = (startStep + (down.position.x / colWidthPx).toInt().coerceIn(0, stepsOnScreen - 1))
-                                        val row = (down.position.y / rowHeight).toInt()
+                                        val step = (pageStartStep + (down.position.x / colWidthPx).toInt().coerceIn(0, stepsOnScreen - 1))
+                                        val row = (down.position.y / rowHeightPx).toInt()
                                         val pitch = (currentTopPitch - row).coerceIn(0, 119)
                                         val startTick = snapStep(step) * stepTicks
                                         val hitNote = notes.firstOrNull { note ->
@@ -2703,7 +2706,7 @@ private fun PianoRollWorkspace(
                                             editMessage = "Note added"
                                         }
                                     } else if (!dragged && !keyboardVisible && notes.isNotEmpty()) {
-                                        val targetTick = (startStep + (down.position.x / colWidthPx).toInt().coerceIn(0, stepsOnScreen - 1)) * stepTicks
+                                        val targetTick = (pageStartStep + (down.position.x / colWidthPx).toInt().coerceIn(0, stepsOnScreen - 1)) * stepTicks
                                         val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) }
                                         if (nearest != null) {
                                             selectedNoteId = nearest.id
@@ -2716,7 +2719,7 @@ private fun PianoRollWorkspace(
                         }
                     Box(contentModifier) {
                         Canvas(Modifier.fillMaxSize()) {
-                            val localRowHeight = rowHeight
+                            val localRowHeight = rowHeightPx
                             val localColWidth = size.width / stepsOnScreen.toFloat()
                             val rowsVisible = (size.height / localRowHeight).toInt().coerceAtLeast(1)
                             for (row in 0..rowsVisible) {
@@ -2755,10 +2758,10 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(editMessage, color = MutedText, fontSize = 8.sp)
+        Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(editMessage, color = MutedText, fontSize = 8.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text("H ${zoomX.format(2)}×   V ${zoomY.format(2)}×", color = Mint, fontSize = 8.sp)
+            Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = Mint, fontSize = 8.sp)
         }
     }
 }
