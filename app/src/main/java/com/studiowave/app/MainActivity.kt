@@ -2848,6 +2848,45 @@ private fun PianoRollWorkspace(
     val gestureNoteWriter = rememberUpdatedState<(List<com.studiowave.app.data.MidiNote>) -> Unit> { updated ->
         updateNotes(updated)
     }
+    fun splitSelectedClipAtTick() {
+        val selectedId = selectedClipId ?: return
+        val selectedTrack = track ?: return
+        val selectedClip = selectedTrack.clips.firstOrNull { it.id == selectedId } ?: return
+        val selection = selectedNoteIds + listOfNotNull(selectedNoteId)
+        if (selection.isEmpty()) { editMessage = "Select notes first"; return }
+        val splitTick = notes.filter { it.id in selection }.minOfOrNull { it.startTick } ?: return
+        if (splitTick <= 0L || splitTick >= selectedClip.lengthTicks) {
+            editMessage = "Select a note inside the clip to split"
+            return
+        }
+        val rightNotes = notes.filter { it.id in selection && it.startTick >= splitTick }.map {
+            it.copy(
+                id = java.util.UUID.randomUUID().toString(),
+                startTick = it.startTick - splitTick
+            )
+        }
+        val leftNotes = fitMidiNotesToClip(notes.filterNot { it.id in selection && it.startTick >= splitTick }, splitTick)
+        val rightLength = (selectedClip.lengthTicks - splitTick).coerceAtLeast(stepTicks)
+        val rightClip = selectedClip.copy(
+            id = java.util.UUID.randomUUID().toString(),
+            name = selectedClip.name + " (2)",
+            startTick = selectedClip.startTick + splitTick,
+            lengthTicks = rightLength,
+            midiNotes = fitMidiNotesToClip(rightNotes, rightLength)
+        )
+        onProjectChange(project.copy(tracks = project.tracks.map { current ->
+            if (current.id != selectedTrack.id) current else current.copy(
+                clips = current.clips.flatMap { item ->
+                    if (item.id != selectedClip.id) listOf(item)
+                    else listOf(item.copy(lengthTicks = splitTick, midiNotes = leftNotes), rightClip)
+                }
+            )
+        }))
+        selectedNoteId = null
+        selectedNoteIds = emptySet()
+        editMessage = "Clip split at selected note position"
+    }
+
     fun quantizeSelectedNotes() {
         val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
         if (ids.isEmpty()) { editMessage = "Select notes first"; return }
@@ -2953,9 +2992,8 @@ private fun PianoRollWorkspace(
                         editMessage = "${ids.size} note(s) deleted"
                     } else editMessage = "Select a note first"
                 }
-                SmallAction("SNAP") {
-                    quantizeSelectedNotes()
-                }
+                SmallAction("SNAP") { quantizeSelectedNotes() }
+                SmallAction("SPLIT") { splitSelectedClipAtTick() }
                 SmallAction("LEGATO") {
                     val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
                     if (selected.size >= 2) {
