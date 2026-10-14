@@ -2490,28 +2490,27 @@ private fun TimelineGrid(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Text(
-                                    clip.name,
-                                    modifier = Modifier.weight(1f, fill = false),
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = timelinePalette.text,
-                                    maxLines = 1
-                                )
-                                val clipBadge = when (track.kind) {
-                                    "midi" -> "MIDI · ${clip.midiNotes.size} N"
-                                    "drum" -> "DRUM · ${clip.drumSteps.count { it }}"
-                                    "audio" -> "AUDIO"
-                                    else -> track.kind.uppercase()
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        clip.name,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = timelinePalette.text,
+                                        maxLines = 1
+                                    )
+                                    val detail = when (track.kind) {
+                                        "midi" -> "${clip.midiNotes.size} NOTES · ${clip.lengthTicks} TICKS"
+                                        "drum" -> "${clip.drumSteps.count { it }} ACTIVE STEPS"
+                                        "audio" -> clip.sourceUri?.substringAfterLast('/')?.take(28) ?: "NO AUDIO SOURCE"
+                                        else -> track.kind.uppercase()
+                                    }
+                                    Text(
+                                        detail,
+                                        fontSize = 6.sp,
+                                        color = timelinePalette.text.copy(alpha = 0.82f),
+                                        maxLines = 1
+                                    )
                                 }
-                                Text(
-                                    clipBadge,
-                                    fontSize = 6.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = timelinePalette.text.copy(alpha = 0.82f),
-                                    maxLines = 1
-                                )
-                            }
                             if (track.kind == "drum") {
                                 // Step-sequencer thumbnail: 16 equal steps, stronger beat accents, active hits clearly visible.
                                 Row(
