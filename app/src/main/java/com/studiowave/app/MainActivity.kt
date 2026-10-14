@@ -46,9 +46,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlin.math.roundToInt
 import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -75,6 +78,32 @@ private val MutedText = Color(0xFFA4A8B0)
 private val Mint = Color(0xFF00D2B4)
 private val Green = Color(0xFF22C55E)
 private val Red = Color(0xFFEF4444)
+
+
+/**
+ * Give an Arrangement clip its real timeline width even when it is wider than the
+ * visible lane. Modifier.width() respects the lane's maxWidth and silently truncates
+ * long clips to the viewport, making their apparent duration change as the viewport zooms.
+ *
+ * The parent reports a constrained width to preserve layout, but the child is measured
+ * at its requested width and placed at x=0. TimelineGrid's clipToBounds() clips only the
+ * off-screen portion, not the clip's musical extent.
+ */
+private fun Modifier.timelineClipWidthPx(widthPx: Float): Modifier = layout { measurable, constraints ->
+    // Compose packs dimensions into Constraints; keep a generous finite ceiling while
+    // never using the viewport width as the clip's preferred width.
+    val desiredWidthPx = if (widthPx.isFinite()) {
+        widthPx.roundToInt().coerceIn(1, 262_143)
+    } else {
+        1
+    }
+    val childConstraints = constraints.copy(minWidth = desiredWidthPx, maxWidth = desiredWidthPx)
+    val placeable = measurable.measure(childConstraints)
+    val reportedWidth = constraints.constrainWidth(desiredWidthPx)
+    layout(reportedWidth, placeable.height) {
+        placeable.placeRelative(0, 0)
+    }
+}
 
 private data class TrackRowLayout(val topDp: Float, val heightDp: Float)
 
@@ -1521,8 +1550,8 @@ private fun TimelineGrid(
                     track.clips.forEach { clip ->
                         // Clip geometry is derived only from musical duration and the shared
                         // viewport scale; a fixed visual minimum makes clip lengths jump on zoom.
-                        val clipWidthPx = viewport.tickDeltaToPixels(clip.lengthTicks).coerceIn(0.01f, 1_000_000f)
-                        val clipWidthDp = with(density) { clipWidthPx.toDp().value }.coerceAtLeast(0.01f)
+                        val clipWidthPx = viewport.tickDeltaToPixels(clip.lengthTicks.coerceAtLeast(1L)).coerceAtLeast(1f)
+                        val clipWidthDp = with(density) { clipWidthPx.toDp().value }
                         val resizeGripWidthDp = minOf(18f, clipWidthDp * 0.38f).coerceAtLeast(0.01f)
                         val resizeGripWidthPx = with(density) { resizeGripWidthDp.dp.toPx() }
                         val displayLeftPx = viewport.timeToViewportX(clip.startTick)
@@ -1537,7 +1566,7 @@ private fun TimelineGrid(
                                     translationY = if (draggingClip == clip.id) dragDy else 0f
                                 }
                                 .padding(top = 7.dp, bottom = 7.dp)
-                                .width(clipWidthDp.dp)
+                                .timelineClipWidthPx(clipWidthPx)
                                 .fillMaxHeight()
                                 .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
