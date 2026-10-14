@@ -1102,7 +1102,7 @@ private fun ArrangementWorkspace(
                                 val end = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
                                 val fraction = (change.position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f).toDouble()
                                 val visible = size.width.toDouble() /
-                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
                                 val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visible).coerceAtLeast(0.0)
                                 onScroll((end * fraction).coerceIn(0.0, maxScroll))
                             },
@@ -2648,43 +2648,9 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        // Velocity editing is shown in the main note grid by switching NOTES/VEL. verticalAlignment = Alignment.CenterVertically) {
-            Text("VEL", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
-                modifier = Modifier.width(54.dp))
-            Canvas(
-                Modifier.weight(1f).fillMaxHeight().background(Color(0xFF202328), RoundedCornerShape(3.dp))
-                    .pointerInput(track?.id, clip?.id, notes, stepTicks, pageStartStep) {
-                        detectTapGestures { point ->
-                            if (track == null || clip == null || notes.isEmpty()) return@detectTapGestures
-                            val colW = size.width / visibleSteps.toFloat()
-                            val targetTick = ((pageStartStep + (point.x / colW).toInt().coerceIn(0, visibleSteps - 1)) * stepTicks)
-                            val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) } ?: return@detectTapGestures
-                            val velocity = (127f * (1f - point.y / size.height.coerceAtLeast(1))).roundToInt().coerceIn(1, 127)
-                            val updatedNotes = notes.map { if (it.id == nearest.id) it.copy(velocity = velocity) else it }
-                            onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                                if (item.id == track.id) item.copy(clips = item.clips.map { c ->
-                                    if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c
-                                }) else item
-                            }))
-                        }
-                    }
-            ) {
-                val colW = size.width / visibleSteps.toFloat()
-                for (col in 0..visibleSteps) {
-                    drawLine(Color(0xFF343840), Offset(col * colW, 0f), Offset(col * colW, size.height), 0.5f)
-                }
-                notes.forEach { note ->
-                    val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * colW
-                    if (x in 0.0..size.width.toDouble()) {
-                        val barHeight = size.height * note.velocity.coerceIn(1, 127) / 127f
-                        drawRoundRect(Mint.copy(alpha = 0.9f), Offset(x.toFloat() + 2f, size.height - barHeight),
-                            Size((colW - 4f).coerceAtLeast(2f), barHeight), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
-                    }
-                }
-            }
-        }
         Text("Touch grid to add/remove notes • use −/+ to move by one page • project autosave",
             color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(start = 54.dp, top = 3.dp))
+    }
 }
 
 @Composable
