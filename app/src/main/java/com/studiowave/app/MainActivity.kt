@@ -790,7 +790,7 @@ private fun ArrangementWorkspace(
             val baseBarWidthPx = with(density) { 74.dp.toPx() }.coerceAtLeast(1f)
             (timelineWidthPx.toDouble() * fitTimebase.ticksPerBar.toDouble() /
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
-                .toFloat().coerceIn(0.1f, 4f)
+                .toFloat().coerceIn(0.1f, 16f)
         }
         Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
