@@ -2712,8 +2712,9 @@ private fun PianoRollWorkspace(
     // zoom changes pixels-per-step, not the duration represented by the viewport.
     val clipLengthSteps = kotlin.math.ceil(rawLengthTicks.toDouble() / stepTicks.toDouble())
         .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(1)
+    // Keep zoom controls and gestures on one shared steps-per-screen mapping.
     val stepsOnScreen = kotlin.math.ceil(
-        ticksPerBar.toDouble() / stepTicks.toDouble() *
+        (ticksPerBar.toDouble() / stepTicks.toDouble()) *
             2.0 / zoomX.coerceIn(0.35f, 8f)
     ).toInt().coerceIn(4, 96)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
