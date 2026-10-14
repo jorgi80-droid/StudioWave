@@ -2849,7 +2849,7 @@ private fun PianoRollWorkspace(
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
-                val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
+                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
                 val anchor = pageStartStep + oldVisible / 2
                 zoomX = nextZoom
                 startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
@@ -2858,7 +2858,7 @@ private fun PianoRollWorkspace(
             TransportAction("+") {
                 val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
-                val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
+                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
                 val anchor = pageStartStep + oldVisible / 2
                 zoomX = nextZoom
                 startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
