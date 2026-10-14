@@ -36,13 +36,27 @@ class ArrangementTimingTest {
         assertTrue(ArrangementTiming.framesToTicks(Long.MAX_VALUE, 40, 3840) > 0L)
     }
 
-    @Test fun oneHourAt120BpmFitsThe1800BarArrangementLimit() {
-        val ticksPerBar = 3_840L
-        val endOfBar1800 = ticksPerBar * 1_800L
-        val frames = ArrangementTiming.ticksToFrames(endOfBar1800, 120, 960)
-        val oneHourFrames = 44_100L * 60L * 60L
-        assertEquals(oneHourFrames, frames)
-        assertTrue(frames <= oneHourFrames)
+    @Test fun 1800BarsAt120BpmFourFourFitExactlyOneHour() {
+        val endTick = ArrangementTiming.maxArrangementTick(4, 4, 960, 1_800)
+        val frames = ArrangementTiming.ticksToFrames(endTick, 120, 960)
+        assertEquals(44_100L * 60L * 60L, frames)
+    }
+
+    @Test fun 1800BarPlaybackLimitFollowsTempoAndTimeSignature() {
+        val slowFourFourTicks = ArrangementTiming.maxArrangementTick(4, 4, 960, 1_800)
+        val slowFourFourFrames = ArrangementTiming.ticksToFrames(slowFourFourTicks, 40, 960)
+        assertEquals(44_100L * 60L * 60L * 3L, slowFourFourFrames)
+
+        val sevenEightTicks = ArrangementTiming.maxArrangementTick(7, 8, 960, 1_800)
+        assertEquals(6_048_000L, sevenEightTicks)
+        assertEquals(44_100L * 60L * 60L * 1.3125, ArrangementTiming.ticksToFrames(sevenEightTicks, 80, 960).toDouble(), 1.0)
+    }
+
+    @Test fun arrangementEndTickSanitizesInvalidTimebaseAndBarCount() {
+        assertEquals(
+            ArrangementTiming.maxArrangementTick(32, 1, 3_840, 1_800),
+            ArrangementTiming.maxArrangementTick(40, 0, 8_000, 2_000)
+        )
     }
 
     @Test fun soloAndMuteRulesAreDeterministic() {

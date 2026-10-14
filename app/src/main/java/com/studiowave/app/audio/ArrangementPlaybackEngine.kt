@@ -287,12 +287,19 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             ArrangementTiming.ticksToFrames(ticks, bpm, ppq, sampleRate)
 
         val tracks = project.tracks
+        val maxAllowedTick = ArrangementTiming.maxArrangementTick(
+            project.numerator, project.denominator, ppq, MAX_ARRANGEMENT_BARS
+        )
+        val defaultBarTicks = maxAllowedTick / MAX_ARRANGEMENT_BARS
         val maxTick = tracks.asSequence().flatMap { it.clips.asSequence() }.maxOfOrNull {
             val start = it.startTick.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 2)
             val length = it.lengthTicks.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / 2)
             if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
-        } ?: (ppq.toLong() * project.numerator.coerceAtLeast(1) * 4L / project.denominator.coerceAtLeast(1))
-        val totalFrames = ticksToFrames(maxTick).coerceIn(1L, sampleRate.toLong() * MAX_ARRANGEMENT_SECONDS)
+        } ?: defaultBarTicks
+        // Keep playback aligned with the same 1800-bar musical limit as Arrangement.
+        // A fixed seconds cap would truncate valid projects at slower tempos or different meters.
+        val boundedMaxTick = maxTick.coerceIn(1L, maxAllowedTick)
+        val totalFrames = ticksToFrames(boundedMaxTick).coerceAtLeast(1L)
 
         val requestedTicksByUri = linkedMapOf<String, Long>()
         tracks.filter { it.kind == "audio" }.forEach { track ->
@@ -856,7 +863,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         const val BLOCK_FRAMES = 256
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 300
-        const val MAX_ARRANGEMENT_SECONDS = 60 * 60
+        const val MAX_ARRANGEMENT_BARS = 1800
         const val MAX_TOTAL_PCM_BYTES = 64L * 1024L * 1024L
         // 64 MiB accommodates one five-minute stereo PCM source (~50.5 MiB), avoiding
         // cache eviction and expensive source decoding every time a long clip is resized.
