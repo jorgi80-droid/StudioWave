@@ -153,7 +153,7 @@ data class TimelineViewport(
 
     companion object {
         const val MIN_PIXELS_PER_BAR = 20f
-        const val MAX_PIXELS_PER_BAR = 1200f
+        const val MAX_PIXELS_PER_BAR = 4800f
     }
 
     /**
