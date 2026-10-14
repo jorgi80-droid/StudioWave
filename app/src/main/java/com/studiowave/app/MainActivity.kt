@@ -884,7 +884,6 @@ private fun TransportBar(
                         drawLine(p.accent, Offset(x, size.height), Offset(x, size.height - bar), 1.2f)
                     }
                 }
-            }
         }
 }
 
@@ -2307,7 +2306,7 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Text(clip.name, fontSize = 8.sp, color = if (timelinePalette.text.luminance() > 0.5f) Color(0xFF111315) else Color.White, maxLines = 1)
+                            Text(clip.name, fontSize = 8.sp, color = if (clipFill.alpha > 0.01f && clipFill.red * 0.299f + clipFill.green * 0.587f + clipFill.blue * 0.114f > 0.52f) Color(0xFF111315) else Color.White, maxLines = 1)
                             if (track.kind == "drum") {
                                 Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
                                     (0 until 16).forEach { step ->
