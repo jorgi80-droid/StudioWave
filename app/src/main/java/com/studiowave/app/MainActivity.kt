@@ -721,9 +721,9 @@ private fun StudioWaveApp() {
                     )
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        if (selectedWorkspace != "ARRANGEMENT") {
+                        if (selectedWorkspace != "ARRANGEMENT" && selectedWorkspace !in setOf("PIANO ROLL", "AUDIO EDITOR", "DRUM SEQUENCER")) {
                             Row(
-                                Modifier.fillMaxWidth().height(25.dp)
+                                Modifier.fillMaxWidth().height(22.dp)
                                     .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp))
                                     .padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -1460,7 +1460,30 @@ private fun ArrangementWorkspace(
                         Spacer(Modifier.weight(1f))
                         Text("×", color = MutedText, fontSize = 14.sp, modifier = Modifier.clickable { showClipView = false }.padding(horizontal = 3.dp))
                     }
-                    Text(clip.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    Text(clip.name, color = clipPalette.text, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                    when (selectedClipTrack.kind) {
+                        "midi" -> {
+                            Canvas(Modifier.fillMaxWidth().height(32.dp).background(clipPalette.room, RoundedCornerShape(3.dp))) {
+                                val clipTicks = clip.lengthTicks.coerceAtLeast(1L).toDouble()
+                                clip.midiNotes.forEach { note ->
+                                    val left = (note.startTick.toDouble() / clipTicks * size.width).toFloat()
+                                    val width = (note.durationTicks.toDouble() / clipTicks * size.width).toFloat().coerceAtLeast(2f)
+                                    val y = ((119 - note.pitch.coerceIn(0, 119)).toFloat() / 120f * size.height).coerceIn(0f, size.height - 2f)
+                                    drawRoundRect(clipPalette.accent, Offset(left, y), Size(width, 2.8f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
+                                }
+                            }
+                        }
+                        "drum" -> {
+                            Row(Modifier.fillMaxWidth().height(26.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
+                                repeat(16) { step ->
+                                    val active = clip.drumSteps.getOrNull(step) == true
+                                    Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.9f else 0.22f)
+                                        .background(if (active) clipPalette.accent else clipPalette.control, RoundedCornerShape(1.dp)))
+                                }
+                            }
+                        }
+                        "audio" -> AudioClipWaveform(clip.sourceUri, clipPalette.accent)
+                    }
                     Text(
                         "${selectedClipTrack.kind.uppercase()}  •  BAR ${firstBar}–${lastBar}  •  ${String.format(java.util.Locale.US, "%.2f", clip.lengthTicks.toDouble() / timebase.ticksPerBar)} bars",
                         color = MutedText, fontSize = 8.sp, maxLines = 1
@@ -2546,8 +2569,8 @@ private fun PianoRollWorkspace(
     val beatTicks = (project.ppq.toLong() * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
     val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
     val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks).toInt().coerceAtLeast(1)
-    val rowHeight = (16f * zoomY).coerceIn(8f, 36f)
-    val stepsOnScreen = (32f / zoomX.coerceIn(0.45f, 5f)).roundToInt().coerceIn(6, 72)
+    val rowHeight = (18f * zoomY).coerceIn(10f, 44f)
+    val stepsOnScreen = (24f / zoomX.coerceIn(0.35f, 8f)).roundToInt().coerceIn(4, 96)
     val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
     val clipLengthSteps = ((rawLengthTicks + stepTicks - 1L) / stepTicks)
         .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
@@ -2569,9 +2592,9 @@ private fun PianoRollWorkspace(
         return names[Math.floorMod(pitch, 12)] + (pitch / 12 - 1)
     }
 
-    Column(Modifier.fillMaxSize().background(pianoPalette.room, RoundedCornerShape(7.dp)).padding(5.dp)) {
+    Column(Modifier.fillMaxSize().background(pianoPalette.room, RoundedCornerShape(5.dp)).padding(3.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(28.dp).background(pianoPalette.grid.copy(alpha = 0.55f), RoundedCornerShape(5.dp))
+            Modifier.fillMaxWidth().height(21.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp))
                 .padding(horizontal = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2582,25 +2605,25 @@ private fun PianoRollWorkspace(
             SmallAction("BACK", onBack)
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 3.dp, bottom = 3.dp)
-                .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+            Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 2.dp)
+                .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp, vertical = 1.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
-            SmallAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.45f, 5f) }
+            SmallAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.35f, 8f) }
             SmallAction("BAR ◀") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
             Text("${pageStartStep / stepsPerBar + 1}", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             SmallAction("▶ BAR") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
-            SmallAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.45f, 5f) }
-            SmallAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.5f, 2.6f) }
-            SmallAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.5f, 2.6f) }
+            SmallAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.35f, 8f) }
+            SmallAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
+            SmallAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
             SmallAction("1/${snapDenominator}") { snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 } }
             SmallAction(if (editToolsExpanded) "LESS" else "NOTE TOOLS") { editToolsExpanded = !editToolsExpanded }
         }
         if (editToolsExpanded) {
             Row(
-                Modifier.fillMaxWidth().padding(bottom = 3.dp)
-                    .background(pianoPalette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+                Modifier.fillMaxWidth().padding(bottom = 2.dp)
+                    .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp, vertical = 1.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
             ) {
                 SmallAction("COPY") {
@@ -2639,7 +2662,7 @@ private fun PianoRollWorkspace(
 
         Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
             if (keyboardVisible) {
-                Column(Modifier.width(55.dp).fillMaxHeight().background(LocalStudioWavePalette.current.panel)) {
+                Column(Modifier.width(42.dp).fillMaxHeight().background(pianoPalette.panel)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
@@ -2674,7 +2697,7 @@ private fun PianoRollWorkspace(
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                     val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
                     val currentTopPitch = topPitch.coerceIn(maxTopPitch, 119)
-                    val colWidthPx = (viewportWidthPx / stepsOnScreen.toFloat()).coerceAtLeast(5f)
+                    val colWidthPx = (viewportWidthPx / stepsOnScreen.toFloat()).coerceAtLeast(2f)
                     val maxHorizontalScroll = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
                     val currentStart = pageStartStep
                     val contentModifier = Modifier
@@ -2696,8 +2719,8 @@ private fun PianoRollWorkspace(
                                             val mid = (pts[0].position + pts[1].position) / 2f
                                             val ratio = newSpan / lastDistance
                                             if (kotlin.math.abs(ratio - 1f) > 0.015f) {
-                                                zoomX = (zoomX * ratio).coerceIn(0.45f, 5f)
-                                                zoomY = (zoomY * ratio).coerceIn(0.5f, 2.6f)
+                                                zoomX = (zoomX * ratio).coerceIn(0.35f, 8f)
+                                                zoomY = (zoomY * ratio).coerceIn(0.45f, 3.5f)
                                             }
                                             val delta = mid - lastMid
                                             if (kotlin.math.abs(delta.x) > 1f) {
@@ -2805,7 +2828,7 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(editMessage, color = MutedText, fontSize = 8.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = Mint, fontSize = 8.sp)
