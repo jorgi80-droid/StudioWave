@@ -1344,22 +1344,25 @@ private fun TimelineGrid(
                         val rowY = firstDown.position.y - rulerHeightPx
                         val rowIndex = hitProject.tracks.indices.firstOrNull { index ->
                             val row = currentTrackRows.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
-                            val topPx = with(density) { ((row.topDp - currentScrollTracks) * currentVerticalZoom).dp.toPx() }
-                            val heightPx = with(density) { (row.heightDp * currentVerticalZoom).dp.toPx() }
+                            val topPx = (row.topDp - currentScrollTracks) * currentVerticalZoom * density.density
+                            val heightPx = row.heightDp * currentVerticalZoom * density.density
                             rowY >= topPx && rowY <= topPx + heightPx
                         }
                         val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
-                        val barWidthPx = TimelineViewport(timebase, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                        hitTrack?.clips?.any { clip ->
-                            val hitViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
-                             val left = hitViewport.timeToViewportX(clip.startTick)
-                            val width = hitViewport.tickDeltaToPixels(clip.lengthTicks)
-                            val right = left + width
+                        if (hitTrack == null) {
+                            false
+                        } else {
+                            val hitViewport = TimelineViewport(
+                                timebase, baseBarWidthPx * currentZoom,
+                                currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx
+                            )
                             val pointerX = firstDown.position.x
-                            // A pointer to the right of the final clip is empty canvas.
-                            // This is what lets the user begin viewport panning after clips.
-                            pointerX >= left && pointerX <= right
-                        } == true
+                            hitTrack.clips.any { clip ->
+                                val left = hitViewport.timeToViewportX(clip.startTick)
+                                val right = left + hitViewport.tickDeltaToPixels(clip.lengthTicks.coerceAtLeast(1L))
+                                pointerX >= left && pointerX <= right
+                            }
+                        }
                     }
                     var previousSinglePosition = firstDown.position
                     var previousCentroid = Offset.Zero
