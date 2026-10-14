@@ -16,7 +16,7 @@ class TimelineViewportTest {
         val frames = spans.map { span ->
             calculatePinchZoomFrame(timebase, initialZoom, startScroll, 180f, span, anchor, anchorX, 74f)
         }
-        assertTrue(frames.first().zoom > initialZoom)
+        assertEquals(initialZoom, frames.first().zoom, 0.001f)
         assertTrue(frames[2].zoom > frames[1].zoom)
         assertEquals(initialZoom, frames.last().zoom, 0.001f)
         val restoredViewport = TimelineViewport(
