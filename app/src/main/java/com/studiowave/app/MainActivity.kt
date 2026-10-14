@@ -762,7 +762,16 @@ private fun StudioWaveApp() {
                                 ?: project.tracks.firstOrNull { it.kind == "midi" },
                             project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" }
                         )
-                        "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
+                        "BROWSER" -> BrowserWorkspace(
+                            project = project,
+                            selectedTrackId = editorTrackId,
+                            onSelectTrack = { editorTrackId = it },
+                            onOpenEditor = { workspace, trackId ->
+                                if (trackId != null) editorTrackId = trackId
+                                selectedWorkspace = workspace
+                            },
+                            onImportAudio = { audioPicker.launch(arrayOf("audio/*")) }
+                        )
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(
                             project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "drum" }
                                 ?: project.tracks.firstOrNull { it.kind == "drum" },
@@ -3075,26 +3084,157 @@ private fun MixerWorkspace(
 }
 
 @Composable
-private fun BrowserWorkspace(onImportAudio: () -> Unit) {
-    Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(10.dp)) {
-        Text("BROWSER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onImportAudio, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalStudioWavePalette.current.accent.copy(alpha = 0.18f), contentColor = LocalStudioWavePalette.current.accent)) {
-            Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = LocalStudioWavePalette.current.accent, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text("IMPORT AUDIO", fontSize = 10.sp, color = LocalStudioWavePalette.current.text)
+private fun BrowserWorkspace(
+    project: StudioProject,
+    selectedTrackId: String?,
+    onSelectTrack: (String) -> Unit,
+    onOpenEditor: (String, String?) -> Unit,
+    onImportAudio: () -> Unit
+) {
+    val p = LocalStudioWavePalette.current
+    var category by remember { mutableStateOf("ALL") }
+    var query by remember { mutableStateOf("") }
+    val categories = listOf("ALL", "SAMPLES", "CLIPS", "TRACKS", "DEVICES")
+    val normalizedQuery = query.trim().lowercase()
+    val tracks = project.tracks.filter { track ->
+        (category != "TRACKS" || true) &&
+            (normalizedQuery.isEmpty() || track.name.lowercase().contains(normalizedQuery) ||
+                track.kind.lowercase().contains(normalizedQuery) ||
+                track.clips.any { it.name.lowercase().contains(normalizedQuery) })
+    }
+    val clipEntries = project.tracks.flatMap { track -> track.clips.map { track to it } }
+        .filter { (track, clip) ->
+            val matchesCategory = when (category) {
+                "SAMPLES" -> track.kind == "audio" && clip.sourceUri != null
+                "CLIPS" -> true
+                else -> true
+            }
+            matchesCategory && (normalizedQuery.isEmpty() ||
+                clip.name.lowercase().contains(normalizedQuery) ||
+                track.name.lowercase().contains(normalizedQuery))
         }
-        Spacer(Modifier.height(8.dp))
-        Surface(color = LocalStudioWavePalette.current.panel, shape = RoundedCornerShape(7.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            Column(Modifier.padding(10.dp)) {
-                Text("LOCAL AUDIO", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = LocalStudioWavePalette.current.accent)
-                Text("Choose an audio file from Android storage. It will be placed on the audio track in Arrangement.",
-                    color = LocalStudioWavePalette.current.text, fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
+    Column(Modifier.fillMaxSize().background(p.room).padding(5.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(30.dp).background(p.panel, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("BROWSER", color = p.orange, fontSize = 10.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.width(8.dp))
+            Text("LIBRARY", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            Text("${project.tracks.size} TRACKS  ·  ${project.tracks.sumOf { it.clips.size }} CLIPS",
+                color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(4.dp))
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth().height(47.dp),
+            singleLine = true,
+            placeholder = { Text("Search current project…", fontSize = 10.sp) },
+            leadingIcon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Search project", modifier = Modifier.size(15.dp)) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                focusedTextColor = p.text, unfocusedTextColor = p.text
+            )
+        )
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth().height(28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            categories.forEach { item ->
+                val active = category == item
+                Surface(
+                    color = if (active) p.accent.copy(alpha = 0.18f) else p.panel,
+                    shape = RoundedCornerShape(4.dp),
+                    border = BorderStroke(1.dp, if (active) p.accent else p.border),
+                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { category = item }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(item, color = if (active) p.accent else p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(4.dp))
+        when (category) {
+            "ALL", "SAMPLES" -> Row(Modifier.fillMaxWidth().height(31.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Button(
+                    onClick = onImportAudio, modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = p.accent.copy(alpha = 0.18f), contentColor = p.accent),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(5.dp)); Text("IMPORT AUDIO", fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = { onOpenEditor("ARRANGEMENT", null) },
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
+                    shape = RoundedCornerShape(4.dp)
+                ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Bold) }
+            }
+            "DEVICES" -> Surface(color = p.panel, shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("DEVICE LIBRARY", color = p.accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
+                    Text("No built-in instrument or FX processor registry is connected yet. This view intentionally does not offer fake device entries.",
+                        color = p.muted, fontSize = 9.sp)
+                }
+            }
+            else -> {}
+        }
+        Spacer(Modifier.height(3.dp))
+        when (category) {
+            "TRACKS" -> {
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    tracks.forEach { track ->
+                        val selected = track.id == selectedTrackId
+                        Row(
+                            Modifier.fillMaxWidth().background(if (selected) p.raised else p.panel, RoundedCornerShape(4.dp))
+                                .clickable { onSelectTrack(track.id) }.padding(horizontal = 8.dp, vertical = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.width(3.dp).height(25.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(2.dp)))
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(track.name, color = p.text, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text("${track.kind.uppercase()}  ·  ${track.clips.size} CLIPS", color = p.muted, fontSize = 7.sp)
+                            }
+                            SmallAction("SELECT") { onSelectTrack(track.id) }
+                            SmallAction("EDIT") { onSelectTrack(track.id); onOpenEditor(when(track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" }, track.id) }
+                        }
+                    }
+                }
+            }
+            "DEVICES" -> {}
+            else -> {
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    clipEntries.forEach { (track, clip) ->
+                        Row(
+                            Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.width(3.dp).height(31.dp).background(Color((clip.colorArgb ?: track.colorArgb).toInt()), RoundedCornerShape(2.dp)))
+                            Spacer(Modifier.width(7.dp))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(clip.name, color = p.text, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text("${track.name}  ·  ${track.kind.uppercase()}  ·  ${clip.lengthTicks} TICKS",
+                                    color = p.muted, fontSize = 7.sp, maxLines = 1)
+                            }
+                            SmallAction("OPEN") {
+                                onSelectTrack(track.id)
+                                onOpenEditor(when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" }, track.id)
+                            }
+                        }
+                    }
+                    if (clipEntries.isEmpty()) {
+                        Text("No matching project items.", color = p.muted, fontSize = 9.sp, modifier = Modifier.padding(8.dp))
+                    }
+                }
             }
         }
     }
 }
-
 @Composable
 private fun DeviceDock(
     project: StudioProject,
