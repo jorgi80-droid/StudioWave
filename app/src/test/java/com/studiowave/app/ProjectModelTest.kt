@@ -189,7 +189,7 @@ class ProjectModelTest {
         val (left, right) = splitWaveClip(source, 3000L)!!
         assertTrue(left.midiNotes.all { it.startTick + it.durationTicks <= 2000L })
         assertTrue(right.midiNotes.all { it.startTick + it.durationTicks <= right.lengthTicks })
-        assertEquals(listOf("cross", "after"), right.midiNotes.map { it.id }.sorted())
+        assertEquals(listOf("after", "cross"), right.midiNotes.map { it.id }.sorted())
         assertEquals(500L, right.midiNotes.first { it.id == "cross" }.startTick)
         assertEquals(1500L, left.midiNotes.first { it.id == "cross" }.durationTicks)
         assertEquals(500L, right.midiNotes.first { it.id == "cross" }.durationTicks)
