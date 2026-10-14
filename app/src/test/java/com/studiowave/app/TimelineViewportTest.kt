@@ -5,6 +5,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimelineViewportTest {
+    @Test fun refreshRatePreferenceCapsAt120AndLeaves60HzToSystem() {
+        assertEquals(120f, choosePreferredRefreshRate(listOf(60f, 90f, 120f, 144f)) ?: 0f, 0.001f)
+        assertEquals(90f, choosePreferredRefreshRate(listOf(60f, 90f)) ?: 0f, 0.001f)
+        assertEquals(null, choosePreferredRefreshRate(listOf(60f, 59.94f)))
+        assertEquals(null, choosePreferredRefreshRate(emptyList()))
+    }
+
     @Test fun arrangementExtentIsCappedAtExactly1800Bars() {
         val timebase = TimelineTimebase(120, 4, 4, 960)
         val maxTick = maxArrangementTick(timebase)
