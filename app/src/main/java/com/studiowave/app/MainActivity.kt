@@ -675,11 +675,20 @@ private fun StudioWaveApp() {
             .putString("audio_output_mode", audioOutputMode)
             .apply()
     }
-    MaterialTheme(colorScheme = darkColorScheme(
-        primary = swatch.accent, secondary = swatch.orange, background = swatch.room,
-        surface = swatch.panel, onPrimary = swatch.room, onBackground = swatch.text,
-        onSurface = swatch.text
-    )) {
+    val studioColorScheme = if (themeName == "Live Light") {
+        lightColorScheme(
+            primary = swatch.accent, secondary = swatch.orange, background = swatch.room,
+            surface = swatch.panel, onPrimary = swatch.room, onBackground = swatch.text,
+            onSurface = swatch.text
+        )
+    } else {
+        darkColorScheme(
+            primary = swatch.accent, secondary = swatch.orange, background = swatch.room,
+            surface = swatch.panel, onPrimary = swatch.room, onBackground = swatch.text,
+            onSurface = swatch.text
+        )
+    }
+    MaterialTheme(colorScheme = studioColorScheme) {
         CompositionLocalProvider(
             LocalStudioWavePalette provides swatch,
             LocalStudioWaveGridOpacity provides gridOpacity,
