@@ -635,8 +635,11 @@ private fun StudioWaveApp() {
                     WorkspaceRail(
                         selected = selectedWorkspace,
                         devicesOpen = showDock,
-                        onSelect = { selectedWorkspace = it },
-                        onToggleDevices = { showDock = !showDock }
+                        onSelect = {
+                        selectedWorkspace = it
+                        showDock = false
+                    },
+                    onToggleDevices = { showDock = !showDock }
                     )
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
@@ -665,7 +668,11 @@ private fun StudioWaveApp() {
                                 ?: project.tracks.firstOrNull { it.kind == "audio" },
                             onBack = { selectedWorkspace = "ARRANGEMENT" }
                         )
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId ->
+                                editorTrackId = trackId
+                                selectedWorkspace = workspace
+                                showDock = false
+                            },
                             onPlaybackRestart = { updatedProject ->
                                 if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
                             },
@@ -691,12 +698,6 @@ private fun StudioWaveApp() {
                             onProjectChange = { changeProject(it) },
                             onToggle = { showDock = false }
                         )
-                        Surface(
-                            color = Raised.copy(alpha = 0.96f),
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 5.dp)
-                                .size(24.dp).clickable { showDock = false }
-                        ) { Box(contentAlignment = Alignment.Center) { Text("×", color = MutedText, fontSize = 16.sp) } }
                     }
                 }
             }
@@ -880,6 +881,29 @@ private fun ArrangementWorkspace(
     var renameClipId by remember { mutableStateOf<String?>(null) }
     var renameText by remember { mutableStateOf("") }
     var copiedClip by remember { mutableStateOf<Pair<StudioTrack, com.studiowave.app.data.WaveClip>?>(null) }
+    var addTrackMenu by remember { mutableStateOf(false) }
+
+    // Contextual overlays are mutually exclusive on compact screens.
+    LaunchedEffect(showTimelineMenu, showAddTrack, addTrackMenu) {
+        if (addTrackMenu) {
+            if (showTimelineMenu) showTimelineMenu = false
+            if (showAddTrack) showAddTrack = false
+        } else if (showAddTrack && showTimelineMenu) {
+            showTimelineMenu = false
+        }
+    }
+    LaunchedEffect(selectedWorkspace) {
+        if (selectedWorkspace != "ARRANGEMENT") {
+            showTimelineMenu = false
+            showAddTrack = false
+            clipMenu = null
+            showClipView = false
+            addTrackMenu = false
+        }
+    }
+    LaunchedEffect(selectedClipModel) {
+        if (selectedClipModel == null) showClipView = false
+    }
 
     fun addTrack(kind: String, openEditor: Boolean = false) {
         if (project.tracks.size >= StudioProject.MAX_TRACKS) {
@@ -991,11 +1015,6 @@ private fun ArrangementWorkspace(
             showTimelineMenu = false
             return
         }
-        if (target.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK) {
-            statusMessage = "Clip limit reached for this track"
-            showTimelineMenu = false
-            return
-        }
         val nextStart = target.clips.maxOfOrNull {
             if (it.startTick > Long.MAX_VALUE - it.lengthTicks.coerceAtLeast(1L)) Long.MAX_VALUE
             else it.startTick + it.lengthTicks.coerceAtLeast(1L)
@@ -1032,7 +1051,6 @@ private fun ArrangementWorkspace(
                 Row(Modifier.fillMaxWidth().height(22.dp).background(Raised), verticalAlignment = Alignment.CenterVertically) {
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = MutedText, modifier = Modifier.padding(start = 5.dp))
                 }
-                var addTrackMenu by remember { mutableStateOf(false) }
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
                     val headerViewportHeightDp = maxHeight.value
                     project.tracks.forEachIndexed { index, track ->
@@ -1092,7 +1110,14 @@ private fun ArrangementWorkspace(
                             modifier = Modifier.align(Alignment.TopEnd)
                                 .offset(y = (addAnchorY + 8f).coerceAtLeast(0f).dp)
                                 .padding(end = 5.dp)
-                                .size(34.dp).clickable { addTrackMenu = !addTrackMenu }
+                                .size(34.dp).clickable {
+                                    addTrackMenu = !addTrackMenu
+                                    if (addTrackMenu) {
+                                        showTimelineMenu = false
+                                        showAddTrack = false
+                                        clipMenu = null
+                                    }
+                                }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(if (addTrackMenu) "×" else "✦", color = Room, fontSize = 18.sp, fontWeight = FontWeight.Black)
@@ -1111,10 +1136,9 @@ private fun ArrangementWorkspace(
                             Column(Modifier.width(174.dp).padding(5.dp)) {
                                 Text("ADD TRACK", color = Mint, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                                 listOf(
-                                    "MIDI track" to "midi",
+                                    "MIDI / Instrument track" to "midi",
                                     "Audio track" to "audio",
-                                    "Drum track" to "drum",
-                                    "Virtual instrument" to "midi"
+                                    "Drum track" to "drum"
                                 ).forEach { pair ->
                                     Text(
                                         pair.first, color = Color.White, fontSize = 11.sp,
@@ -1148,7 +1172,12 @@ private fun ArrangementWorkspace(
                     }
                 },
                 onClipLongPress = { clipMenu = it },
-                onTimelineLongPress = { showTimelineMenu = true },
+                onTimelineLongPress = {
+                    showTimelineMenu = true
+                    showAddTrack = false
+                    addTrackMenu = false
+                    clipMenu = null
+                },
                 clipMenuClipId = clipMenu,
                 onClipAction = { action, clipId -> handleClipAction(action, clipId) },
                 onDismissClipMenu = { clipMenu = null },
@@ -1316,7 +1345,7 @@ private fun ArrangementWorkspace(
                         }
                         SmallAction("+ BAR") {
                             val limit = maxArrangementTick(timebase)
-                            val nextStart = (clip.startTick + timebase.ticksPerBar).coerceAtMost(limit)
+                            val nextStart = (clip.startTick + timebase.ticksPerBar).coerceAtMost((limit - clip.lengthTicks.coerceAtLeast(1L)).coerceAtLeast(0L))
                             onProjectChange(project.copy(tracks = project.tracks.map { track ->
                                 if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
                                     if (item.id == clip.id) item.copy(startTick = nextStart) else item
@@ -1333,7 +1362,8 @@ private fun ArrangementWorkspace(
                         }
                         SmallAction("LENGTH +") {
                             val limit = maxArrangementTick(timebase)
-                            val nextLength = (clip.lengthTicks + timebase.ticksPerBar).coerceAtMost(limit)
+                            val maxLength = (maxArrangementTick(timebase) - clip.startTick.coerceAtLeast(0L)).coerceAtLeast(timebase.ticksPerBeat)
+                            val nextLength = (clip.lengthTicks + timebase.ticksPerBar).coerceAtMost(maxLength)
                             onProjectChange(project.copy(tracks = project.tracks.map { track ->
                                 if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
                                     if (item.id == clip.id) item.copy(lengthTicks = nextLength) else item
@@ -1389,12 +1419,22 @@ private fun ArrangementWorkspace(
             if (showTimelineMenu) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(150.dp).padding(5.dp)) {
                     Text("TIMELINE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
-                    Text("Add track", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { showAddTrack = true; showTimelineMenu = false }.padding(9.dp))
+                    Text("Add track", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
+                        showAddTrack = true
+                        showTimelineMenu = false
+                        addTrackMenu = false
+                        clipMenu = null
+                    }.padding(9.dp))
                     Text("Paste clip", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { pasteClip() }.padding(9.dp))
-                    Text("Import audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { onOpenEditor("BROWSER", null); showTimelineMenu = false }.padding(9.dp))
+                    Text("Import audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
+                        showTimelineMenu = false
+                        showAddTrack = false
+                        addTrackMenu = false
+                        onOpenEditor("BROWSER", null)
+                    }.padding(9.dp))
                 }
             }
-            if (showAddTrack) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showAddTrack && !addTrackMenu) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(155.dp).padding(5.dp)) {
                     Text("ADD TRACK", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
@@ -1558,7 +1598,7 @@ private fun TrackHeader(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
-        Column(Modifier.weight(1f).combinedClickable(onClick = onDoubleTap, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
+        Column(Modifier.weight(1f).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
             Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2685,7 +2725,8 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
         color = Color(0xFF353A42),
         contentColor = Color(0xFFE4E8EF),
         shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.height(36.dp).defaultMinSize(minWidth = 42.dp).clickable(onClick = onClick)
+        modifier = Modifier.height(40.dp).defaultMinSize(minWidth = 44.dp)
+            .clickable(onClickLabel = description, onClick = onClick)
     ) {
         Box(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
             Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -2704,9 +2745,17 @@ private fun SmallAction(label: String, onClick: () -> Unit) {
 
 @Composable
 private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.size(29.dp), contentPadding = PaddingValues(0.dp),
+    val description = when (icon) {
+        Icons.Default.Stop -> "Stop playback"
+        Icons.Default.FolderOpen -> "Open project"
+        Icons.Default.Save -> "Save project"
+        Icons.Default.Undo -> "Undo"
+        Icons.Default.Redo -> "Redo"
+        else -> "Action"
+    }
+    Button(onClick = onClick, modifier = Modifier.size(32.dp), contentPadding = PaddingValues(0.dp),
         shape = RoundedCornerShape(5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF353940), contentColor = tint)) {
-        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Icon(icon, contentDescription = description, modifier = Modifier.size(16.dp))
     }
 }
 
