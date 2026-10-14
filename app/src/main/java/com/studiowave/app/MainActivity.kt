@@ -342,9 +342,6 @@ private fun StudioWaveApp() {
     var highContrast by remember { mutableStateOf(preferences.getBoolean("ui_high_contrast", false)) }
     var gridOpacity by remember { mutableFloatStateOf(preferences.getFloat("ui_grid_opacity", 0.72f)) }
     var uiScale by remember { mutableFloatStateOf(preferences.getFloat("ui_scale", 1f).coerceIn(0.6f, 1.2f)) }
-    var audioSampleRate by remember { mutableIntStateOf(preferences.getInt("audio_sample_rate", 48000)) }
-    var audioBufferFrames by remember { mutableIntStateOf(preferences.getInt("audio_buffer_frames", 512)) }
-    var audioOutputMode by remember { mutableStateOf(preferences.getString("audio_output_mode", "SYSTEM") ?: "SYSTEM") }
     // Start with the device drawer collapsed so Arrangement gets the full vertical workspace.
     var showDock by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
@@ -670,9 +667,6 @@ private fun StudioWaveApp() {
             .putBoolean("ui_high_contrast", highContrast)
             .putFloat("ui_grid_opacity", gridOpacity)
             .putFloat("ui_scale", uiScale)
-            .putInt("audio_sample_rate", audioSampleRate)
-            .putInt("audio_buffer_frames", audioBufferFrames)
-            .putString("audio_output_mode", audioOutputMode)
             .apply()
     }
     val studioColorScheme = if (themeName == "Live Light") {
@@ -704,17 +698,12 @@ private fun StudioWaveApp() {
                     highContrast = highContrast, onHighContrastChange = { highContrast = it },
                     gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
                     uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.6f, 1.2f) },
-                    audioOutputMode = audioOutputMode, onAudioOutputModeChange = { audioOutputMode = it },
-                    audioSampleRate = audioSampleRate, onAudioSampleRateChange = { audioSampleRate = it },
-                    audioBufferFrames = audioBufferFrames, onAudioBufferFramesChange = { audioBufferFrames = it },
-                    audioStatus = "Android system output; custom device routing is not wired into the current engine.",
+                    audioStatus = "Android AudioTrack system output; custom routing and DSP device chains are not connected.",
                     interfaceLog = listOf(
                         "Theme: $themeName / $paletteTone",
                         "UI scale: ${(uiScale * 100).toInt()}%",
                         "Transport: ${if (playing) "PLAYING" else "STOPPED"}",
-                        "Audio output mode preference: $audioOutputMode",
-                        "Configured sample rate: $audioSampleRate Hz",
-                        "Configured buffer: $audioBufferFrames frames",
+                        "Audio output: stereo PCM16 at 44.1 kHz / 256-frame mixer blocks",
                         "Peak: ${masterPeakDbfs.toInt()} dBFS; RMS: ${masterRmsDbfs.toInt()} dBFS",
                         "Workspace: $selectedWorkspace",
                         "Project autosave: enabled"
