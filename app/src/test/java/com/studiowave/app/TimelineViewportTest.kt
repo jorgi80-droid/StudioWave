@@ -229,11 +229,30 @@ class TimelineViewportTest {
         }
     }
 
-    @Test fun extremeTickDeltasAreSaturatedAndNonFiniteInputsAreIgnored() {
+    @Test fun nonFinitePixelDeltasAreIgnored() {
         val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 20f, 0.0, 500f)
         assertEquals(0L, viewport.pixelsToTickDelta(Float.NaN))
         assertEquals(0L, viewport.pixelsToTickDelta(Float.POSITIVE_INFINITY))
         assertEquals(0L, viewport.pixelsToTickDelta(Float.NEGATIVE_INFINITY))
+    }
+
+
+    @Test fun placeTickAtViewportXKeepsAnchorAcrossScrollAndZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        listOf(24f, 74f, 240f, 1190f).forEach { scale ->
+            val initial = TimelineViewport(timebase, scale, 7680.0, 900f)
+            val anchorX = 377f
+            val anchorTick = initial.viewportXToTime(anchorX)
+            val placed = initial.placeTickAtViewportX(anchorTick, anchorX)
+            assertEquals(anchorTick, placed.viewportXToTime(anchorX), 1L)
+            assertEquals(scale, placed.effectivePixelsPerBar, 0.001f)
+        }
+    }
+
+    @Test fun placeTickAtViewportXIgnoresNonFiniteAnchor() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 74f, 1200.0, 900f)
+        assertEquals(viewport, viewport.placeTickAtViewportX(3840L, Float.NaN))
+        assertEquals(viewport, viewport.placeTickAtViewportX(3840L, Float.POSITIVE_INFINITY))
     }
 
 }
