@@ -2777,15 +2777,21 @@ private fun MixerWorkspace(
     onProjectChange: (StudioProject) -> Unit,
     trackMeterReadings: Map<String, Pair<Float, Float>>
 ) {
-    Row(
-        Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp))
-            .horizontalScroll(rememberScrollState()).padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(5.dp)
+    BoxWithConstraints(
+        Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(4.dp)
     ) {
+        val trackCount = project.tracks.size.coerceAtLeast(1)
+        val availableWidth = maxWidth - 114.dp
+        val channelWidth = ((availableWidth - (trackCount - 1).coerceAtLeast(0) * 5.dp) / trackCount)
+            .coerceIn(104.dp, 180.dp)
+        Row(
+            Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
         project.tracks.forEach { track ->
             Column(
-                Modifier.width(104.dp).fillMaxHeight()
-                    .background(Color(0xFF25272B), RoundedCornerShape(5.dp)).padding(horizontal = 5.dp, vertical = 6.dp),
+                Modifier.width(channelWidth).fillMaxHeight()
+                    .background(Color(0xFF25272B), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -2911,6 +2917,7 @@ private fun MixerWorkspace(
             Text("GAIN " + (master * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
             Slider(value = master, onValueChange = onMasterChange, valueRange = 0f..1f,
                 modifier = Modifier.fillMaxWidth().height(24.dp))
+        }
         }
     }
 }
