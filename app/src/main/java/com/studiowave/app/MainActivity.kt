@@ -2549,12 +2549,16 @@ private fun PianoRollWorkspace(
     val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
     val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks).toInt().coerceAtLeast(1)
     val rowHeight = (18f * zoomY).coerceIn(10f, 44f)
-    val stepsOnScreen = (24f / zoomX.coerceIn(0.35f, 8f)).roundToInt().coerceIn(4, 96)
+    val stepsOnScreen = (stepsPerBar.toFloat() * 2f / zoomX.coerceIn(0.35f, 8f)).roundToInt().coerceIn(4, 96)
     val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
     val clipLengthSteps = ((rawLengthTicks + stepTicks - 1L) / stepTicks)
         .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
+    val gestureZoomX = rememberUpdatedState(zoomX)
+    val gestureZoomY = rememberUpdatedState(zoomY)
+    val gestureStartStep = rememberUpdatedState(pageStartStep)
+    val gestureTopPitch = rememberUpdatedState(topPitch)
 
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
         val activeTrack = track ?: return
@@ -2675,63 +2679,101 @@ private fun PianoRollWorkspace(
                     val rowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                     val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
-                    val currentTopPitch = topPitch.coerceIn(maxTopPitch, 119)
+                    val currentTopPitch = gestureTopPitch.value.coerceIn(maxTopPitch, 119)
                     val colWidthPx = (viewportWidthPx / stepsOnScreen.toFloat()).coerceAtLeast(2f)
                     val maxHorizontalScroll = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
-                    val currentStart = pageStartStep
+                    val currentStart = gestureStartStep.value
                     val contentModifier = Modifier
                         .fillMaxSize()
-                        .pointerInput(track?.id, clip?.id, notes, snapDenominator, zoomX, zoomY, currentStart, currentTopPitch, keyboardVisible) {
+                        .pointerInput(track?.id, clip?.id, snapDenominator, keyboardVisible, viewportWidthPx, viewportHeightPx) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val second = awaitPointerEvent()
                                 if (second.changes.count { it.pressed } >= 2) {
-                                    val positions = second.changes.filter { it.pressed }.map { it.position }
-                                    val span = if (positions.size >= 2) (positions[0] - positions[1]).getDistance() else 1f
-                                    var lastDistance = span.coerceAtLeast(1f)
-                                    var lastMid = if (positions.size >= 2) (positions[0] + positions[1]) / 2f else down.position
+                                    val initialPointers = second.changes.filter { it.pressed }.take(2)
+                                    var initialMid = (initialPointers[0].position + initialPointers[1].position) / 2f
+                                    val initialSpan = (initialPointers[0].position - initialPointers[1].position).getDistance().coerceAtLeast(1f)
+                                    val baseZoomX = gestureZoomX.value.coerceIn(0.35f, 8f)
+                                    val baseZoomY = gestureZoomY.value.coerceIn(0.45f, 3.5f)
+                                    val baseStart = gestureStartStep.value
+                                    val baseTop = gestureTopPitch.value
+                                    val baseStepsOnScreen = (stepsPerBar.toFloat() * 2f / baseZoomX).roundToInt().coerceIn(4, 96)
+                                    val baseColWidth = (viewportWidthPx / baseStepsOnScreen.toFloat()).coerceAtLeast(2f)
+                                    val baseRowHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                        (18f * baseZoomY).coerceIn(10f, 44f).dp.toPx()
+                                    }.coerceAtLeast(1f)
+                                    val anchorStep = baseStart + initialMid.x / baseColWidth
+                                    val anchorPitch = baseTop - initialMid.y / baseRowHeight
                                     do {
                                         val event = awaitPointerEvent()
-                                        val pts = event.changes.filter { it.pressed }
+                                        val pts = event.changes.filter { it.pressed }.take(2)
                                         if (pts.size >= 2) {
-                                            val newSpan = (pts[0].position - pts[1].position).getDistance().coerceAtLeast(1f)
-                                            val mid = (pts[0].position + pts[1].position) / 2f
-                                            val ratio = newSpan / lastDistance
-                                            if (kotlin.math.abs(ratio - 1f) > 0.015f) {
-                                                zoomX = (zoomX * ratio).coerceIn(0.35f, 8f)
-                                                zoomY = (zoomY * ratio).coerceIn(0.45f, 3.5f)
-                                            }
-                                            val delta = mid - lastMid
-                                            if (kotlin.math.abs(delta.x) > 1f) {
-                                                startStep = (startStep - (delta.x / colWidthPx).roundToInt()).coerceIn(0, maxStartStep)
-                                            }
-                                            if (kotlin.math.abs(delta.y) > 1f) {
-                                                topPitch = (topPitch + (delta.y / rowHeightPx).roundToInt()).coerceIn(0, 119)
-                                            }
-                                            lastDistance = newSpan
-                                            lastMid = mid
+                                            val span = (pts[0].position - pts[1].position).getDistance().coerceAtLeast(1f)
+                                            val midpoint = (pts[0].position + pts[1].position) / 2f
+                                            val scale = span / initialSpan
+                                            val newZoomX = (baseZoomX * scale).coerceIn(0.35f, 8f)
+                                            val newZoomY = (baseZoomY * scale).coerceIn(0.45f, 3.5f)
+                                            val newSteps = (stepsPerBar.toFloat() * 2f / newZoomX).roundToInt().coerceIn(4, 96)
+                                            val newColWidth = (viewportWidthPx / newSteps.toFloat()).coerceAtLeast(2f)
+                                            val newRowHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                                (18f * newZoomY).coerceIn(10f, 44f).dp.toPx()
+                                            }.coerceAtLeast(1f)
+                                            val newClipSteps = kotlin.math.ceil(rawLengthTicks.toDouble() / stepTicks.toDouble())
+                                                .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(newSteps)
+                                            val newStart = (anchorStep - midpoint.x / newColWidth).roundToInt()
+                                                .coerceIn(0, (newClipSteps - newSteps).coerceAtLeast(0))
+                                            val newTop = (anchorPitch + midpoint.y / newRowHeight).roundToInt().coerceIn(0, 119)
+                                            if (kotlin.math.abs(newZoomX - gestureZoomX.value) > 0.0005f) zoomX = newZoomX
+                                            if (kotlin.math.abs(newZoomY - gestureZoomY.value) > 0.0005f) zoomY = newZoomY
+                                            if (newStart != gestureStartStep.value) startStep = newStart
+                                            if (newTop != gestureTopPitch.value) topPitch = newTop
                                             event.changes.forEach { it.consume() }
                                         }
                                     } while (event.changes.any { it.pressed })
                                 } else {
                                     var previous = down.position
                                     var dragged = false
+                                    var horizontalRemainder = 0f
+                                    var verticalRemainder = 0f
+                                    var dragStart = gestureStartStep.value
+                                    var dragPitch = gestureTopPitch.value
+                                    val fixedColWidth = (viewportWidthPx /
+                                        (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96).toFloat()).coerceAtLeast(2f)
+                                    val fixedRowHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                        (18f * gestureZoomY.value).coerceIn(10f, 44f).dp.toPx()
+                                    }.coerceAtLeast(1f)
                                     do {
                                         val event = awaitPointerEvent()
                                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                         if (change.pressed) {
                                             val delta = change.position - previous
-                                            if (kotlin.math.abs(delta.x) > 2f || kotlin.math.abs(delta.y) > 2f) {
+                                            if (kotlin.math.abs(delta.x) > 1f || kotlin.math.abs(delta.y) > 1f) {
                                                 dragged = true
-                                                startStep = (startStep - (delta.x / colWidthPx).roundToInt()).coerceIn(0, maxStartStep)
-                                                topPitch = (topPitch + (delta.y / rowHeightPx).roundToInt()).coerceIn(0, 119)
+                                                horizontalRemainder += -delta.x / fixedColWidth
+                                                verticalRemainder += delta.y / fixedRowHeight
+                                                val stepDelta = horizontalRemainder.roundToInt()
+                                                val pitchDelta = verticalRemainder.roundToInt()
+                                                if (stepDelta != 0) {
+                                                    val currentSteps = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
+                                                    val maxScroll = (clipLengthSteps - currentSteps).coerceAtLeast(0)
+                                                    dragStart = (dragStart + stepDelta).coerceIn(0, maxScroll)
+                                                    startStep = dragStart
+                                                    horizontalRemainder -= stepDelta
+                                                }
+                                                if (pitchDelta != 0) {
+                                                    dragPitch = (dragPitch + pitchDelta).coerceIn(0, 119)
+                                                    topPitch = dragPitch
+                                                    verticalRemainder -= pitchDelta
+                                                }
                                                 change.consume()
                                             }
                                             previous = change.position
                                         }
                                     } while (event.changes.any { it.pressed })
                                     if (!dragged && track != null && clip != null && keyboardVisible) {
-                                        val step = (pageStartStep + (down.position.x / colWidthPx).toInt().coerceIn(0, stepsOnScreen - 1))
+                                        val liveStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
+                                        val liveColWidth = (viewportWidthPx / liveStepsOnScreen.toFloat()).coerceAtLeast(2f)
+                                        val step = (gestureStartStep.value + (down.position.x / liveColWidth).toInt().coerceIn(0, liveStepsOnScreen - 1))
                                         val row = (down.position.y / rowHeightPx).toInt()
                                         val pitch = (currentTopPitch - row).coerceIn(0, 119)
                                         val startTick = snapStep(step) * stepTicks
@@ -2755,7 +2797,9 @@ private fun PianoRollWorkspace(
                                             editMessage = "Note added"
                                         }
                                     } else if (!dragged && !keyboardVisible && notes.isNotEmpty()) {
-                                        val targetTick = (pageStartStep + (down.position.x / colWidthPx).toInt().coerceIn(0, stepsOnScreen - 1)) * stepTicks
+                                        val liveStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
+                                        val liveColWidth = (viewportWidthPx / liveStepsOnScreen.toFloat()).coerceAtLeast(2f)
+                                        val targetTick = (gestureStartStep.value + (down.position.x / liveColWidth).toInt().coerceIn(0, liveStepsOnScreen - 1)) * stepTicks
                                         val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) }
                                         if (nearest != null) {
                                             selectedNoteId = nearest.id
@@ -2879,7 +2923,7 @@ private fun MixerWorkspace(
                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
                             )
                         }
-                        drawLine(Color.White.copy(alpha = 0.85f),
+                        drawLine(mixerPalette.text.copy(alpha = 0.82f),
                             Offset((size.width - lane) / 2f, size.height * (1f - rms)),
                             Offset((size.width + lane) / 2f, size.height * (1f - rms)), 1f)
                     }
@@ -2909,20 +2953,24 @@ private fun MixerWorkspace(
                         Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
                     )
+                    for (tick in 0..10) {
+                        val y = railTop + (railBottom - railTop) * tick / 10f
+                        drawLine(mixerPalette.grid.copy(alpha = 0.68f),
+                            Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
+                    }
                     val fraction = track.volume.coerceIn(0f, 1.5f) / 1.5f
                     val thumbY = railBottom - fraction * (railBottom - railTop)
-                    drawRoundRect(
-                        mixerPalette.accent.copy(alpha = 0.7f),
-                        Offset(railLeft, thumbY),
-                        Size(railWidth, (railBottom - thumbY).coerceAtLeast(0f)),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
-                    )
-                    drawRoundRect(
-                        mixerPalette.text,
-                        Offset(size.width * 0.18f, thumbY - 3f),
-                        Size(size.width * 0.64f, 6f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
-                    )
+                    val handleLeft = size.width * 0.12f
+                    val handleWidth = size.width * 0.76f
+                    drawRoundRect(mixerPalette.control,
+                        Offset(handleLeft, thumbY - 7f), Size(handleWidth, 14f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f))
+                    drawRoundRect(mixerPalette.border,
+                        Offset(handleLeft, thumbY - 7f), Size(handleWidth, 14f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
+                    drawLine(mixerPalette.accent, Offset(handleLeft + 3f, thumbY),
+                        Offset(handleLeft + handleWidth - 3f, thumbY), 2f)
                     }
                 }
                 Spacer(Modifier.height(3.dp))
@@ -2984,14 +3032,22 @@ private fun MixerWorkspace(
                     drawLine(mixerPalette.grid.copy(alpha = 0.55f), Offset(size.width * 0.08f, y),
                         Offset(size.width * 0.24f, y), 1f)
                 }
+                for (tick in 0..12) {
+                    val y = size.height * tick / 12f
+                    drawLine(mixerPalette.grid.copy(alpha = 0.68f),
+                        Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
+                }
                 val gain = master.coerceIn(0f, 1f)
-                val activeHeight = size.height * gain
-                drawRoundRect(mixerPalette.accent.copy(alpha = 0.82f),
-                    Offset(railLeft, size.height - activeHeight), Size(railWidth, activeHeight),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                val thumbY = size.height - activeHeight
-                drawRoundRect(mixerPalette.text, Offset(size.width * 0.14f, thumbY - 3f),
-                    Size(size.width * 0.72f, 6f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                val thumbY = size.height * (1f - gain)
+                val handleLeft = size.width * 0.10f
+                val handleWidth = size.width * 0.80f
+                drawRoundRect(mixerPalette.control, Offset(handleLeft, thumbY - 7f),
+                    Size(handleWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f))
+                drawRoundRect(mixerPalette.border, Offset(handleLeft, thumbY - 7f),
+                    Size(handleWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
+                drawLine(mixerPalette.accent, Offset(handleLeft + 3f, thumbY),
+                    Offset(handleLeft + handleWidth - 3f, thumbY), 2f)
             }
             val masterDbLabel = if (master <= 0.001f) "-∞ dB" else
                 String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(master))
@@ -3225,9 +3281,9 @@ private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
         else -> "Action"
     }
     val p = LocalStudioWavePalette.current
-    Button(onClick = onClick, modifier = Modifier.size(32.dp), contentPadding = PaddingValues(0.dp),
+    Button(onClick = onClick, modifier = Modifier.size(26.dp), contentPadding = PaddingValues(0.dp),
         shape = RoundedCornerShape(5.dp), colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = tint)) {
-        Icon(icon, contentDescription = description, modifier = Modifier.size(16.dp))
+        Icon(icon, contentDescription = description, modifier = Modifier.size(14.dp))
     }
 }
 
