@@ -3607,7 +3607,7 @@ private fun MixerStateButton(
 }
 
 @Composable
-private fun TransportAction(label: String, onClick: () -> Unit) {
+internal fun TransportAction(label: String, onClick: () -> Unit) {
     val p = LocalStudioWavePalette.current
     Surface(
         color = p.control,
