@@ -124,7 +124,9 @@ internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Lo
         val from = noteStart.coerceAtLeast(offset)
         val to = noteEnd.coerceAtMost(offset + windowLength)
         if (to <= from) null else note.copy(
-            id = if (newIds) java.util.UUID.randomUUID().toString() else note.id,
+            // Keep IDs for notes that remain wholly in one piece; only a note
+            // crossing the split boundary needs a new ID for its right-hand segment.
+            id = if (newIds && noteStart < offset && noteEnd > offset) java.util.UUID.randomUUID().toString() else note.id,
             startTick = from - offset, durationTicks = to - from
         )
     }
