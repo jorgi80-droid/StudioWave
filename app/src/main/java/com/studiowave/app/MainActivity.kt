@@ -2276,7 +2276,10 @@ private fun PianoRollWorkspace(
 ) {
     val clip = track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
-    val stepTicks = (project.ppq.toLong() / 4L).coerceAtLeast(1L)
+    // The snap selector changes the real musical step size used by note placement and the grid.
+    var snapDenominator by remember(track?.id, clip?.id) { mutableStateOf(16) }
+    val stepTicks = (project.ppq.toLong() * 4L / snapDenominator.toLong()).coerceAtLeast(1L)
+    val stepsPerBeat = (snapDenominator / 4).coerceAtLeast(1)
     val visibleSteps = 32
     val highestPitch = 83
     val lowestPitch = 48
@@ -2289,9 +2292,12 @@ private fun PianoRollWorkspace(
                 Text("NOTES", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
             }
-            Surface(color = Color(0xFF25282D), shape = RoundedCornerShape(4.dp)) {
-                Text("SNAP 1/16", color = MutedText, fontSize = 8.sp,
-                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
+            SmallAction("SNAP 1/${snapDenominator}") {
+                snapDenominator = when (snapDenominator) {
+                    16 -> 8
+                    8 -> 4
+                    else -> 16
+                }
             }
             Spacer(Modifier.weight(1f))
             Text("TAP GRID: ADD / REMOVE NOTE", color = MutedText, fontSize = 8.sp)
@@ -2349,9 +2355,21 @@ private fun PianoRollWorkspace(
                     )
                 }
                 for (col in 0..visibleSteps) {
-                    val strong = col % 4 == 0
-                    drawLine(if (strong) Color(0xFF69717D) else Color(0xFF343840),
-                        Offset(col * colW, 0f), Offset(col * colW, size.height), if (strong) 1.2f else 0.5f)
+                    val strong = col % stepsPerBeat == 0
+                    val barLine = col % (stepsPerBeat * project.numerator.coerceAtLeast(1)) == 0
+                    drawLine(
+                        when {
+                            barLine -> Color(0xFF89919D)
+                            strong -> Color(0xFF69717D)
+                            else -> Color(0xFF343840)
+                        },
+                        Offset(col * colW, 0f), Offset(col * colW, size.height),
+                        when {
+                            barLine -> 1.4f
+                            strong -> 0.9f
+                            else -> 0.45f
+                        }
+                    )
                 }
                 notes.forEach { note ->
                     if (note.pitch !in lowestPitch..highestPitch) return@forEach
