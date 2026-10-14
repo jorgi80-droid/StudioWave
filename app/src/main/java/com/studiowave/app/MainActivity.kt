@@ -2082,6 +2082,7 @@ private fun TimelineGrid(
                             green = rawAccent.green * 0.76f,
                             blue = rawAccent.blue * 0.76f
                         ) else rawAccent
+                        val clipInk = if (isLightTheme) Color(0xFF17191C) else Color(0xFFF4F6FA)
                         val clipFill by androidx.compose.animation.animateColorAsState(
                             targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.94f else 0.76f),
                             animationSpec = tween(durationMillis = 140),
@@ -2220,7 +2221,7 @@ private fun TimelineGrid(
                                     val rowHeight = (size.height / 12f).coerceAtLeast(2f)
                                     for (beat in 1..3) {
                                         val x = size.width * beat / 4f
-                                        drawLine(timelinePalette.text.copy(alpha = if (isLightTheme) 0.30f else 0.18f), Offset(x, 0f), Offset(x, size.height), 1f)
+                                        drawLine(clipInk.copy(alpha = if (isLightTheme) 0.24f else 0.20f), Offset(x, 0f), Offset(x, size.height), 1f)
                                     }
                                     clip.midiNotes.forEach { note ->
                                         val left = (note.startTick.toDouble() / duration * size.width).toFloat()
@@ -2228,7 +2229,7 @@ private fun TimelineGrid(
                                         val y = ((127 - note.pitch.coerceIn(0,127)).toFloat() / 128f * size.height)
                                             .coerceIn(0f, (size.height - rowHeight).coerceAtLeast(0f))
                                         drawRoundRect(
-                                            color = timelinePalette.text.copy(alpha = 0.98f),
+                                            color = clipInk.copy(alpha = 0.98f),
                                             topLeft = Offset(left, y),
                                             size = Size(noteWidth.coerceAtLeast(2f), rowHeight.coerceAtMost(size.height)),
                                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
@@ -2236,7 +2237,7 @@ private fun TimelineGrid(
                                     }
                                 }
                             } else if (track.kind == "audio") {
-                                AudioClipWaveform(clip.sourceUri, timelinePalette.text)
+                                AudioClipWaveform(clip.sourceUri, clipInk)
                             }
                                 }
                                 var leftResizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
@@ -3024,11 +3025,11 @@ private fun DeviceDock(
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICE VIEW", fontSize = 10.sp, fontWeight = FontWeight.Black, color = AbletonOrange)
+            Text("DEVICE VIEW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = devicePalette.orange)
             Spacer(Modifier.width(8.dp))
             Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = devicePalette.text, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            SmallAction(if (page == "MIX") "MIX" else "DEVICES") { page = if (page == "MIX") "DEVICES" else "MIX" }
+            SmallAction(if (page == "MIX") "MIX" else "DEVICE CHAIN") { page = if (page == "MIX") "DEVICES" else "MIX" }
             SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
             SmallAction("× CLOSE") { onToggle() }
         }
@@ -3160,8 +3161,8 @@ private fun DeviceDock(
                                     Text(label, color = if (available) devicePalette.accent else devicePalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                                 }
                                 Text(
-                                    if (available) "Track data available" else "Processor not connected",
-                                    color = devicePalette.text, fontSize = 8.sp
+                                    if (available) "Parameters available for this track" else "No processor connected — no audio FX are applied",
+                                    color = devicePalette.muted, fontSize = 8.sp
                                 )
                             }
                         }
