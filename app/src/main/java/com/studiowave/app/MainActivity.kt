@@ -2485,7 +2485,7 @@ private fun TimelineGrid(
         }
         }
         // Overlay the cursor after clips so it stays visible over audio, MIDI and drum patterns.
-        val playheadPalette = LocalStudioWavePalette.current
+        val playheadPalette = timelinePalette
         Canvas(Modifier.fillMaxSize().padding(top = 24.dp).clipToBounds()) {
             val playheadViewport = TimelineViewport(
                 timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
