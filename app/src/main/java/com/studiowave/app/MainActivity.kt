@@ -1602,6 +1602,11 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
 private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
     val context = LocalContext.current
     val clip = track?.clips?.firstOrNull { it.sourceUri != null }
+    var warpEnabled by remember(clip?.id) { mutableStateOf(false) }
+    var clipGain by remember(clip?.id) { mutableFloatStateOf(1f) }
+    var transpose by remember(clip?.id) { mutableIntStateOf(0) }
+    var startFraction by remember(clip?.id) { mutableFloatStateOf(0f) }
+    var endFraction by remember(clip?.id) { mutableFloatStateOf(1f) }
     var waveform by remember(clip?.sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
     var loading by remember(clip?.sourceUri) { mutableStateOf(false) }
     var loadError by remember(clip?.sourceUri) { mutableStateOf<String?>(null) }
@@ -1631,16 +1636,24 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
-        Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text((track?.name ?: "AUDIO").uppercase() + " • AUDIO EDITOR", color = Color.White, fontWeight = FontWeight.Bold)
+    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(7.dp)) {
+        WorkspaceTitleBar("CLIP VIEW  /  SAMPLE EDITOR", track?.name ?: "No audio track", onBack)
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            SmallAction(if (warpEnabled) "WARP ON" else "WARP OFF") { warpEnabled = !warpEnabled }
+            SmallAction("GAIN " + (clipGain * 100).toInt() + "%") { clipGain = if (clipGain >= 1.49f) 0f else (clipGain + 0.25f).coerceAtMost(1.5f) }
+            SmallAction("PITCH " + (if (transpose > 0) "+" else "") + transpose + " st") { transpose = if (transpose >= 12) -12 else transpose + 1 }
             Spacer(Modifier.weight(1f))
-            Surface(color = Raised, shape = RoundedCornerShape(6.dp), modifier = Modifier.size(28.dp).clickable { onBack() }) {
-                Box(contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 20.sp) }
-            }
+            Text(if (warpEnabled) "TEMPO SYNC" else "ORIGINAL TEMPO", color = MutedText, fontSize = 7.sp, maxLines = 1)
         }
-        Spacer(Modifier.height(12.dp))
-        Box(Modifier.fillMaxWidth().weight(1f).background(Raised, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+        Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text("START", color = MutedText, fontSize = 7.sp)
+            Slider(value = startFraction, onValueChange = { startFraction = it.coerceIn(0f, (endFraction - 0.01f).coerceAtLeast(0f)) },
+                modifier = Modifier.weight(1f).height(20.dp))
+            Text("END", color = MutedText, fontSize = 7.sp)
+            Slider(value = endFraction, onValueChange = { endFraction = it.coerceIn((startFraction + 0.01f).coerceAtMost(1f), 1f) },
+                modifier = Modifier.weight(1f).height(20.dp))
+        }
+        Box(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF27292E), RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
             if (waveform.isNotEmpty()) {
                 Canvas(Modifier.fillMaxSize().padding(12.dp)) {
                     val mid = size.height / 2f
@@ -1663,8 +1676,12 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
             }
         }
         Text(
-            if (waveform.isNotEmpty()) "Waveform sumber • " + waveform.size + " peak" else "Waveform sumber diproses di background",
-            color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 10.dp)
+            when {
+                waveform.isNotEmpty() -> "SOURCE WAVEFORM  ·  " + waveform.size + " peaks  ·  range " + (startFraction * 100).toInt() + "–" + (endFraction * 100).toInt() + "%"
+                loading -> "READING SOURCE WAVEFORM…"
+                else -> loadError ?: "IMPORT AN AUDIO CLIP TO BEGIN"
+            },
+            color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp)
         )
     }
 }
