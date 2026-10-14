@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -2568,7 +2569,11 @@ private fun PianoRollWorkspace(
             SmallAction("+ LEN") {
                 val selected = notes.firstOrNull { it.id == selectedNoteId }
                 if (selected != null) {
-                    updateNotes(notes.map { if (it.id == selected.id) it.copy(durationTicks = (it.durationTicks + stepTicks).coerceAtMost(project.ppq.toLong() * 4L * 4096L) else it })
+                    updateNotes(notes.map { note ->
+                        if (note.id == selected.id) {
+                            note.copy(durationTicks = (note.durationTicks + stepTicks).coerceAtMost(project.ppq.toLong() * 4L * 4096L))
+                        } else note
+                    })
                 }
             }
             Spacer(Modifier.weight(1f))
@@ -2752,6 +2757,7 @@ private fun PianoRollWorkspace(
     }
 }
 
+@Composable
 private fun Float.format(digits: Int): String = "%.${digits}f".format(java.util.Locale.US, this)
 
 private fun MixerWorkspace(
@@ -3046,6 +3052,7 @@ private fun DeviceDock(
     }
 }
 
+@Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
         color = Color(0xFF353A42),
