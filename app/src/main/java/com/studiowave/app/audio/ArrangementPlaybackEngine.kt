@@ -222,7 +222,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         loudnessMeter.reset()
         publishMasterMeter(0f, 0f, MasterLoudnessMeter.SILENCE_LUFS)
         project.tracks.forEach { track ->
-            publishTrackMeter(track.id, 0f, 0f)
+            publishTrackMeter(track.id, 0f, 0f, 0f, 0f)
         }
         updateMix(project)
         val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
@@ -804,7 +804,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         generation.incrementAndGet()
         scratchOffsetsMs.clear()
         stopOutputOnly()
-        trackMeterBits.keys.forEach { id -> publishTrackMeter(id, 0f, 0f) }
+        trackMeterBits.keys.forEach { id -> publishTrackMeter(id, 0f, 0f, 0f, 0f) }
     }
 
     private fun stopOutputOnly() {
