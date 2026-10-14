@@ -2718,9 +2718,10 @@ private fun PianoRollWorkspace(
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
         val activeTrack = track ?: return
         val activeClip = clip ?: return
+        val safeNotes = fitMidiNotesToClip(updatedNotes, activeClip.lengthTicks)
         onProjectChange(project.copy(tracks = project.tracks.map { item ->
             if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
-                if (current.id == activeClip.id) current.copy(midiNotes = updatedNotes) else current
+                if (current.id == activeClip.id) current.copy(midiNotes = safeNotes) else current
             })
         }))
     }
@@ -2795,16 +2796,30 @@ private fun PianoRollWorkspace(
                 }
                 SmallAction("PASTE") {
                     val source = clipboard
-                    if (source != null && clip != null && track != null) {
-                        val pasted = source.copy(
-                            id = java.util.UUID.randomUUID().toString(),
-                            startTick = source.startTick + stepTicks,
-                            pitch = source.pitch
-                        )
-                        updateNotes(notes + pasted)
-                        selectedNoteId = pasted.id
-                        editMessage = "Note pasted"
-                    } else editMessage = "Copy a note first"
+                    if (source == null) {
+                        editMessage = "Copy a note first"
+                    } else if (clip == null || track == null) {
+                        editMessage = "Create a MIDI clip first"
+                    } else {
+                        val requestedStart = if (source.startTick > Long.MAX_VALUE - stepTicks) Long.MAX_VALUE
+                            else source.startTick.coerceAtLeast(0L) + stepTicks
+                        if (requestedStart >= clip.lengthTicks.coerceAtLeast(1L)) {
+                            editMessage = "No room to paste after this note"
+                        } else {
+                            val candidate = source.copy(
+                                id = java.util.UUID.randomUUID().toString(),
+                                startTick = requestedStart
+                            )
+                            val pasted = fitMidiNotesToClip(listOf(candidate), clip.lengthTicks).firstOrNull()
+                            if (pasted == null) {
+                                editMessage = "Note does not fit in this clip"
+                            } else {
+                                updateNotes(notes + pasted)
+                                selectedNoteId = pasted.id
+                                editMessage = "Note pasted"
+                            }
+                        }
+                    }
                 }
                 SmallAction("− LEN") {
                     val selected = notes.firstOrNull { it.id == selectedNoteId }
