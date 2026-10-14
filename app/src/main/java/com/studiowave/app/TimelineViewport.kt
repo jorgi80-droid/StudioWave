@@ -125,10 +125,12 @@ data class TimelineViewport(
 
     /** Change scale without changing the musical tick under the screen anchor. */
     fun zoomKeepingAnchor(newPixelsPerBar: Float, anchorScreenX: Float): TimelineViewport {
-        val anchorTick = screenXToTime(anchorScreenX)
+        val anchorTick = scrollTimeTicks +
+            (anchorScreenX - trackHeaderWidthPx).toDouble() / pixelsPerTick
         val requestedScale = if (newPixelsPerBar.isFinite()) newPixelsPerBar else MAX_PIXELS_PER_BAR
         val clampedScale = requestedScale.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
-        // Reuse the same anchor-placement mapping as pinch-pan and Follow playback.
+        // Anchor positions are fractional ticks: integer rounding at each pinch frame causes
+        // cumulative visible movement, especially at high zoom or far into a long arrangement.
         return copy(pixelsPerBar = clampedScale)
             .placeTickAtViewportX(anchorTick, anchorScreenX - trackHeaderWidthPx)
     }
@@ -137,9 +139,13 @@ data class TimelineViewport(
      * Return a viewport in which [tick] sits at [viewportX] in the local timeline-pane
      * coordinate space. Used by pinch anchoring and follow-playback to share one mapping.
      */
-    fun placeTickAtViewportX(tick: Long, viewportX: Float): TimelineViewport {
-        if (!viewportX.isFinite()) return this
-        val newScroll = (tick.coerceAtLeast(0L).toDouble() - viewportX.toDouble() / pixelsPerTick)
+    fun placeTickAtViewportX(tick: Long, viewportX: Float): TimelineViewport =
+        placeTickAtViewportX(tick.coerceAtLeast(0L).toDouble(), viewportX)
+
+    /** Place a fractional musical tick at a screen point without integer-tick rounding. */
+    fun placeTickAtViewportX(tick: Double, viewportX: Float): TimelineViewport {
+        if (!viewportX.isFinite() || !tick.isFinite()) return this
+        val newScroll = (tick.coerceAtLeast(0.0) - viewportX.toDouble() / pixelsPerTick)
             .coerceIn(0.0, Long.MAX_VALUE.toDouble())
         return copy(scrollTimeTicks = newScroll)
     }
