@@ -2559,6 +2559,7 @@ private fun PianoRollWorkspace(
     val gestureZoomY = rememberUpdatedState(zoomY)
     val gestureStartStep = rememberUpdatedState(pageStartStep)
     val gestureTopPitch = rememberUpdatedState(topPitch)
+    val pianoDensity = LocalDensity.current
 
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
         val activeTrack = track ?: return
@@ -2647,7 +2648,7 @@ private fun PianoRollWorkspace(
             if (keyboardVisible) {
                 Column(Modifier.width(42.dp).fillMaxHeight().background(pianoPalette.panel)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
-                        val keyRowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
+                        val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                         val keyMaxTopPitch = (119 - keyVisibleRows + 1).coerceAtLeast(0)
                         val keyTopPitch = topPitch.coerceIn(keyMaxTopPitch, 119)
@@ -2674,11 +2675,11 @@ private fun PianoRollWorkspace(
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.canvas)) {
-                    val viewportWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
-                    val viewportHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxHeight.toPx() }
+                    val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
+                    val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
                     val currentStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
                     val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
-                    val rowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { currentRowHeight.dp.toPx() }
+                    val rowHeightPx = with(pianoDensity) { currentRowHeight.dp.toPx() }
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                     val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
                     val currentTopPitch = gestureTopPitch.value.coerceIn(maxTopPitch, 119)
@@ -2701,7 +2702,7 @@ private fun PianoRollWorkspace(
                                     val baseTop = gestureTopPitch.value
                                     val baseStepsOnScreen = (stepsPerBar.toFloat() * 2f / baseZoomX).roundToInt().coerceIn(4, 96)
                                     val baseColWidth = (viewportWidthPx / baseStepsOnScreen.toFloat()).coerceAtLeast(2f)
-                                    val baseRowHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                    val baseRowHeight = with(pianoDensity) {
                                         (18f * baseZoomY).coerceIn(10f, 44f).dp.toPx()
                                     }.coerceAtLeast(1f)
                                     val anchorStep = baseStart + initialMid.x / baseColWidth
@@ -2717,7 +2718,7 @@ private fun PianoRollWorkspace(
                                             val newZoomY = (baseZoomY * scale).coerceIn(0.45f, 3.5f)
                                             val newSteps = (stepsPerBar.toFloat() * 2f / newZoomX).roundToInt().coerceIn(4, 96)
                                             val newColWidth = (viewportWidthPx / newSteps.toFloat()).coerceAtLeast(2f)
-                                            val newRowHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                            val newRowHeight = with(pianoDensity) {
                                                 (18f * newZoomY).coerceIn(10f, 44f).dp.toPx()
                                             }.coerceAtLeast(1f)
                                             val newClipSteps = kotlin.math.ceil(rawLengthTicks.toDouble() / stepTicks.toDouble())
@@ -2741,7 +2742,7 @@ private fun PianoRollWorkspace(
                                     var dragPitch = gestureTopPitch.value
                                     val fixedColWidth = (viewportWidthPx /
                                         (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96).toFloat()).coerceAtLeast(2f)
-                                    val fixedRowHeight = with(androidx.compose.ui.platform.LocalDensity.current) {
+                                    val fixedRowHeight = with(pianoDensity) {
                                         (18f * gestureZoomY.value).coerceIn(10f, 44f).dp.toPx()
                                     }.coerceAtLeast(1f)
                                     do {
