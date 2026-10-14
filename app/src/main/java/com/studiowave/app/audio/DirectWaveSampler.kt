@@ -46,7 +46,9 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
 
     fun load(uri: Uri, onLoaded: (Boolean) -> Unit = {}) {
         loaded = false
-        val id = runCatching { pool.load(appContext, uri, 1) }.getOrDefault(0)
+        val descriptor = runCatching { appContext.contentResolver.openAssetFileDescriptor(uri, "r") }.getOrNull()
+        if (descriptor == null) { onLoaded(false); return }
+        val id = runCatching { descriptor.use { pool.load(it, 1) } }.getOrDefault(0)
         if (id == 0) { onLoaded(false); return }
         sampleId = id
         pool.setOnLoadCompleteListener { _, loadedId, status ->
@@ -66,7 +68,7 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
         val generation = (generations[midi] ?: 0L) + 1L
         generations[midi] = generation
         val rate = 2.0.pow(((midi - 60 + pitchSemitones).toDouble() + fineTuneCents / 100.0) / 12.0)
-            .toFloat().coerceIn(0.125f, 8f)
+            .toFloat().coerceIn(0.5f, 2f)
         val gain = velocity.coerceIn(1, 127) / 127f
         val stream = pool.play(sampleId, 0f, 0f, 1, if (looping) -1 else 0, rate)
         if (stream == 0) return
