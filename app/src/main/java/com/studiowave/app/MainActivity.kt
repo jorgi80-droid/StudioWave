@@ -45,6 +45,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.awaitCancellation
+import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -108,6 +109,11 @@ private fun Modifier.timelineClipWidthPx(widthPx: Float): Modifier = layout { me
 }
 
 private data class TrackRowLayout(val topDp: Float, val heightDp: Float)
+
+internal fun choosePreferredRefreshRate(supportedRates: Iterable<Float>): Float? =
+    supportedRates.asSequence()
+        .filter { it.isFinite() && it >= 90f && it <= 120f }
+        .maxOrNull()
 
 internal data class PinchZoomFrame(val zoom: Float, val scrollTicks: Double)
 
@@ -174,10 +180,28 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        preferAdaptiveHighRefreshRate()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideDawSystemBars()
         window.navigationBarColor = android.graphics.Color.rgb(20, 21, 23)
         setContent { StudioWaveApp() }
+    }
+
+    /**
+     * Ask Android for the fastest supported mode up to 120 Hz. This remains a
+     * preference, so Android can lower refresh rate for power/thermal policy.
+     * Devices without a 90–120 Hz mode keep the system-selected rate.
+     */
+    @Suppress("DEPRECATION")
+    private fun preferAdaptiveHighRefreshRate() {
+        val targetRate = choosePreferredRefreshRate(
+            windowManager.defaultDisplay.supportedModes.map { it.refreshRate }.asIterable()
+        )
+        if (targetRate != null) {
+            window.attributes = window.attributes.apply {
+                preferredRefreshRate = targetRate
+            }
+        }
     }
 
     private fun hideDawSystemBars() {
@@ -1431,6 +1455,7 @@ private fun TimelineGrid(
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
     val currentScroll by rememberUpdatedState(scrollTicks)
+    val currentPlayhead by rememberUpdatedState(playheadTick)
     val currentScrollTracks by rememberUpdatedState(scrollTracks)
     val currentVerticalZoom by rememberUpdatedState(verticalZoom)
     val currentOnVerticalZoom by rememberUpdatedState(onVerticalZoom)
@@ -1576,7 +1601,7 @@ private fun TimelineGrid(
                         timebase, baseBarWidthPx * currentZoom, currentScroll,
                         timelineWidthPx, trackHeaderWidthPx
                     )
-                    val currentX = currentViewport.timeToViewportX(playheadTick)
+                    val currentX = currentViewport.timeToViewportX(currentPlayhead)
                     val leftGuard = timelineWidthPx * 0.08f
                     val rightGuard = timelineWidthPx * 0.70f
                     val targetX = when {
@@ -1585,11 +1610,12 @@ private fun TimelineGrid(
                         else -> null
                     }
                     if (targetX != null) {
-                        val nextScroll = currentViewport.placeTickAtViewportX(playheadTick, targetX)
+                        val nextScroll = currentViewport.placeTickAtViewportX(currentPlayhead, targetX)
                             .scrollTimeTicks
                         if (kotlin.math.abs(nextScroll - currentScroll) > 0.5f) currentOnScroll(nextScroll)
                     }
-                    delay(33L)
+                    // Follow at the display's actual vsync cadence (60/90/120 Hz), not a fixed 30 Hz timer.
+                    withFrameNanos { }
                 }
             }
         }
