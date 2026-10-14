@@ -2926,93 +2926,115 @@ private fun DeviceDock(
     onToggle: () -> Unit
 ) {
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
+    var expanded by remember { mutableStateOf(true) }
+    var page by remember { mutableStateOf("MIX") }
     Column(
-        Modifier.fillMaxWidth().height(92.dp)
-            .background(Color(0xFF25272B), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+        Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp)
+            .background(Color(0xFF25272B), RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICE VIEW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = AbletonOrange)
+        Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("DEVICE VIEW", fontSize = 10.sp, fontWeight = FontWeight.Black, color = AbletonOrange)
             Spacer(Modifier.width(8.dp))
-            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 8.sp, color = Color(0xFFE4E8EF), maxLines = 1)
-            Text("  ·  MIX / DEVICES", fontSize = 7.sp, color = MutedText, maxLines = 1)
+            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = Color(0xFFE4E8EF), maxLines = 1)
             Spacer(Modifier.weight(1f))
+            SmallAction(if (page == "MIX") "MIX" else "DEVICES") { page = if (page == "MIX") "DEVICES" else "MIX" }
+            SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
             SmallAction("× CLOSE") { onToggle() }
         }
-        if (project.tracks.isEmpty()) {
-            Text("Tambahkan track di Arrangement untuk mengatur volume, pan, mute, dan solo.",
-                color = MutedText, fontSize = 8.sp, maxLines = 1)
-        } else {
-            Row(
-                Modifier.fillMaxWidth().height(21.dp).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                project.tracks.forEach { track ->
-                    val isSelected = selectedTrack?.id == track.id
-                    val chipColor by androidx.compose.animation.animateColorAsState(
-                        targetValue = if (isSelected) Color(0xFF18443F) else Color(0xFF202328),
-                        animationSpec = tween(durationMillis = 120),
-                        label = "trackInspectorSelection"
-                    )
-                    Surface(
-                        color = chipColor,
-                        shape = RoundedCornerShape(5.dp),
-                        modifier = Modifier.clickable { onSelectTrack(track.id) }
-                    ) {
-                        Text(track.name.take(14), color = if (isSelected) Mint else Color(0xFFD5D9E0),
-                            fontSize = 8.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
-                    }
-                }
-            }
-            if (selectedTrack != null) {
+        if (expanded) {
+            if (project.tracks.isEmpty()) {
+                Text("Tambahkan track di Arrangement untuk melihat perangkat dan kontrol channel.",
+                    color = MutedText, fontSize = 9.sp)
+            } else {
                 Row(
-                    Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth().height(28.dp).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                        Text("VOL " + (selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt() + "%",
-                            color = MutedText, fontSize = 7.sp, maxLines = 1)
-                        Slider(
-                            value = selectedTrack.volume.coerceIn(0f, 1.5f),
-                            onValueChange = { value ->
-                                onProjectChange(project.copy(tracks = project.tracks.map {
-                                    if (it.id == selectedTrack.id) it.copy(volume = value) else it
-                                }))
-                            },
-                            valueRange = 0f..1.5f,
-                            modifier = Modifier.fillMaxWidth().height(19.dp)
-                        )
-                    }
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                        val pan = selectedTrack.pan.coerceIn(-1f, 1f)
-                        Text("PAN " + when {
-                            pan <= -0.95f -> "L"
-                            pan >= 0.95f -> "R"
-                            else -> (pan * 100).toInt().toString()
-                        }, color = MutedText, fontSize = 7.sp, maxLines = 1)
-                        Slider(
-                            value = pan,
-                            onValueChange = { value ->
-                                onProjectChange(project.copy(tracks = project.tracks.map {
-                                    if (it.id == selectedTrack.id) it.copy(pan = value) else it
-                                }))
-                            },
-                            valueRange = -1f..1f,
-                            modifier = Modifier.fillMaxWidth().height(21.dp)
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SmallAction(if (selectedTrack.muted) "M✓" else "M") {
-                            onProjectChange(project.copy(tracks = project.tracks.map {
-                                if (it.id == selectedTrack.id) it.copy(muted = !it.muted) else it
-                            }))
+                    project.tracks.forEach { track ->
+                        val isSelected = selectedTrack?.id == track.id
+                        Surface(
+                            color = if (isSelected) Color(0xFF18443F) else Color(0xFF202328),
+                            shape = RoundedCornerShape(5.dp),
+                            modifier = Modifier.clickable { onSelectTrack(track.id) }
+                        ) {
+                            Text(track.name.take(18), color = if (isSelected) Mint else Color(0xFFD5D9E0),
+                                fontSize = 9.sp, maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
                         }
-                        SmallAction(if (selectedTrack.solo) "S✓" else "S") {
-                            onProjectChange(project.copy(tracks = project.tracks.map {
-                                if (it.id == selectedTrack.id) it.copy(solo = !it.solo) else it
-                            }))
+                    }
+                }
+                if (selectedTrack != null && page == "MIX") {
+                    Row(
+                        Modifier.fillMaxWidth().weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("VOLUME  ·  ${(selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt()}%",
+                                color = MutedText, fontSize = 9.sp)
+                            Slider(
+                                value = selectedTrack.volume.coerceIn(0f, 1.5f),
+                                onValueChange = { value ->
+                                    onProjectChange(project.copy(tracks = project.tracks.map {
+                                        if (it.id == selectedTrack.id) it.copy(volume = value) else it
+                                    }))
+                                },
+                                valueRange = 0f..1.5f,
+                                modifier = Modifier.fillMaxWidth().height(30.dp)
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            val pan = selectedTrack.pan.coerceIn(-1f, 1f)
+                            Text("PAN  ·  " + when {
+                                pan <= -0.95f -> "L"
+                                pan >= 0.95f -> "R"
+                                else -> (pan * 100).toInt().toString()
+                            }, color = MutedText, fontSize = 9.sp)
+                            Slider(
+                                value = pan,
+                                onValueChange = { value ->
+                                    onProjectChange(project.copy(tracks = project.tracks.map {
+                                        if (it.id == selectedTrack.id) it.copy(pan = value) else it
+                                    }))
+                                },
+                                valueRange = -1f..1f,
+                                modifier = Modifier.fillMaxWidth().height(30.dp)
+                            )
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            SmallAction(if (selectedTrack.muted) "MUTE ✓" else "MUTE") {
+                                onProjectChange(project.copy(tracks = project.tracks.map {
+                                    if (it.id == selectedTrack.id) it.copy(muted = !it.muted) else it
+                                }))
+                            }
+                            SmallAction(if (selectedTrack.solo) "SOLO ✓" else "SOLO") {
+                                onProjectChange(project.copy(tracks = project.tracks.map {
+                                    if (it.id == selectedTrack.id) it.copy(solo = !it.solo) else it
+                                }))
+                            }
+                        }
+                    }
+                } else if (selectedTrack != null) {
+                    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        val devices = when (selectedTrack.kind) {
+                            "audio" -> listOf("SAMPLE", "WARP (NOT IMPLEMENTED)", "AUDIO EFFECTS")
+                            "drum" -> listOf("DRUM PATTERN", "INSTRUMENT (NOT IMPLEMENTED)", "AUDIO EFFECTS")
+                            else -> listOf("MIDI NOTES", "INSTRUMENT (NOT IMPLEMENTED)", "MIDI EFFECTS", "AUDIO EFFECTS")
+                        }
+                        devices.forEachIndexed { index, label ->
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight()
+                                    .background(Color(0xFF202328), RoundedCornerShape(5.dp)).padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Text(label, color = if (index == 0) Mint else MutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    if (index == 0) "Track data available" else "Belum ada processor audio terhubung",
+                                    color = Color(0xFFD5D9E0), fontSize = 8.sp
+                                )
+                            }
                         }
                     }
                 }
@@ -3021,7 +3043,6 @@ private fun DeviceDock(
     }
 }
 
-@Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
         color = Color(0xFF353A42),
