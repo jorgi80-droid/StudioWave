@@ -107,7 +107,6 @@ class MidiNoteGestureTest {
         // At the minimum zoom, the shared mapping rounds 32 / 0.35 to 91 steps;
         // the 96-step ceiling is a safety bound, not the expected value at every minimum zoom.
         assertEquals(91, pianoRollVisibleSteps(16, 0.35f))
-        assertEquals(pianoRollVisibleSteps(16, 0.35f), pianoRollVisibleSteps(16, 0.35f))
         assertEquals(4, pianoRollVisibleSteps(0, 8f))
     }
 }
