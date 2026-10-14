@@ -806,7 +806,7 @@ private fun TransportBar(
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     Column(
-        Modifier.fillMaxWidth().background(Color(0xFF242528), RoundedCornerShape(7.dp))
+        Modifier.fillMaxWidth().background(LocalStudioWavePalette.current.panel, RoundedCornerShape(7.dp))
             .padding(horizontal = 7.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -819,10 +819,10 @@ private fun TransportBar(
                 Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = AbletonOrange,
                     maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp))
             }
-            Text("LIVE SET", color = Color(0xFF777B82), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("LIVE SET", color = LocalStudioWavePalette.current.muted.copy(alpha = 0.72f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text("BPM", color = MutedText, fontSize = 8.sp)
             SmallAction("−") { onBpm(bpm - 1) }
-            Surface(color = Color(0xFF111315), shape = RoundedCornerShape(4.dp)) {
+            Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(4.dp)) {
                 Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
             }
@@ -841,31 +841,31 @@ private fun TransportBar(
             horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             SmallIconButton(Icons.Default.Stop, MutedText, onStop)
             Surface(
-                color = if (playing) Color(0xFF553126) else Color(0xFF352722),
+                color = if (playing) LocalStudioWavePalette.current.accent.copy(alpha = 0.24f) else LocalStudioWavePalette.current.raised,
                 shape = RoundedCornerShape(7.dp),
                 modifier = Modifier.size(width = 42.dp, height = 32.dp).clickable(onClick = onPlay)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (playing) "Pause playback" else "Start playback",
-                        tint = if (playing) AbletonOrange else Color(0xFFFF9A72), modifier = Modifier.size(22.dp))
+                        tint = if (playing) LocalStudioWavePalette.current.accent else LocalStudioWavePalette.current.orange, modifier = Modifier.size(22.dp))
                 }
             }
-            Surface(color = Color(0xFF111315), shape = RoundedCornerShape(5.dp)) {
+            Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(5.dp)) {
                 Text(positionLabel, fontSize = 10.sp, fontWeight = FontWeight.Bold,
-                    color = Color(0xFFE4E8EF), modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), maxLines = 1)
+                    color = LocalStudioWavePalette.current.text, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), maxLines = 1)
             }
             Spacer(Modifier.weight(1f))
-            Text("MASTER", color = MutedText, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Text("MASTER", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Slider(value = master, onValueChange = onMaster,
                 modifier = Modifier.width(82.dp).height(30.dp), valueRange = 0f..1f)
             Column(Modifier.width(112.dp), verticalArrangement = Arrangement.Center) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("P ${peakDbfs.toInt()} dBFS", color = LocalStudioWavePalette.current.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text("${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
                 Canvas(Modifier.fillMaxWidth().height(9.dp)) {
-                    drawLine(Color(0xFF343A40), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
+                    drawLine(LocalStudioWavePalette.current.grid, Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
                     peakHistory.forEachIndexed { index, level ->
                         val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
                         val x = index * size.width / peakHistory.size.coerceAtLeast(1)
