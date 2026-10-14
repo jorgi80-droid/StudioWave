@@ -1415,6 +1415,11 @@ private fun TimelineGrid(
                     var previousCentroid = Offset.Zero
                     var previousSpan = 0f
                     var initialized = false
+                    var gestureBaseSpan = 0f
+                    var gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
+                    var gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                    var gestureAnchorTick = 0L
+                    var gestureAnchorTrackDp = 0f
                     do {
                         val event = awaitPointerEvent()
                         val pointers = event.changes.filter { it.pressed }
@@ -1425,27 +1430,34 @@ private fun TimelineGrid(
                             )
                             val span = pointers.map { (it.position - centroid).getDistance() }.average().toFloat() * 2f
                             if (initialized) {
-                                val zoomFactor = if (previousSpan > 1f && span > 1f) (span / previousSpan).coerceIn(0.70f, 1.40f) else 1f
+                                // Derive zoom from the starting pinch span instead of multiplying each
+                                // move event. This avoids cumulative clamping jumps and scale drift.
+                                val spanRatio = if (gestureBaseSpan > 1f && span > 1f) span / gestureBaseSpan else 1f
+                                val newZoom = (gestureBaseZoom * spanRatio).coerceIn(0.1f, 16f)
                                 val oldZoom = currentZoom.coerceIn(0.1f, 16f)
-                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.1f, 16f)
-                                val oldBarWidth = TimelineViewport(timebase, baseBarWidthPx * oldZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
+                                val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                                val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
                                 val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                                val pinchViewport = TimelineViewport(
-                                    timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat()
-                                )
-                                // Preserve the same musical tick under the moving pinch centroid.
-                                val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x)
                                 val newScroll = TimelineViewport(
                                     timebase, newBarWidth, currentScroll.toDouble(), size.width.toFloat()
-                                ).placeTickAtViewportX(anchorTick, centroid.x).scrollTimeTicks.toFloat()
-                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
-                                 val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
-                                 val anchorTrackDp = currentScrollTracks + (previousCentroid.y - rulerHeightPx) / (density.density * oldVerticalZoom).coerceAtLeast(0.1f)
-                                 val newTrackScroll = (anchorTrackDp - (centroid.y - rulerHeightPx) / (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
+                                ).placeTickAtViewportX(gestureAnchorTick, centroid.x).scrollTimeTicks.toFloat()
+                                val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
+                                    (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
                                 if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                 if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
                                 if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
+                            }
+                            if (!initialized) {
+                                gestureBaseSpan = span.coerceAtLeast(1f)
+                                gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
+                                gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                                val baseViewport = TimelineViewport(
+                                    timebase, baseBarWidthPx * gestureBaseZoom, currentScroll.toDouble(), size.width.toFloat()
+                                )
+                                gestureAnchorTick = baseViewport.viewportXToTime(centroid.x)
+                                gestureAnchorTrackDp = currentScrollTracks +
+                                    (centroid.y - rulerHeightPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
                             }
                             previousCentroid = centroid
                             previousSpan = span
@@ -1454,6 +1466,7 @@ private fun TimelineGrid(
                         } else {
                             initialized = false
                             previousSpan = 0f
+                            gestureBaseSpan = 0f
                             val pointer = pointers.firstOrNull()
                             if (pointer != null) {
                                 val delta = pointer.position - previousSinglePosition
