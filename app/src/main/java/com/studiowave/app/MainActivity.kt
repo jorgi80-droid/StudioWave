@@ -145,7 +145,7 @@ internal fun calculatePinchZoomFrame(
     val effectiveZoom = viewportScale / baseBarWidthPx
     // Pinch anchor is stored as a fractional tick, so returning to the start scale must
     // return the start scroll without an integer-tick snap.
-    val scroll = TimelineViewport(timebase, viewportScale, baseScrollTicks, 0f)
+    val scroll = TimelineViewport(timebase, viewportScale, baseScrollTicks, viewportWidthPx)
         .placeTickAtViewportX(anchorTick, centroidX).scrollTimeTicks
     return PinchZoomFrame(effectiveZoom, scroll)
 }
