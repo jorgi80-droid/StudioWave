@@ -3437,6 +3437,11 @@ private fun BrowserWorkspace(
                 clip.name.lowercase().contains(normalizedQuery) ||
                 track.name.lowercase().contains(normalizedQuery))
         }
+    val visibleClipEntries = when (category) {
+        "SAMPLES" -> clipEntries.filter { (track, clip) -> track.kind == "audio" && clip.sourceUri != null }
+        "CLIPS" -> clipEntries
+        else -> clipEntries
+    }
     Column(Modifier.fillMaxSize().background(p.room).padding(5.dp)) {
         Row(
             Modifier.fillMaxWidth().height(30.dp).background(p.panel, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp),
@@ -3542,7 +3547,7 @@ private fun BrowserWorkspace(
             "DEVICES" -> {}
             else -> {
                 Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    clipEntries.forEach { (track, clip) ->
+                    visibleClipEntries.forEach { (track, clip) ->
                         Row(
                             Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
