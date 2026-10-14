@@ -3208,9 +3208,14 @@ private fun PianoRollWorkspace(
                             val activeTrack = track
                             val activeClip = clip
                             if (activeTrack != null && activeClip != null) {
+                                val noteStartTick = (pageStartStep.toLong() * stepTicks)
+                                    .coerceIn(0L, (activeClip.lengthTicks - 1L).coerceAtLeast(0L))
+                                val noteDuration = stepTicks.coerceAtMost(
+                                    (activeClip.lengthTicks - noteStartTick).coerceAtLeast(1L)
+                                ).coerceAtLeast(1L)
                                 val note = com.studiowave.app.data.MidiNote(
-                                    pitch = pitch, startTick = (pageStartStep * stepTicks),
-                                    durationTicks = stepTicks, velocity = 100
+                                    pitch = pitch, startTick = noteStartTick,
+                                    durationTicks = noteDuration, velocity = 100
                                 )
                                 updateNotes(notes + note)
                                 selectedNoteId = note.id
