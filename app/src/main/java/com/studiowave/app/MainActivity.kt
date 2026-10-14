@@ -2535,6 +2535,7 @@ private fun PianoRollWorkspace(
             Spacer(Modifier.weight(1f))
             SmallAction(if (keyboardVisible) "PIANO KEYS" else "PIANO KEYS OFF") { keyboardVisible = !keyboardVisible }
             SmallAction(if (virtualKeyboardVisible) "KEYBOARD ON" else "KEYBOARD") { virtualKeyboardVisible = !virtualKeyboardVisible }
+            SmallAction(if (editToolsExpanded) "TOOLS" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
@@ -2557,7 +2558,6 @@ private fun PianoRollWorkspace(
             TransportAction("1/${snapDenominator}") {
                 snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 }
             }
-            SmallAction(if (editToolsExpanded) "TOOLS −" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
             SmallAction("BACK", onBack)
         }
         if (editToolsExpanded) {
