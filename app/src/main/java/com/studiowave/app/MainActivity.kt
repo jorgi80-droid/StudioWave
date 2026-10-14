@@ -175,7 +175,8 @@ internal fun transformMidiNoteFromGesture(
     val originalDuration = note.durationTicks.coerceIn(safeStep, safeClipLength)
     val safeDeltaSteps = deltaSteps.coerceIn(-100_000, 100_000)
     if (resize) {
-        val start = note.startTick.coerceIn(0L, (safeClipLength - 1L).coerceAtLeast(0L))
+        val latestAllowedStart = (safeClipLength - safeStep).coerceAtLeast(0L)
+        val start = note.startTick.coerceIn(0L, latestAllowedStart)
         val maxDuration = (safeClipLength - start).coerceAtLeast(safeStep)
         val requested = originalDuration.toDouble() + safeDeltaSteps.toDouble() * safeStep.toDouble()
         val duration = requested.coerceIn(safeStep.toDouble(), maxDuration.toDouble()).toLong()
