@@ -143,6 +143,22 @@ data class TimelineViewport(
         const val MAX_PIXELS_PER_BAR = 1200f
     }
 
+    /**
+     * Select a readable grid subdivision from the shared timebase and current zoom.
+     * Never return a zero-sized subdivision: the drawing loop advances by this value,
+     * so a zero result could freeze the UI for unusual PPQ/time-signature combinations.
+     */
+    fun gridSubdivisionTicks(beatPixels: Double): Long {
+        val beatTicks = timebase.ticksPerBeat
+        return when {
+            beatPixels >= 80.0 -> (beatTicks / 16L).coerceAtLeast(1L)
+            beatPixels >= 52.0 -> (beatTicks / 8L).coerceAtLeast(1L)
+            beatPixels >= 30.0 -> (beatTicks / 4L).coerceAtLeast(1L)
+            beatPixels >= 16.0 -> (beatTicks / 2L).coerceAtLeast(1L)
+            else -> 0L
+        }
+    }
+
     fun visibleSubdivisionTicks(pixelsPerTickThreshold: Double = 0.35): Long {
         val candidates = listOf(
             timebase.ticksPerBeat / 4L,
