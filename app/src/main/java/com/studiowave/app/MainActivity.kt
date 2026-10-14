@@ -1127,7 +1127,7 @@ private fun ArrangementWorkspace(
                 }
                 val viewportStart = (scrollTicks / endTick * size.width).toFloat().coerceIn(0f, size.width)
                 val visibleTicks = size.width.toDouble() /
-                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
                 val viewportWidth = (visibleTicks / endTick * size.width).toFloat().coerceIn(2f, size.width)
                 drawRoundRect(
                     Color.White.copy(alpha = 0.2f), Offset(viewportStart, 0f),
