@@ -54,7 +54,7 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
         } else {
             val descriptor = runCatching { appContext.contentResolver.openFileDescriptor(uri, "r") }.getOrNull()
             if (descriptor == null) 0 else runCatching {
-                descriptor.use { pool.load(it, 0L, it.statSize.coerceAtLeast(0L), 1) }
+                descriptor.use { pool.load(it.fileDescriptor, 0L, it.statSize.coerceAtLeast(0L), 1) }
             }.getOrDefault(0)
         }
         if (id == 0) { onLoaded(false); return }
