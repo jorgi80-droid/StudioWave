@@ -2589,7 +2589,6 @@ private fun TimelineGrid(
                                     ppq = project.ppq
                                 )
                             }
-                                }
                                 var leftResizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
                                 Box(
                                     Modifier.align(Alignment.CenterStart)
