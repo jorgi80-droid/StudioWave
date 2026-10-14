@@ -157,6 +157,41 @@ internal fun calculatePinchZoomFrame(
         .placeTickAtViewportX(anchorTick, centroidX).scrollTimeTicks
     return PinchZoomFrame(effectiveZoom, scroll)
 }
+/**
+ * Apply a horizontal/vertical Piano Roll gesture to an existing MIDI note.
+ * Timeline positions are clip-relative ticks; resizing always keeps a note inside the clip.
+ */
+internal fun transformMidiNoteFromGesture(
+    note: com.studiowave.app.data.MidiNote,
+    clipLengthTicks: Long,
+    stepTicks: Long,
+    deltaSteps: Int,
+    deltaPitch: Int,
+    resize: Boolean
+): com.studiowave.app.data.MidiNote {
+    val safeStep = stepTicks.coerceAtLeast(1L)
+    val safeClipLength = clipLengthTicks.coerceAtLeast(safeStep)
+    val start = note.startTick.coerceIn(0L, (safeClipLength - 1L).coerceAtLeast(0L))
+    val originalDuration = note.durationTicks.coerceIn(safeStep, safeClipLength)
+    val safeDeltaSteps = deltaSteps.coerceIn(-100_000, 100_000)
+    if (resize) {
+        val maxDuration = (safeClipLength - start).coerceAtLeast(safeStep)
+        val requested = originalDuration.toDouble() + safeDeltaSteps.toDouble() * safeStep.toDouble()
+        val duration = requested.coerceIn(safeStep.toDouble(), maxDuration.toDouble()).toLong()
+        return note.copy(startTick = start, durationTicks = duration.coerceIn(safeStep, maxDuration))
+    }
+    val maxStart = (safeClipLength - originalDuration).coerceAtLeast(0L)
+    val rawStart = (start.toDouble() + safeDeltaSteps.toDouble() * safeStep.toDouble())
+        .coerceIn(0.0, maxStart.toDouble()).toLong()
+    val quotient = (rawStart.toDouble() / safeStep.toDouble()).roundToLong()
+    val snappedStart = (quotient * safeStep).coerceIn(0L, maxStart)
+    return note.copy(
+        startTick = snappedStart,
+        durationTicks = originalDuration,
+        pitch = (note.pitch + deltaPitch.coerceIn(-119, 119)).coerceIn(0, 119)
+    )
+}
+
 /** Split a clip at an absolute arrangement tick while keeping both halves tied to source time. */
 internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Long): Pair<com.studiowave.app.data.WaveClip, com.studiowave.app.data.WaveClip>? {
     val start = clip.startTick.coerceAtLeast(0L)
@@ -2796,7 +2831,7 @@ private fun PianoRollWorkspace(
                                     val clickedStep = (visibleStartStep +
                                         (down.position.x / gestureColWidth).toInt().coerceIn(0, currentStepsForGesture - 1))
                                         .coerceIn(0, (clipLengthSteps - 1).coerceAtLeast(0))
-                                    val clickedPitch = (gestureTopPitch.value -
+                                    val clickedPitch = (currentTopPitch -
                                         (down.position.y / gestureRowHeight).toInt()).coerceIn(0, 119)
                                     val notesAtDown = gestureNotes.value
                                     val touchedNote = if (keyboardVisible) notesAtDown.firstOrNull { note ->
@@ -2860,28 +2895,14 @@ private fun PianoRollWorkspace(
                                         if (dragged) {
                                             val stepDelta = (accumulatedDelta.x / gestureColWidth).roundToInt().coerceIn(-100_000, 100_000)
                                             val pitchDelta = (-accumulatedDelta.y / gestureRowHeight).roundToInt().coerceIn(-119, 119)
-                                            val updatedNote = if (resizeNote) {
-                                                val maxDuration = (clip.lengthTicks - touchedNote.startTick).coerceAtLeast(stepTicks)
-                                                val duration = (touchedNote.durationTicks.toDouble() +
-                                                    stepDelta.toDouble() * stepTicks.toDouble())
-                                                    .coerceIn(stepTicks.toDouble(), maxDuration.toDouble())
-                                                    .toLong().coerceAtLeast(stepTicks)
-                                                touchedNote.copy(durationTicks = duration)
-                                            } else {
-                                                val duration = touchedNote.durationTicks.coerceAtLeast(stepTicks)
-                                                val maxStart = (clip.lengthTicks - duration).coerceAtLeast(0L)
-                                                val rawStart = (touchedNote.startTick.toDouble() +
-                                                    stepDelta.toDouble() * stepTicks.toDouble())
-                                                    .coerceIn(0.0, maxStart.toDouble()).toLong()
-                                                val snappedStart = if (stepTicks > 0L) {
-                                                    val quotient = (rawStart.toDouble() / stepTicks.toDouble()).roundToInt().toLong()
-                                                    (quotient * stepTicks).coerceIn(0L, maxStart)
-                                                } else rawStart
-                                                touchedNote.copy(
-                                                    startTick = snappedStart,
-                                                    pitch = (touchedNote.pitch + pitchDelta).coerceIn(0, 119)
-                                                )
-                                            }
+                                            val updatedNote = transformMidiNoteFromGesture(
+                                                note = touchedNote,
+                                                clipLengthTicks = clip.lengthTicks,
+                                                stepTicks = stepTicks,
+                                                deltaSteps = stepDelta,
+                                                deltaPitch = pitchDelta,
+                                                resize = resizeNote
+                                            )
                                             gestureNoteWriter.value(latestNotes.map { note ->
                                                 if (note.id == touchedNote.id) updatedNote else note
                                             })
