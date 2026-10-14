@@ -28,7 +28,7 @@ class DirectWaveSampler(context: Context) : AutoCloseable {
     @Volatile private var sampleId: Int = 0
     @Volatile private var loaded: Boolean = false
     @Volatile var pitchSemitones: Int = 0
-        set(value) { field = value.coerceIn(-24, 24) }
+        set(value) { field = value.coerceIn(-12, 12) }
     @Volatile var attackMs: Int = 5
         set(value) { field = value.coerceIn(0, 5000) }
     @Volatile var decayMs: Int = 120

@@ -4160,6 +4160,7 @@ private fun DeviceDock(
                     DirectWaveDevicePanel(
                         trackId = selectedTrack.id,
                         trackName = selectedTrack.name,
+                        trackKind = selectedTrack.kind,
                         palette = devicePalette
                     )
                 }
@@ -4171,8 +4172,24 @@ private fun DeviceDock(
 private fun DirectWaveDevicePanel(
     trackId: String,
     trackName: String,
+    trackKind: String,
     palette: StudioWavePalette
 ) {
+    if (trackKind != "midi") {
+        Column(
+            Modifier.fillMaxWidth().fillMaxHeight()
+                .background(palette.room, RoundedCornerShape(5.dp)).padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Text("DIRECTWAVE  /  INSTRUMENT DEVICE", color = palette.orange,
+                fontSize = 10.sp, fontWeight = FontWeight.Black)
+            Text("Select a MIDI track to use this instrument.",
+                color = palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("Tap a MIDI track such as SYNTH BASS or LEAD / CHORDS in the track strip above. The sample instrument is routed into Arrangement MIDI playback; it is not an audio-track effect.",
+                color = palette.muted, fontSize = 9.sp)
+        }
+        return
+    }
     val context = LocalContext.current
     val preferences = remember(context) {
         context.getSharedPreferences("studiowave_directwave", android.content.Context.MODE_PRIVATE)
@@ -4200,13 +4217,14 @@ private fun DirectWaveDevicePanel(
     }
     DisposableEffect(sampler) { onDispose { sampler.close() } }
     LaunchedEffect(trackId, sampler) {
-        pitch = preferences.getInt("pitch.$trackId", 0).toFloat()
+        pitch = preferences.getInt("pitch.$trackId", 0).toFloat().coerceIn(-12f, 12f)
         attack = preferences.getInt("attack.$trackId", 5).toFloat()
         decay = preferences.getInt("decay.$trackId", 120).toFloat()
         sustain = preferences.getInt("sustain.$trackId", 80) / 100f
         release = preferences.getInt("release.$trackId", 180).toFloat()
         loop = preferences.getBoolean("loop.$trackId", false)
-        sampler.pitchSemitones = pitch.toInt()
+        sampler.pitchSemitones = pitch.toInt().coerceIn(-12, 12)
+        sampler.fineTuneCents = preferences.getInt("fineTune.$trackId", 0).coerceIn(-100, 100)
         sampler.attackMs = attack.toInt()
         sampler.decayMs = decay.toInt()
         sampler.sustain = sustain
@@ -4219,7 +4237,7 @@ private fun DirectWaveDevicePanel(
         }
     }
     Column(
-        Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+        Modifier.fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState())
             .background(palette.room, RoundedCornerShape(5.dp)).padding(7.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
@@ -4245,8 +4263,19 @@ private fun DirectWaveDevicePanel(
                 pitch = it; sampler.pitchSemitones = it.toInt()
             }, onValueChangeFinished = {
                 preferences.edit().putInt("pitch.$trackId", pitch.toInt()).apply()
-            }, valueRange = -24f..24f, modifier = Modifier.weight(1f))
-            Text("±24", color = palette.muted, fontSize = 8.sp)
+            }, valueRange = -12f..12f, modifier = Modifier.weight(1f))
+            Text("±12", color = palette.muted, fontSize = 8.sp)
+        }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("FINE", color = palette.text, fontSize = 8.sp, modifier = Modifier.width(70.dp))
+            var fineTune by remember(trackId) { mutableFloatStateOf(preferences.getInt("fineTune.$trackId", 0).toFloat()) }
+            Slider(value = fineTune, onValueChange = {
+                fineTune = it; sampler.fineTuneCents = it.toInt()
+            }, onValueChangeFinished = {
+                preferences.edit().putInt("fineTune.$trackId", fineTune.toInt()).apply()
+            }, valueRange = -100f..100f, modifier = Modifier.weight(1f))
+            Text("${fineTune.toInt()}c", color = palette.muted, fontSize = 8.sp)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             DirectWaveEnvelopeControl("A", attack, 0f..2000f, palette, Modifier.weight(1f)) {
@@ -4289,7 +4318,7 @@ private fun DirectWaveDevicePanel(
             }
         }
         Text(
-            if (sampleReady) "16-voice sample playback · pitch · loop · ADSR · touch keyboard"
+            if (sampleReady) "16-voice audition · Arrangement MIDI sample instrument · pitch · fine tune · loop · ADSR"
             else "Load a local WAV/MP3 sample to enable audition. FL Studio .dwp/.instr import and multisample zones are not implemented yet.",
             color = palette.muted, fontSize = 8.sp
         )

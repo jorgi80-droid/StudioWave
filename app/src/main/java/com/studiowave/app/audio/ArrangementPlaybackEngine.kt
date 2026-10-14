@@ -172,13 +172,25 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val asset: AudioAsset
     )
 
+    private data class SamplerInstrument(
+        val asset: AudioAsset,
+        val looping: Boolean,
+        val pitchSemitones: Int,
+        val fineTuneCents: Int,
+        val attackMs: Int,
+        val decayMs: Int,
+        val sustain: Float,
+        val releaseMs: Int
+    )
+
     private data class NoteEvent(
         val startFrame: Long,
         val endFrame: Long,
         val pitch: Int,
         val velocity: Int,
         val pan: Float,
-        val track: StudioTrack
+        val track: StudioTrack,
+        val instrument: SamplerInstrument? = null
     )
 
     private data class DrumEvent(
@@ -320,6 +332,37 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val audioEvents = ArrayList<AudioEvent>()
         val notes = ArrayList<NoteEvent>()
         val drums = ArrayList<DrumEvent>()
+        val samplerPreferences = appContext.getSharedPreferences("studiowave_directwave", Context.MODE_PRIVATE)
+        val instrumentsByTrack = HashMap<String, SamplerInstrument>()
+        tracks.asSequence().filter { it.kind == "midi" }.forEach { track ->
+            ensureCurrent()
+            val uriText = samplerPreferences.getString("sample.${track.id}", null)?.takeIf { it.isNotBlank() }
+                ?: return@forEach
+            val uri = Uri.parse(uriText)
+            // Bound instrument decoding to 30 seconds and include it in the shared PCM budget.
+            val duration = (readSourceDurationSeconds(uri) ?: 10.0).coerceIn(0.05, 30.0)
+            val frameCount = ceil(duration * sampleRate).toLong()
+                .coerceIn(1L, sampleRate.toLong() * 30L).toInt()
+            estimatedBytes += frameCount.toLong() * 4L
+            require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
+                "Instrument samples exceed the safe PCM memory budget; shorten samples or use fewer instrument tracks"
+            }
+            val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
+            val asset = audioAssetCache.get(cacheKey) ?: decodeAudioAsset(uri, duration, token).also { decoded ->
+                ensureCurrent()
+                audioAssetCache.put(cacheKey, decoded)
+            }
+            instrumentsByTrack[track.id] = SamplerInstrument(
+                asset = asset,
+                looping = samplerPreferences.getBoolean("loop.${track.id}", false),
+                pitchSemitones = samplerPreferences.getInt("pitch.${track.id}", 0).coerceIn(-24, 24),
+                fineTuneCents = samplerPreferences.getInt("fineTune.${track.id}", 0).coerceIn(-100, 100),
+                attackMs = samplerPreferences.getInt("attack.${track.id}", 5).coerceIn(0, 5000),
+                decayMs = samplerPreferences.getInt("decay.${track.id}", 120).coerceIn(0, 5000),
+                sustain = (samplerPreferences.getInt("sustain.${track.id}", 80) / 100f).coerceIn(0f, 1f),
+                releaseMs = samplerPreferences.getInt("release.${track.id}", 180).coerceIn(0, 5000)
+            )
+        }
         tracks.forEach { track ->
             ensureCurrent()
             track.clips.forEach clipLoop@{ clip ->
@@ -345,7 +388,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         if (noteEnd > noteStart) {
                             notes.add(NoteEvent(
                                 noteStart, noteEnd, note.pitch.coerceIn(0, 127),
-                                note.velocity.coerceIn(1, 127), note.pan.coerceIn(-1f, 1f), track
+                                note.velocity.coerceIn(1, 127), note.pan.coerceIn(-1f, 1f), track,
+                                instrumentsByTrack[track.id]
                             ))
                         }
                     }
@@ -643,28 +687,60 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
+                    val instrument = note.instrument
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
                     val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
-                    val gain = channelGain * liveMasterGain
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
+                    val instrumentRate = instrument?.let {
+                        2.0.pow(((note.pitch - 60 + it.pitchSemitones).toDouble() + it.fineTuneCents / 100.0) / 12.0)
+                    } ?: 1.0
+                    val attackFrames = instrument?.let { it.attackMs.toLong() * sampleRate / 1000L } ?: 0L
+                    val decayFrames = instrument?.let { it.decayMs.toLong() * sampleRate / 1000L } ?: 0L
+                    val releaseFrames = instrument?.let { it.releaseMs.toLong() * sampleRate / 1000L } ?: 0L
                     for (absolute in from until to) {
                         val elapsed = absolute - note.startFrame
-                        val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
-                        val attack = min(1f, elapsed.toFloat() / (sampleRate * 0.008f))
-                        val release = min(1f, (noteLength - elapsed).toFloat() / (sampleRate * 0.035f))
-                        val envelope = min(attack, release)
-                        val channelWave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * channelGain * envelope
-                        val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
-                        val sourceLeft = channelWave * leftPan
-                        val sourceRight = channelWave * rightPan
-                        mix[outIndex] += wave * leftPan
-                        mix[outIndex + 1] += wave * rightPan
-                        channelBuffer[outIndex] += sourceLeft
-                        channelBuffer[outIndex + 1] += sourceRight
+                        if (instrument != null) {
+                            var sourceFrame = (elapsed.toDouble() * instrumentRate).toLong()
+                            if (instrument.looping) {
+                                sourceFrame %= instrument.asset.frames.toLong().coerceAtLeast(1L)
+                            } else if (sourceFrame >= instrument.asset.frames) {
+                                continue
+                            }
+                            val attackGain = if (attackFrames <= 0L) 1f
+                                else (elapsed.toFloat() / attackFrames.toFloat()).coerceIn(0f, 1f)
+                            val decayProgress = if (decayFrames <= 0L) 1f
+                                else ((elapsed - attackFrames).toFloat() / decayFrames.toFloat()).coerceIn(0f, 1f)
+                            val sustainGain = if (elapsed <= attackFrames) attackGain
+                                else 1f - (1f - instrument.sustain) * decayProgress
+                            val releaseGain = if (releaseFrames <= 0L) 1f
+                                else ((note.endFrame - absolute).toFloat() / releaseFrames.toFloat()).coerceIn(0f, 1f)
+                            val envelope = min(sustainGain, releaseGain)
+                            val sampleIndex = sourceFrame.toInt().coerceIn(0, instrument.asset.frames - 1) * 2
+                            val velocityGain = channelMix.volume * (note.velocity / 127f) * envelope
+                            val sourceLeft = instrument.asset.pcmStereo[sampleIndex] / 32768f * velocityGain * leftPan
+                            val sourceRight = instrument.asset.pcmStereo[sampleIndex + 1] / 32768f * velocityGain * rightPan
+                            mix[outIndex] += sourceLeft * liveMasterGain
+                            mix[outIndex + 1] += sourceRight * liveMasterGain
+                            channelBuffer[outIndex] += sourceLeft
+                            channelBuffer[outIndex + 1] += sourceRight
+                        } else {
+                            val attack = min(1f, elapsed.toFloat() / (sampleRate * 0.008f))
+                            val release = min(1f, (noteLength - elapsed).toFloat() / (sampleRate * 0.035f))
+                            val envelope = min(attack, release)
+                            val channelWave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * channelGain * envelope
+                            val wave = channelWave * liveMasterGain
+                            val sourceLeft = channelWave * leftPan
+                            val sourceRight = channelWave * rightPan
+                            mix[outIndex] += wave * leftPan
+                            mix[outIndex + 1] += wave * rightPan
+                            channelBuffer[outIndex] += sourceLeft
+                            channelBuffer[outIndex + 1] += sourceRight
+                        }
                     }
                 }
 
