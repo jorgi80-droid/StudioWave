@@ -76,3 +76,27 @@ This implementation uses the Ableton Live 12 Reference Manual as a workflow and 
 - **Device and rack processing:** no serializable device/effect chain, sample instrument registry or warp/time-stretch processor exists yet. Do not mark unavailable effects or warp controls as working; model and audio-engine implementation are required first.
 - **Validation:** CI #516 passed Browser category/filter empty states, #519 passed selected-clip routing and four drum-pattern normalization tests, and #520 passed lazy horizontal step-cell rendering. CI #522 passed source-duration range calculation, #523 passed Arrangement waveform integration, and #524 passed four `AudioWaveformRangeTest` cases with APK upload. CI #525 is verifying the documentation refresh; the newest head remains pending until that run finishes. Temporary callback compile failures in #510–#514 were corrected; #515 and later code/test runs through #524 passed.
 - **References:** retain the official Live 12 manual links below and use the interface as a reference, not as a source for redistributing proprietary images/fonts/assets.
+
+
+## Required design reference from the project owner (2026-10-15)
+
+The visual target is **Ableton Live 12-inspired at the control-surface level**, adapted for a landscape-first phone—not merely similar colors. Compare and progressively align the following:
+
+- **Arrangement View** — https://www.ableton.com/en/live-manual/12/arrangement-view/#arrangement-view
+- **Clip View** — https://www.ableton.com/en/live-manual/12/clip-view/#clip-view
+- **Audio Clips, Tempo and Warping** — https://www.ableton.com/en/live-manual/12/audio-clips-tempo-and-warping/#audio-clips-tempo-and-warping
+- **MIDI Editor / Piano Roll** — https://www.ableton.com/en/live-manual/12/editing-midi/#editing-midi
+- **Mixing** — https://www.ableton.com/en/live-manual/12/mixing/#mixing
+- **Device View / Instruments and Effects** — https://www.ableton.com/en/live-manual/12/working-with-instruments-and-effects/#working-with-instruments-and-effects
+- **Instrument, Drum and Effect Racks** — https://www.ableton.com/en/live-manual/12/instrument-drum-and-effect-racks/#instrument-drum-and-effect-racks
+- **Live Concepts** — https://www.ableton.com/en/live-manual/12/live-concepts/#live-concepts
+
+### Visual audit checklist
+1. Match the hierarchy, proportions, spacing, alignment, labels, and contrast of the Live interface as closely as practical on mobile.
+2. Rework buttons, toggles, faders, knobs, gain displays, meters, device headers, track headers and clip information together as a coherent control system. Use original Compose/vector drawing—not extracted proprietary assets.
+3. Arrangement clips must show meaningful content: MIDI notes, drum hits, or decoded audio waveform, plus readable clip identity and time/length cues when space permits. Visuals must stay clipped to the clip bounds and correctly follow zoom/resize.
+4. Faders and knobs must be interactive and tied to actual project or engine values. Do not make fake controls to imitate screenshots; mark unsupported device processing as unavailable.
+5. Design for direct touch: accessible target sizes, long-press/context actions, clear selected/active/disabled states, compact toolbar, and a usable primary timeline.
+6. Validate every visual increment with CI build and unit tests; verify on a physical Android device before claiming accurate touch feel, latency or frame pacing.
+
+Do not describe the UI as “100% Ableton” until a screenshot-by-screenshot audit and device test have actually passed. This file is the persistent design contract for future StudioWave work.
