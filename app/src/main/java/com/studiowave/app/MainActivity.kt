@@ -2540,16 +2540,16 @@ private fun PianoRollWorkspace(
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
                 val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
-                val anchor = startStep + oldVisible / 2
+                val anchor = pageStartStep + oldVisible / 2
                 zoomX = nextZoom
                 startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
             }
             Text("BAR ${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            TransportAction("+") {
+            TransportAction("−") {
                 val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
                 val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
-                val anchor = startStep + oldVisible / 2
+                val anchor = pageStartStep + oldVisible / 2
                 zoomX = nextZoom
                 startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
             }
@@ -2743,7 +2743,7 @@ private fun PianoRollWorkspace(
                                         val step = (gestureStartStep.value + (down.position.x / liveColWidth).toInt().coerceIn(0, liveStepsOnScreen - 1))
                                         val row = (down.position.y / rowHeightPx).toInt()
                                         val pitch = (currentTopPitch - row).coerceIn(0, 119)
-                                        val startTick = snapStep(step) * stepTicks
+                                        val startTick = snapStep(currentStart + step) * stepTicks
                                         val hitNote = notes.firstOrNull { note ->
                                             val noteStartStep = (note.startTick / stepTicks).toInt()
                                             val noteEndStep = noteStartStep +
