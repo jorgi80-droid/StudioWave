@@ -15,6 +15,18 @@ class TimelineViewportTest {
         assertEquals(1799L, viewport.lastVisibleBar(10))
     }
 
+    @Test fun longArrangementTicksRemainBoundedAt1800BarsAcrossZoomAndPan() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val endTick = maxArrangementTick(timebase)
+        listOf(20f, 74f, 600f, 1200f, 4800f).forEach { scale ->
+            val viewport = TimelineViewport(timebase, scale, endTick.toDouble(), 1000f)
+            assertTrue(viewport.scrollTimeTicks <= endTick.toDouble())
+            assertEquals(endTick, viewport.screenXToTime(Float.MAX_VALUE))
+            assertTrue(viewport.panByScreenPixels(-100_000f).scrollTimeTicks <= endTick.toDouble())
+            assertTrue(viewport.placeTickAtViewportX(endTick.toDouble(), 500f).scrollTimeTicks <= endTick.toDouble())
+        }
+    }
+
     @Test fun pinchFrameReturnsToStartScaleAndScrollAfterRelease() {
         val timebase = TimelineTimebase(120, 4, 4, 960)
         val initialZoom = 1f
