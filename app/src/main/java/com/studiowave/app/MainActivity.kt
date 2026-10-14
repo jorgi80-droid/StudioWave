@@ -892,13 +892,12 @@ private fun ArrangementWorkspace(
             showTimelineMenu = false
         }
     }
-    LaunchedEffect(selectedWorkspace) {
-        if (selectedWorkspace != "ARRANGEMENT") {
-            showTimelineMenu = false
-            showAddTrack = false
-            clipMenu = null
+    LaunchedEffect(project.tracks, selectedClip) {
+        val stillExists = selectedClip != null && project.tracks.any { track -> track.clips.any { it.id == selectedClip } }
+        if (!stillExists) {
+            selectedClip = null
             showClipView = false
-            addTrackMenu = false
+            clipMenu = null
         }
     }
     LaunchedEffect(selectedClipModel) {
