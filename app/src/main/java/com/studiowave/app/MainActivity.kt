@@ -1469,22 +1469,21 @@ private fun TimelineGrid(
                             )
                             val span = pointers.map { (it.position - centroid).getDistance() }.average().toFloat() * 2f
                             if (initialized && pointers.size == gesturePointerCount) {
-                                // Derive zoom from the starting pinch span instead of multiplying each
-                                // move event. This avoids cumulative clamping jumps and scale drift.
+                                // Derive every scale/scroll frame from the same baseline.
                                 val frame = calculatePinchZoomFrame(
                                     timebase, gestureBaseZoom, gestureBaseScrollTicks, gestureBaseSpan, span,
                                     gestureAnchorTick, centroid.x, baseBarWidthPx
                                 )
                                 val spanRatio = if (gestureBaseSpan > 1f && span > 1f) span / gestureBaseSpan else 1f
                                 val newZoom = frame.zoom
+                                val newScroll = frame.scrollTicks
                                 val oldZoom = currentZoom.coerceIn(0.1f, 16f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
-                                val newScroll = frame.scrollTicks
                                 val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
                                     (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
-                                if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
+                                if (kotlin.math.abs(newScroll - currentScroll) > 0.0005) currentOnScroll(newScroll)
                                 if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
                                 if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
                             }
