@@ -97,4 +97,14 @@ class MidiNoteGestureTest {
         assertEquals(0L, safe[1].startTick)
         assertEquals(100L, safe[1].durationTicks)
     }
+
+    @Test
+    fun pianoRollVisibleStepMappingUsesOneStableRoundingRule() {
+        assertEquals(32, pianoRollVisibleSteps(16, 1f))
+        assertEquals(26, pianoRollVisibleSteps(16, 1.25f))
+        assertEquals(40, pianoRollVisibleSteps(16, 0.8f))
+        assertEquals(4, pianoRollVisibleSteps(16, 8f))
+        assertEquals(96, pianoRollVisibleSteps(16, 0.35f))
+        assertEquals(4, pianoRollVisibleSteps(0, 8f))
+    }
 }
