@@ -2849,6 +2849,22 @@ private fun PianoRollWorkspace(
     val gestureNoteWriter = rememberUpdatedState<(List<com.studiowave.app.data.MidiNote>) -> Unit> { updated ->
         updateNotes(updated)
     }
+    fun quantizeSelectedNotes() {
+        val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+        if (ids.isEmpty()) { editMessage = "Select notes first"; return }
+        val quantized = notes.map { note ->
+            if (note.id !in ids) note else {
+                val snappedStart = ((note.startTick + stepTicks / 2L) / stepTicks) * stepTicks
+                val snappedEnd = ((note.startTick + note.durationTicks + stepTicks / 2L) / stepTicks) * stepTicks
+                val safeStart = snappedStart.coerceAtLeast(0L)
+                val safeEnd = maxOf(safeStart + stepTicks, snappedEnd)
+                note.copy(startTick = safeStart, durationTicks = (safeEnd - safeStart).coerceAtLeast(stepTicks))
+            }
+        }
+        updateNotes(quantized)
+        editMessage = "Quantized ${ids.size} note(s) to 1/$snapDenominator"
+    }
+
     fun snapStep(raw: Int): Int = (raw / 1).coerceAtLeast(0)
     fun pitchLabel(pitch: Int): String {
         val names = arrayOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
@@ -2904,7 +2920,7 @@ private fun PianoRollWorkspace(
             TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
             TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
             TransportAction("1/${snapDenominator}") {
-                snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 }
+                snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
             }
             SmallAction("BACK", onBack)
         }
@@ -2939,8 +2955,7 @@ private fun PianoRollWorkspace(
                     } else editMessage = "Select a note first"
                 }
                 SmallAction("SNAP") {
-                    snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
-                    editMessage = "Snap 1/$snapDenominator"
+                    quantizeSelectedNotes()
                 }
                 SmallAction("LEGATO") {
                     val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
