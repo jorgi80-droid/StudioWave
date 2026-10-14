@@ -395,6 +395,7 @@ private fun StudioWaveApp() {
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
     var editorTrackId by remember { mutableStateOf<String?>(null) }
+    var editorClipId by remember { mutableStateOf<String?>(null) }
     var scratchOffset by remember { mutableFloatStateOf(0f) }
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
@@ -831,7 +832,8 @@ private fun StudioWaveApp() {
                         "PIANO ROLL" -> PianoRollWorkspace(
                             project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "midi" }
                                 ?: project.tracks.firstOrNull { it.kind == "midi" },
-                            project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" }
+                            project, { changeProject(it) }, onBack = { selectedWorkspace = "ARRANGEMENT" },
+                            selectedClipId = editorClipId
                         )
                         "BROWSER" -> BrowserWorkspace(
                             project = project,
@@ -846,17 +848,20 @@ private fun StudioWaveApp() {
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(
                             project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "drum" }
                                 ?: project.tracks.firstOrNull { it.kind == "drum" },
-                            { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" }
+                            { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" },
+                            selectedClipId = editorClipId
                         )
                         "AUDIO EDITOR" -> AudioEditorWorkspace(
                             track = project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "audio" }
                                 ?: project.tracks.firstOrNull { it.kind == "audio" },
                             project = project,
                             onProjectChange = { changeProject(it) },
-                            onBack = { selectedWorkspace = "ARRANGEMENT" }
+                            onBack = { selectedWorkspace = "ARRANGEMENT" },
+                            selectedClipId = editorClipId
                         )
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId ->
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId, clipId ->
                                 editorTrackId = trackId
+                                editorClipId = clipId
                                 selectedWorkspace = workspace
                                 showDock = false
                             },
