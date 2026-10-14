@@ -306,29 +306,33 @@ private fun StudioWaveApp() {
                     snapshot,
                     gain,
                     onCompleted = {
-                        if (session == playbackSession) {
-                            playheadTick = snapshot.tracks.asSequence().flatMap { it.clips.asSequence() }
-                                .maxOfOrNull { clip ->
-                                    val start = clip.startTick.coerceAtLeast(0L)
-                                    val length = clip.lengthTicks.coerceAtLeast(1L)
-                                    if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
-                                } ?: playheadTick
-                            playing = false
-                            playbackLoading = false
-                            playbackJob = null
+                        playbackScope.launch(Dispatchers.Main.immediate) {
+                            if (session == playbackSession) {
+                                playheadTick = snapshot.tracks.asSequence().flatMap { it.clips.asSequence() }
+                                    .maxOfOrNull { clip ->
+                                        val start = clip.startTick.coerceAtLeast(0L)
+                                        val length = clip.lengthTicks.coerceAtLeast(1L)
+                                        if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
+                                    } ?: playheadTick
+                                playing = false
+                                playbackLoading = false
+                                playbackJob = null
+                            }
                         }
                     },
                     onError = { message ->
-                        if (session == playbackSession) {
-                            playing = false
-                            playbackLoading = false
-                            playbackJob = null
-                            audioError = message
+                        playbackScope.launch(Dispatchers.Main.immediate) {
+                            if (session == playbackSession) {
+                                playing = false
+                                playbackLoading = false
+                                playbackJob = null
+                                audioError = message
+                            }
                         }
                     },
                     startAtTick = startTick,
                     onProgress = { positionTicks ->
-                        withContext(Dispatchers.Main.immediate) {
+                        playbackScope.launch(Dispatchers.Main.immediate) {
                             if (session == playbackSession) {
                                 val nextTick = positionTicks.coerceAtLeast(0L)
                                 if (nextTick >= playheadTick) playheadTick = nextTick
