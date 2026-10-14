@@ -752,6 +752,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         generation.incrementAndGet()
         scratchOffsetsMs.clear()
         stopOutputOnly()
+        trackMeterBits.keys.forEach { id -> publishTrackMeter(id, 0f, 0f) }
     }
 
     private fun stopOutputOnly() {
