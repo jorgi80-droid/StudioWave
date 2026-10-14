@@ -2483,10 +2483,13 @@ private fun PianoRollWorkspace(
     var clipboard by remember(track?.id, clip?.id) { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
     var editMessage by remember(track?.id, clip?.id) { mutableStateOf("Pinch to zoom · drag empty grid to scroll") }
 
-    val stepTicks = (project.ppq.toLong() * 4L / snapDenominator.toLong()).coerceAtLeast(1L)
-    val beatTicks = (project.ppq.toLong() * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
-    val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
-    val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks).toInt().coerceAtLeast(1)
+    val safePpq = project.ppq.coerceIn(24, 3840).toLong()
+    val ticksPerQuarter = safePpq
+    val stepTicks = (ticksPerQuarter * 4L / snapDenominator.toLong()).coerceAtLeast(1L)
+    val beatTicks = (ticksPerQuarter * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
+    val stepsPerBeat = (beatTicks.toDouble() / stepTicks.toDouble()).roundToInt().coerceAtLeast(1)
+    val ticksPerBar = (beatTicks * project.numerator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
+    val stepsPerBar = (ticksPerBar.toDouble() / stepTicks.toDouble()).roundToInt().coerceAtLeast(1)
     val rowHeight = (18f * zoomY).coerceIn(10f, 44f)
     val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
     // Base the visible musical span on the selected clip duration, like Arrangement zoom:
@@ -2494,8 +2497,7 @@ private fun PianoRollWorkspace(
     val clipLengthSteps = kotlin.math.ceil(rawLengthTicks.toDouble() / stepTicks.toDouble())
         .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(1)
     val stepsOnScreen = kotlin.math.ceil(
-        (project.ppq.toDouble() * 4.0 * project.numerator.coerceAtLeast(1).toDouble() /
-            project.denominator.coerceAtLeast(1).toDouble()) / stepTicks.toDouble() *
+        ticksPerBar.toDouble() / stepTicks.toDouble() *
             2.0 / zoomX.coerceIn(0.35f, 8f)
     ).toInt().coerceIn(4, 96)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
