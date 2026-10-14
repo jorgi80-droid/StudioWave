@@ -164,6 +164,19 @@ internal fun calculatePinchZoomFrame(
  * Keep note events inside a clip's relative musical duration.
  * Notes fully beyond the new end are removed; crossing notes are shortened.
  */
+/** Clamp Piano Roll's top pitch so every row fits the 0..127 MIDI range. */
+internal fun clampPianoRollTopPitch(topPitch: Int, visiblePitchRows: Int): Int {
+    val visibleRows = visiblePitchRows.coerceIn(1, 128)
+    return topPitch.coerceIn(visibleRows - 1, 127)
+}
+
+internal fun pianoRollPitchScrollIndex(topPitch: Int): Int =
+    127 - topPitch.coerceIn(0, 127)
+
+/**
+ * Keep note events inside a clip's relative musical duration.
+ * Notes fully beyond the new end are removed; crossing notes are shortened.
+ */
 internal fun fitMidiNotesToClip(
     notes: List<com.studiowave.app.data.MidiNote>,
     clipLengthTicks: Long
@@ -2919,11 +2932,14 @@ private fun PianoRollWorkspace(
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
-                        val keyMaxTopPitch = (127 - keyVisibleRows + 1).coerceAtLeast(0)
-                        val keyTopPitch = topPitch.coerceIn(keyMaxTopPitch, 127)
-                        val keyScrollPx = rememberScrollState(((127 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
-                        LaunchedEffect(topPitch, keyRowHeightPx, constraints.maxHeight) {
-                            keyScrollPx.scrollTo(((127 - keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0))
+                        val keyTopPitch = clampPianoRollTopPitch(topPitch, keyVisibleRows)
+                        val keyScrollPx = rememberScrollState(
+                            (pianoRollPitchScrollIndex(keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0)
+                        )
+                        LaunchedEffect(keyTopPitch, keyRowHeightPx, constraints.maxHeight) {
+                            keyScrollPx.scrollTo(
+                                (pianoRollPitchScrollIndex(keyTopPitch) * keyRowHeightPx).roundToInt().coerceAtLeast(0)
+                            )
                         }
                         Column(Modifier.verticalScroll(keyScrollPx)
                             .height((rowHeight * 128f).dp)) {
@@ -2933,7 +2949,12 @@ private fun PianoRollWorkspace(
                                 Box(
                                     Modifier.fillMaxWidth().height(rowHeight.dp)
                                         .background(if (isBlack) LocalStudioWavePalette.current.room else LocalStudioWavePalette.current.control)
-                                        .clickable { topPitch = (pitch + keyVisibleRows - 1).coerceIn(0, keyMaxTopPitch) },
+                                        .clickable {
+                                            topPitch = clampPianoRollTopPitch(
+                                                (pitch + keyVisibleRows - 1).coerceAtMost(127),
+                                                keyVisibleRows
+                                            )
+                                        },
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     if (isC || pitch % 12 == 4 || pitch % 12 == 7) {
@@ -2965,8 +2986,7 @@ private fun PianoRollWorkspace(
                     val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
                     val rowHeightPx = with(pianoDensity) { currentRowHeight.dp.toPx() }
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
-                    val maxTopPitch = (127 - visiblePitchRows + 1).coerceAtLeast(0)
-                    val currentTopPitch = gestureTopPitch.value.coerceIn(maxTopPitch, 127)
+                    val currentTopPitch = clampPianoRollTopPitch(gestureTopPitch.value, visiblePitchRows)
                     val colWidthPx = (viewportWidthPx / currentStepsOnScreen.toFloat()).coerceAtLeast(2f)
                     val currentStart = gestureStartStep.value.coerceIn(0, (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0))
                     val maxHorizontalScroll = (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0)
@@ -3010,8 +3030,10 @@ private fun PianoRollWorkspace(
                                             val newStart = (anchorStep - midpoint.x / newColWidth).roundToInt()
                                                 .coerceIn(0, (newClipSteps - newSteps).coerceAtLeast(0))
                                             val visibleRowsAfterZoom = (viewportHeightPx / newRowHeight).roundToInt().coerceIn(12, 128)
-                                            val newTop = (anchorPitch + midpoint.y / newRowHeight).roundToInt()
-                                                .coerceIn((visibleRowsAfterZoom - 1).coerceAtMost(127), 127)
+                                            val newTop = clampPianoRollTopPitch(
+                                                (anchorPitch + midpoint.y / newRowHeight).roundToInt(),
+                                                visibleRowsAfterZoom
+                                            )
                                             if (kotlin.math.abs(newZoomX - gestureZoomX.value) > 0.0005f) zoomX = newZoomX
                                             if (kotlin.math.abs(newZoomY - gestureZoomY.value) > 0.0005f) zoomY = newZoomY
                                             if (newStart != gestureStartStep.value) startStep = newStart
