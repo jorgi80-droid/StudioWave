@@ -2902,6 +2902,34 @@ private fun PianoRollWorkspace(
                     snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
                     editMessage = "Snap 1/$snapDenominator"
                 }
+                SmallAction("LEGATO") {
+                    val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
+                    if (selected.size >= 2) {
+                        val ordered = selected.sortedBy { it.startTick }
+                        val legato = ordered.mapIndexed { index, note ->
+                            val nextStart = ordered.getOrNull(index + 1)?.startTick
+                                ?: (note.startTick + note.durationTicks)
+                            note.copy(durationTicks = (nextStart - note.startTick).coerceAtLeast(stepTicks))
+                        }
+                        val byId = legato.associateBy { it.id }
+                        updateNotes(notes.map { byId[it.id] ?: it })
+                        editMessage = "Legato applied to ${legato.size} notes"
+                    } else editMessage = "Select at least two notes"
+                }
+                SmallAction("OCT−") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isNotEmpty()) {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch - 12).coerceAtLeast(0)) else note })
+                        editMessage = "Selection down one octave"
+                    } else editMessage = "Select notes first"
+                }
+                SmallAction("OCT+") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isNotEmpty()) {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch + 12).coerceAtMost(127)) else note })
+                        editMessage = "Selection up one octave"
+                    } else editMessage = "Select notes first"
+                }
                 SmallAction("PASTE") {
                     val source = clipboard
                     if (source == null) {
