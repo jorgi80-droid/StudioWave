@@ -2508,10 +2508,12 @@ private fun PianoRollWorkspace(
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
     val currentTopPitch = topPitch.coerceIn(0, 119)
-    val highestPitch = currentTopPitch
+    val highestPitch = currentVisibleTop
     val lowestPitch = (highestPitch - 119 + 1).coerceAtLeast(0)
     val visiblePitchRows = (600f / rowHeight).roundToInt().coerceIn(12, 120)
-    val verticalScroll = rememberScrollState(((119 - currentTopPitch) * rowHeight).roundToInt().coerceAtLeast(0))
+    val maxTopPitch = (visiblePitchRows - 1).coerceAtMost(119)
+    val currentVisibleTop = currentTopPitch.coerceIn(0, maxTopPitch)
+    val verticalScroll = rememberScrollState(((119 - currentVisibleTop) * rowHeight).roundToInt().coerceAtLeast(0))
 
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
         val activeTrack = track ?: return
@@ -2595,7 +2597,7 @@ private fun PianoRollWorkspace(
                             Box(
                                 Modifier.fillMaxWidth().height(rowHeight.dp)
                                     .background(if (isBlack) Color(0xFF17191C) else Color(0xFF343840))
-                                    .clickable { topPitch = (pitch + visiblePitchRows - 1).coerceIn(0, 119) },
+                                    .clickable { topPitch = (pitch + visiblePitchRows - 1).coerceIn(0, maxTopPitch) },
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 if (isC || pitch % 12 == 4 || pitch % 12 == 7) {
@@ -2653,7 +2655,7 @@ private fun PianoRollWorkspace(
                                                 startStep = (startStep - (delta.x / colWidthPx).roundToInt()).coerceIn(0, maxStartStep)
                                             }
                                             if (kotlin.math.abs(delta.y) > 1f) {
-                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(0, 119)
+                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(0, maxTopPitch)
                                             }
                                             lastDistance = newSpan
                                             lastMid = mid
