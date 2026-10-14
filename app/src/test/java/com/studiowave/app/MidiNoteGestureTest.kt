@@ -61,4 +61,26 @@ class MidiNoteGestureTest {
         assertEquals(240L, result.durationTicks)
         assertEquals(2400L, result.startTick + result.durationTicks)
     }
+
+    @Test
+    fun shrinkingClipDropsNotesPastEndAndShortensCrossingNotes() {
+        val crossing = MidiNote(pitch = 60, startTick = 800L, durationTicks = 500L)
+        val outside = MidiNote(pitch = 64, startTick = 1200L, durationTicks = 240L)
+        val safe = fitMidiNotesToClip(listOf(crossing, outside), clipLengthTicks = 1000L)
+        assertEquals(1, safe.size)
+        assertEquals(800L, safe.single().startTick)
+        assertEquals(200L, safe.single().durationTicks)
+    }
+
+    @Test
+    fun noteFitPreservesNotesWithinClipAndClampsNegativeStart() {
+        val normal = MidiNote(pitch = 64, startTick = 300L, durationTicks = 240L)
+        val malformed = MidiNote(pitch = 65, startTick = -30L, durationTicks = 100L)
+        val safe = fitMidiNotesToClip(listOf(normal, malformed), clipLengthTicks = 960L)
+        assertEquals(2, safe.size)
+        assertEquals(300L, safe[0].startTick)
+        assertEquals(240L, safe[0].durationTicks)
+        assertEquals(0L, safe[1].startTick)
+        assertEquals(100L, safe[1].durationTicks)
+    }
 }
