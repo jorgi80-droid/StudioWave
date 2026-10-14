@@ -2473,39 +2473,37 @@ private fun PianoRollWorkspace(
         return names[Math.floorMod(pitch, 12)] + (pitch / 12 - 1)
     }
 
-    Column(Modifier.fillMaxSize().background(pianoPalette.room, RoundedCornerShape(5.dp)).padding(3.dp)) {
+    Column(Modifier.fillMaxSize().background(pianoPalette.room).padding(2.dp)) {
+        // Clip identity and editing actions share one shallow strip so the note grid wins height.
         Row(
-            Modifier.fillMaxWidth().height(18.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp))
-                .padding(horizontal = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically
+            Modifier.fillMaxWidth().height(28.dp)
+                .background(pianoPalette.panel, RoundedCornerShape(4.dp))
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("MIDI", color = pianoPalette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
-            Text("${track?.name ?: "NO TRACK"}  /  ${clip?.name ?: "NO CLIP"}",
-                color = pianoPalette.text, fontSize = 8.sp, maxLines = 1)
+            Text("MIDI", color = pianoPalette.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
+                modifier = Modifier.widthIn(max = 100.dp))
             Spacer(Modifier.weight(1f))
-            SmallAction("BACK", onBack)
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(top = 0.dp, bottom = 0.dp)
-                .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 2.dp, vertical = 0.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically
-        ) {
-            TransportAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
+            SmallAction(if (keyboardVisible) "KEYS" else "VEL") { keyboardVisible = !keyboardVisible }
             TransportAction("−") { zoomX = (zoomX / 1.25f).coerceIn(0.35f, 8f) }
-            TransportAction("BAR ◀") { startStep = (pageStartStep - stepsOnScreen).coerceAtLeast(0) }
-            Text("${pageStartStep / stepsPerBar + 1}", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            TransportAction("▶ BAR") { startStep = (pageStartStep + stepsOnScreen).coerceAtMost(maxStartStep) }
+            Text("${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
             TransportAction("+") { zoomX = (zoomX * 1.25f).coerceIn(0.35f, 8f) }
             TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
             TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
-            TransportAction("1/${snapDenominator}") { snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 } }
-            TransportAction(if (editToolsExpanded) "LESS" else "NOTE TOOLS") { editToolsExpanded = !editToolsExpanded }
+            TransportAction("1/${snapDenominator}") {
+                snapDenominator = when (snapDenominator) { 16 -> 8; 8 -> 4; 4 -> 32; else -> 16 }
+            }
+            SmallAction(if (editToolsExpanded) "TOOLS −" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
+            SmallAction("BACK", onBack)
         }
         if (editToolsExpanded) {
             Row(
-                Modifier.fillMaxWidth().padding(bottom = 2.dp)
-                    .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp, vertical = 1.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth().height(26.dp)
+                    .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 SmallAction("COPY") {
                     clipboard = notes.firstOrNull { it.id == selectedNoteId }
@@ -2537,13 +2535,13 @@ private fun PianoRollWorkspace(
                     } else editMessage = "Select a note first"
                 }
                 Spacer(Modifier.weight(1f))
-                Text(if (keyboardVisible) "TAP GRID: ADD / REMOVE" else "VELOCITY EDIT", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp, maxLines = 1)
+                Text(if (keyboardVisible) "NOTE EDIT" else "VELOCITY", color = pianoPalette.muted, fontSize = 7.sp, maxLines = 1)
             }
         }
 
-        Row(Modifier.fillMaxWidth().weight(1f).padding(top = 1.dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f)) {
             if (keyboardVisible) {
-                Column(Modifier.width(34.dp).fillMaxHeight().background(pianoPalette.panel)) {
+                Column(Modifier.width(30.dp).fillMaxHeight().background(pianoPalette.panel)) {
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
@@ -2571,7 +2569,7 @@ private fun PianoRollWorkspace(
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                BoxWithConstraints(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.canvas)) {
+                BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
                     val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
                     val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
                     val currentStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
@@ -2751,8 +2749,8 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(editMessage, color = pianoPalette.muted, fontSize = 7.sp, maxLines = 1)
+        Row(Modifier.fillMaxWidth().height(7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(editMessage, color = pianoPalette.muted, fontSize = 6.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = pianoPalette.accent, fontSize = 7.sp)
         }
