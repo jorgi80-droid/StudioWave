@@ -205,4 +205,35 @@ class TimelineViewportTest {
         assertEquals(0L, viewport.gridSubdivisionTicks(10.0))
     }
 
+
+    @Test fun viewportXAndScreenXConversionsAreExactInTheirOwnCoordinateSpaces() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 148f, 7680.0, 900f, 104f)
+        listOf(0L, 7680L, 9120L, 50000L).forEach { tick ->
+            val paneX = viewport.timeToViewportX(tick)
+            assertEquals(tick, viewport.viewportXToTime(paneX), 1L)
+            assertEquals(tick, viewport.screenXToTime(viewport.timeToScreenX(tick)), 1L)
+            assertEquals(paneX, viewport.timeToScreenX(tick) - viewport.trackHeaderWidthPx, 0.001f)
+        }
+    }
+
+    @Test fun clipWidthUsesOneScaleAndDoesNotChangeWithViewportScroll() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val start = 12_345L
+        val length = 9_876L
+        listOf(20f, 74f, 600f, 1200f).forEach { scale ->
+            val a = TimelineViewport(timebase, scale, 0.0, 900f, 104f)
+            val b = a.copy(scrollTimeTicks = 27_000.0)
+            assertEquals(a.tickDeltaToPixels(length), b.tickDeltaToPixels(length), 0.001f)
+            assertEquals(a.tickDeltaToPixels(length),
+                b.timeToViewportX(start + length) - b.timeToViewportX(start), 0.02f)
+        }
+    }
+
+    @Test fun extremeTickDeltasAreSaturatedAndNonFiniteInputsAreIgnored() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 20f, 0.0, 500f)
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.NaN))
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.POSITIVE_INFINITY))
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.NEGATIVE_INFINITY))
+    }
+
 }
