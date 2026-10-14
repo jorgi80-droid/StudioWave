@@ -3010,12 +3010,12 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
         Button(onClick = onImportAudio, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = LocalStudioWavePalette.current.accent.copy(alpha = 0.18f), contentColor = LocalStudioWavePalette.current.accent)) {
             Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Mint, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
-            Text("IMPORT AUDIO", fontSize = 10.sp, color = Color.White)
+            Text("IMPORT AUDIO", fontSize = 10.sp, color = LocalStudioWavePalette.current.text)
         }
         Spacer(Modifier.height(8.dp))
         Surface(color = LocalStudioWavePalette.current.panel, shape = RoundedCornerShape(7.dp), modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
             Column(Modifier.padding(10.dp)) {
-                Text("LOCAL AUDIO", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Mint)
+                Text("LOCAL AUDIO", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = LocalStudioWavePalette.current.accent)
                 Text("Choose an audio file from Android storage. It will be placed on the audio track in Arrangement.",
                     color = LocalStudioWavePalette.current.text, fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
             }
