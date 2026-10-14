@@ -678,6 +678,7 @@ private fun StudioWaveApp() {
                     }
                 }
                 TransportBar(
+                    compact = selectedWorkspace == "ARRANGEMENT",
                     playing = playing || playbackLoading,
                     bpm = bpm,
                     master = master,
@@ -814,6 +815,7 @@ private fun StudioWaveApp() {
 
 @Composable
 private fun TransportBar(
+    compact: Boolean = false,
     playing: Boolean, bpm: Int, master: Float,
     peakDbfs: Float, rmsDbfs: Float, momentaryLufs: Float, peakHistory: List<Float>,
     positionLabel: String, timeSignatureLabel: String, onSettings: () -> Unit,
@@ -823,11 +825,11 @@ private fun TransportBar(
 ) {
     val p = LocalStudioWavePalette.current
     Row(
-        Modifier.fillMaxWidth().height(38.dp)
+        Modifier.fillMaxWidth().height(if (compact) 35.dp else 38.dp)
             .background(p.panel, RoundedCornerShape(6.dp))
             .padding(horizontal = 5.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp) ) {
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 3.dp else 4.dp) ) {
             Surface(
                 color = Color.Transparent, shape = RoundedCornerShape(4.dp),
                 modifier = Modifier.clickable(onClickLabel = "Open Settings", onClick = onSettings)
@@ -835,33 +837,33 @@ private fun TransportBar(
                 Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = LocalStudioWavePalette.current.orange,
                     maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp))
             }
-            Text("LIVE SET", color = LocalStudioWavePalette.current.muted.copy(alpha = 0.72f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text("BPM", color = LocalStudioWavePalette.current.muted, fontSize = 8.sp)
-            SmallAction("−") { onBpm(bpm - 1) }
+            if (!compact) Text("LIVE SET", color = p.muted.copy(alpha = 0.72f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text("BPM", color = p.muted, fontSize = 7.sp)
+            TransportAction("−") { onBpm(bpm - 1) }
             Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(4.dp)) {
                 Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
             }
-            SmallAction("+") { onBpm(bpm + 1) }
+            TransportAction("+") { onBpm(bpm + 1) }
             Surface(color = LocalStudioWavePalette.current.room, shape = RoundedCornerShape(4.dp)) {
                 Text(timeSignatureLabel, fontSize = 9.sp, color = LocalStudioWavePalette.current.muted,
                     modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp))
             }
             Spacer(Modifier.weight(1f))
-            SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
-            SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
+            SmallIconButton(Icons.Default.FolderOpen, p.muted, onOpenProject)
+            SmallIconButton(Icons.Default.Save, p.muted, onSaveProject)
             SmallIconButton(Icons.Default.Undo, p.muted, onUndo)
             SmallIconButton(Icons.Default.Redo, p.muted, onRedo)
             SmallIconButton(Icons.Default.Stop, p.muted, onStop)
             Surface(
                 color = if (playing) p.accent.copy(alpha = 0.24f) else p.raised,
                 shape = RoundedCornerShape(5.dp),
-                modifier = Modifier.size(width = 30.dp, height = 29.dp).clickable(onClick = onPlay)
+                modifier = Modifier.size(width = 28.dp, height = 28.dp).clickable(onClick = onPlay)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (playing) "Pause playback" else "Start playback",
-                        tint = if (playing) p.accent else p.orange, modifier = Modifier.size(19.dp))
+                        tint = if (playing) p.accent else p.orange, modifier = Modifier.size(17.dp))
                 }
             }
             Surface(color = p.room, shape = RoundedCornerShape(4.dp)) {
@@ -871,16 +873,16 @@ private fun TransportBar(
             Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(54.dp).height(26.dp),
                 valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = p.text, activeTrackColor = p.accent, inactiveTrackColor = p.control))
-            Row(Modifier.width(86.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.width(if (compact) 52.dp else 86.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
                     Text("${peakDbfs.toInt()}dB", color = p.text, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                     Text("${momentaryLufs.toInt()}L", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
-                Canvas(Modifier.width(21.dp).height(17.dp)) {
+                Canvas(Modifier.width(if (compact) 12.dp else 21.dp).height(17.dp)) {
                     drawRect(p.room, size = size)
-                    peakHistory.takeLast(15).forEachIndexed { index, level ->
+                    peakHistory.takeLast(if (compact) 8 else 15).forEachIndexed { index, level ->
                         val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
-                        val x = index * size.width / 15f
+                        val x = index * size.width / (if (compact) 8f else 15f)
                         drawLine(p.accent, Offset(x, size.height), Offset(x, size.height - bar), 1.2f)
                     }
                 }
