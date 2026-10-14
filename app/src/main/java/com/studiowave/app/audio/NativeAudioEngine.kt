@@ -3,7 +3,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** Native stereo PCM output through Oboe/AAudio. Realtime callback never enters Kotlin or waits on locks. */
 class NativeAudioEngine:AutoCloseable {
  private val running=AtomicBoolean(false);private val closed=AtomicBoolean(false)
- companion object {private const val MAX_QUEUED_FRAMES=768;init{System.loadLibrary("studiowave_audio")}}
+ companion object {
+  // Keep enough ready audio for scheduler jitter without adding unnecessary monitoring latency.
+  private const val MAX_QUEUED_FRAMES=1024
+  private const val PRODUCER_BACKPRESSURE_FRAMES=MAX_QUEUED_FRAMES/2
+  init { System.loadLibrary("studiowave_audio") }
+ }
  private external fun nativeOpenOutput(sampleRate:Int):Int
  private external fun nativeCloseOutput()
  private external fun nativeSetTone(frequency:Float,gain:Float,waveform:Int)
@@ -25,7 +30,10 @@ class NativeAudioEngine:AutoCloseable {
   require(sampleCount in 2..samples.size&&sampleCount%2==0){"PCM count must contain complete stereo frames"}
   check(!closed.get()){"Audio engine is closed"}
   while(running.get()&&keepRunning()){
-   if(nativeQueuedFrames()>MAX_QUEUED_FRAMES){try{Thread.sleep(1L)}catch(_:InterruptedException){Thread.currentThread().interrupt();return false};continue}
+   if(nativeQueuedFrames()>=PRODUCER_BACKPRESSURE_FRAMES){
+    try { Thread.sleep(1L) } catch (_:InterruptedException) { Thread.currentThread().interrupt(); return false }
+    continue
+   }
    if(nativeWritePcm(samples,sampleCount)==sampleCount)return true
    try{Thread.sleep(1L)}catch(_:InterruptedException){Thread.currentThread().interrupt();return false}
   };return false
