@@ -136,6 +136,17 @@ data class TimelineViewport(
         return copy(pixelsPerBar = clampedScale, scrollTimeTicks = newScroll)
     }
 
+    /**
+     * Return a viewport in which [tick] sits at [viewportX] in the local timeline-pane
+     * coordinate space. Used by pinch anchoring and follow-playback to share one mapping.
+     */
+    fun placeTickAtViewportX(tick: Long, viewportX: Float): TimelineViewport {
+        if (!viewportX.isFinite()) return this
+        val newScroll = (tick.coerceAtLeast(0L).toDouble() - viewportX.toDouble() / pixelsPerTick)
+            .coerceIn(0.0, Long.MAX_VALUE.toDouble())
+        return copy(scrollTimeTicks = newScroll)
+    }
+
     fun panByScreenPixels(deltaX: Float): TimelineViewport =
         copy(scrollTimeTicks = (scrollTimeTicks - deltaX.toDouble() / pixelsPerTick)
             .coerceIn(0.0, Long.MAX_VALUE.toDouble()))
