@@ -2853,6 +2853,16 @@ private fun PianoRollWorkspace(
             SmallAction(if (selectionMode) "SELECT ON" else "SELECT") { selectionMode = !selectionMode }
             SmallAction(if (velocityMode) "VEL ON" else "VEL") { velocityMode = true; panMode = false }
             SmallAction(if (panMode) "PAN ON" else "PAN") { panMode = true; velocityMode = false }
+            SmallAction("OCT−") {
+                val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                if (ids.isNotEmpty()) updateNotes(notes.map { n -> if (n.id in ids) n.copy(pitch = (n.pitch - 12).coerceAtLeast(0)) else n })
+                else editMessage = "Select notes first"
+            }
+            SmallAction("OCT+") {
+                val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                if (ids.isNotEmpty()) updateNotes(notes.map { n -> if (n.id in ids) n.copy(pitch = (n.pitch + 12).coerceAtMost(127)) else n })
+                else editMessage = "Select notes first"
+            }
             TransportAction("−") {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
@@ -3206,6 +3216,7 @@ private fun PianoRollWorkspace(
                                         }
                                     } else if (touchedNote != null && keyboardVisible && track != null && clip != null) {
                                         selectedNoteId = touchedNote.id
+                                        selectedNoteIds = if (selectionMode) selectedNoteIds + touchedNote.id else setOf(touchedNote.id)
                                         if (dragged && !selectionMode) {
                                             val stepDelta = (accumulatedDelta.x / gestureColWidth).roundToInt().coerceIn(-100_000, 100_000)
                                             val pitchDelta = (-accumulatedDelta.y / gestureRowHeight).roundToInt().coerceIn(-127, 127)
@@ -3240,7 +3251,7 @@ private fun PianoRollWorkspace(
                                         } else {
                                             editMessage = "Add notes before editing velocity"
                                         }
-                                    } else if (!dragged && track != null && clip != null && keyboardVisible) {
+                                    } else if (!dragged && track != null && clip != null && keyboardVisible && !selectionMode) {
                                         val existing = latestNotes.firstOrNull { note ->
                                             note.pitch == clickedPitch &&
                                                 (note.startTick / stepTicks).toInt() == clickedStep
