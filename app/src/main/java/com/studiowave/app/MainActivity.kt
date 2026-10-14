@@ -3263,7 +3263,7 @@ private fun PianoRollWorkspace(
                                                 gestureNoteWriter.value(latestNotes.map { note ->
                                                     if (note.id == nearest.id) note.copy(pan = pan) else note
                                                 })
-                                                editMessage = "Note pan " + (if (pan < -0.01f) "L" else if (pan > 0.01f) "R" else "C") + " · " + pan.format(2)
+                                                editMessage = "Note pan " + (if (pan < -0.01f) "L" else if (pan > 0.01f) "R" else "C") + " · " + String.format(java.util.Locale.US, "%.2f", pan)
                                             } else {
                                                 val velocity = (127f * (1f - finalPosition.y / viewportHeightPx.coerceAtLeast(1f))).roundToInt().coerceIn(1,127)
                                                 gestureNoteWriter.value(latestNotes.map { note -> if (note.id == nearest.id) note.copy(velocity = velocity) else note })
