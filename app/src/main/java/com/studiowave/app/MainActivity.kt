@@ -2279,7 +2279,10 @@ private fun PianoRollWorkspace(
     // The snap selector changes the real musical step size used by note placement and the grid.
     var snapDenominator by remember(track?.id, clip?.id) { mutableStateOf(16) }
     val stepTicks = (project.ppq.toLong() * 4L / snapDenominator.toLong()).coerceAtLeast(1L)
-    val stepsPerBeat = (snapDenominator / 4).coerceAtLeast(1)
+    val beatTicks = (project.ppq.toLong() * 4L / project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
+    val stepsPerBeat = (beatTicks / stepTicks).toInt().coerceAtLeast(1)
+    val stepsPerBar = ((beatTicks * project.numerator.coerceAtLeast(1).toLong()) / stepTicks)
+        .toInt().coerceAtLeast(1)
     val visibleSteps = 32
     val highestPitch = 83
     val lowestPitch = 48
@@ -2356,7 +2359,7 @@ private fun PianoRollWorkspace(
                 }
                 for (col in 0..visibleSteps) {
                     val strong = col % stepsPerBeat == 0
-                    val barLine = col % (stepsPerBeat * project.numerator.coerceAtLeast(1)) == 0
+                    val barLine = col % stepsPerBar == 0
                     drawLine(
                         when {
                             barLine -> Color(0xFF89919D)
