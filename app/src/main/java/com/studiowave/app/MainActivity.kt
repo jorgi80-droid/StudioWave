@@ -1438,13 +1438,7 @@ private fun TimelineGrid(
                      val beatPixels = beatTicks * canvasViewport.pixelsPerTick
                      // Use a progressive musical grid like FL Studio Mobile: the
                      // horizontal zoom decides which subdivisions are worth drawing.
-                     val subdivision = when {
-                         beatPixels >= 80.0 -> (beatTicks / 16L).coerceAtLeast(1L)
-                         beatPixels >= 52.0 -> (beatTicks / 8L).coerceAtLeast(1L)
-                         beatPixels >= 30.0 -> (beatTicks / 4L).coerceAtLeast(1L)
-                         beatPixels >= 16.0 -> (beatTicks / 2L).coerceAtLeast(1L)
-                         else -> 0L
-                     }
+                     val subdivision = canvasViewport.gridSubdivisionTicks(beatPixels)
                      for (beat in 0 until timebase.safeNumerator) {
                          val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
                          val beatX = canvasViewport.timeToViewportX(beatTick)
