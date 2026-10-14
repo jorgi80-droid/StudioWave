@@ -2,6 +2,12 @@ package com.studiowave.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +51,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.awaitCancellation
+import androidx.compose.runtime.withFrameNanos
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -80,6 +87,11 @@ private val MutedText = Color(0xFFA4A8B0)
 private val Mint = Color(0xFF00D2B4)
 private val Green = Color(0xFF22C55E)
 private val Red = Color(0xFFEF4444)
+
+internal fun choosePreferredRefreshRate(supportedRates: Iterable<Float>): Float? =
+    supportedRates.asSequence()
+        .filter { it.isFinite() && it >= 90f && it <= 120f }
+        .maxOrNull()
 
 
 /**
@@ -174,10 +186,22 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        preferAdaptiveHighRefreshRate()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideDawSystemBars()
         window.navigationBarColor = android.graphics.Color.rgb(20, 21, 23)
         setContent { StudioWaveApp() }
+    }
+
+    /** Ask for 90/120 Hz where available; Android may still adapt for battery/thermal policy. */
+    @Suppress("DEPRECATION")
+    private fun preferAdaptiveHighRefreshRate() {
+        val targetRate = choosePreferredRefreshRate(
+            windowManager.defaultDisplay.supportedModes.map { it.refreshRate }.asIterable()
+        )
+        if (targetRate != null) {
+            window.attributes = window.attributes.apply { preferredRefreshRate = targetRate }
+        }
     }
 
     private fun hideDawSystemBars() {
@@ -622,7 +646,11 @@ private fun StudioWaveApp() {
                             onSeekTick = { tick -> seekToTick(tick) })
                     }
                 }
-                if (showDock) {
+                AnimatedVisibility(
+                    visible = showDock,
+                    enter = fadeIn(tween(150)) + slideInVertically(tween(180), initialOffsetY = { it / 3 }),
+                    exit = fadeOut(tween(100)) + slideOutVertically(tween(120), targetOffsetY = { it / 4 })
+                ) {
                     Box(Modifier.fillMaxWidth().height(105.dp)) {
                         DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
                         Surface(
@@ -1574,12 +1602,17 @@ private fun TimelineGrid(
         // Stable follow loop: do not cancel/restart it for each playhead update.
         LaunchedEffect(isPlaying, timelineWidthPx, timebase) {
             if (isPlaying && timelineWidthPx > 0f) {
+                var previousFrameNanos = 0L
                 while (isPlaying) {
+                    val frameNanos = withFrameNanos { it }
+                    val dt = if (previousFrameNanos == 0L) 0.016f
+                        else ((frameNanos - previousFrameNanos).coerceAtLeast(0L) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                    previousFrameNanos = frameNanos
                     val currentViewport = TimelineViewport(
                         timebase, baseBarWidthPx * currentZoom, currentScroll,
                         timelineWidthPx, trackHeaderWidthPx
                     )
-                    val currentX = currentViewport.timeToViewportX(playheadTick)
+                    val currentX = currentViewport.timeToViewportX(currentPlayhead)
                     val leftGuard = timelineWidthPx * 0.08f
                     val rightGuard = timelineWidthPx * 0.70f
                     val targetX = when {
@@ -1588,11 +1621,11 @@ private fun TimelineGrid(
                         else -> null
                     }
                     if (targetX != null) {
-                        val nextScroll = currentViewport.placeTickAtViewportX(playheadTick, targetX)
-                            .scrollTimeTicks
-                        if (kotlin.math.abs(nextScroll - currentScroll) > 0.5f) currentOnScroll(nextScroll)
+                        val targetScroll = currentViewport.placeTickAtViewportX(currentPlayhead, targetX).scrollTimeTicks
+                        val smoothing = (1.0 - kotlin.math.exp(-dt.toDouble() / 0.065)).toFloat()
+                        val nextScroll = currentScroll + (targetScroll - currentScroll) * smoothing
+                        if (kotlin.math.abs(nextScroll - currentScroll) > 0.05) currentOnScroll(nextScroll)
                     }
-                    delay(33L)
                 }
             }
         }
