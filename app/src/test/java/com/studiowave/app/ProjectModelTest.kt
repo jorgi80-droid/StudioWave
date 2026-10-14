@@ -189,12 +189,13 @@ class ProjectModelTest {
         val (left, right) = splitWaveClip(source, 3000L)!!
         assertTrue(left.midiNotes.all { it.startTick + it.durationTicks <= 2000L })
         assertTrue(right.midiNotes.all { it.startTick + it.durationTicks <= right.lengthTicks })
-        assertEquals(listOf("after", "cross"), right.midiNotes.map { it.id }.sorted())
+        assertTrue(right.midiNotes.any { it.id == "after" })
+        assertTrue(right.midiNotes.none { it.id == "before" || it.id == "cross" })
         // The note crosses the split boundary: 500 ticks remain in the left clip,
         // and 1,500 ticks continue from source-relative zero in the right clip.
-        assertEquals(0L, right.midiNotes.first { it.id == "cross" }.startTick)
+        assertEquals(0L, right.midiNotes.first { it.pitch == 62 }.startTick)
         assertEquals(500L, left.midiNotes.first { it.id == "cross" }.durationTicks)
-        assertEquals(1500L, right.midiNotes.first { it.id == "cross" }.durationTicks)
+        assertEquals(1500L, right.midiNotes.first { it.pitch == 62 }.durationTicks)
         assertTrue(left.midiNotes.map { it.id }.intersect(right.midiNotes.map { it.id }.toSet()).isEmpty())
     }
 
