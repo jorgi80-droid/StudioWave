@@ -669,29 +669,36 @@ private fun StudioWaveApp() {
                     }
                 }
                 TransportBar(
-                    playing || playbackLoading,
-                    bpm,
-                    master,
-                    masterPeakDbfs,
-                    masterRmsDbfs,
-                    masterMomentaryLufs,
-                    masterPeakHistory,
-                    musicalPositionLabel(playheadTick, project.ppq, project.numerator, project.denominator),
-                    "${project.numerator}/${project.denominator}",
+                    playing = playing || playbackLoading,
+                    bpm = bpm,
+                    master = master,
+                    peakDbfs = masterPeakDbfs,
+                    rmsDbfs = masterRmsDbfs,
+                    momentaryLufs = masterMomentaryLufs,
+                    peakHistory = masterPeakHistory,
+                    positionLabel = musicalPositionLabel(playheadTick, project.ppq, project.numerator, project.denominator),
+                    timeSignatureLabel = "${project.numerator}/${project.denominator}",
                     onSettings = { settingsSection = "INTERFACE"; showSettings = true },
-                    { value ->
-                    bpm = value.coerceIn(40, 240)
-                    changeProject(project.copy(bpm = bpm))
-                }, { value -> master = value; arrangementPlayback.setMasterGain(value) }, onUndo = { undoProject() }, onRedo = { redoProject() },
+                    onBpm = { value ->
+                        bpm = value.coerceIn(40, 240)
+                        changeProject(project.copy(bpm = bpm))
+                    },
+                    onMaster = { value ->
+                        master = value
+                        arrangementPlayback.setMasterGain(value)
+                    },
+                    onPlay = {
+                        if (playing || playbackLoading) stopPlayback() else startPlaybackAt(playheadTick)
+                    },
+                    onStop = { stopPlayback() },
+                    onUndo = { undoProject() },
+                    onRedo = { redoProject() },
                     onSaveProject = {
                         pendingExportProject = project
                         exportProjectLauncher.launch(suggestedSdawFileName(project.name))
                     },
-                    onOpenProject = { importProjectLauncher.launch(arrayOf("*/*")) },
-                    onPlay = {
-                        if (playing || playbackLoading) stopPlayback() else startPlaybackAt(playheadTick)
-                    },
-                    onStop = { stopPlayback() })
+                    onOpenProject = { importProjectLauncher.launch(arrayOf("*/*")) }
+                )
                 Spacer(Modifier.height(3.dp))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     WorkspaceRail(
