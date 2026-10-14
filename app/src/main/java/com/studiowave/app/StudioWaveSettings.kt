@@ -25,7 +25,7 @@ private data class StudioWavePalette(
     val border: Color, val success: Color, val warning: Color, val danger: Color
 )
 
-private val LocalStudioWavePalette = compositionLocalOf {
+internal val LocalStudioWavePalette = compositionLocalOf {
     StudioWavePalette(Color(0xFF141517), Color(0xFF1E2024), Color(0xFF282B30), Color(0xFF30343B),
         Color(0xFF34383F), Color(0xFFE4E8EF), Color(0xFFA4A8B0), Color(0xFF00D2B4), Color(0xFFFF764D),
         Color(0xFF454950), Color(0xFF3D4148), Color(0xFF22C55E), Color(0xFFE4B45E), Color(0xFFEF4F64))
