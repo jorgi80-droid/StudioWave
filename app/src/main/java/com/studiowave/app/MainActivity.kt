@@ -800,7 +800,7 @@ private fun StudioWaveApp() {
 private fun TransportBar(
     playing: Boolean, bpm: Int, master: Float,
     peakDbfs: Float, rmsDbfs: Float, momentaryLufs: Float, peakHistory: List<Float>,
-    positionLabel: String, timeSignatureLabel: String,
+    positionLabel: String, timeSignatureLabel: String, onSettings: () -> Unit,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
     onUndo: () -> Unit, onRedo: () -> Unit,
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
@@ -812,7 +812,13 @@ private fun TransportBar(
     ) {
         Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = AbletonOrange, maxLines = 1)
+            Surface(
+                color = Color.Transparent, shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.clickable(onClickLabel = "Open Settings", onClick = onSettings)
+            ) {
+                Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = AbletonOrange,
+                    maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp))
+            }
             Text("LIVE SET", color = Color(0xFF777B82), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             Text("BPM", color = MutedText, fontSize = 8.sp)
             SmallAction("−") { onBpm(bpm - 1) }
