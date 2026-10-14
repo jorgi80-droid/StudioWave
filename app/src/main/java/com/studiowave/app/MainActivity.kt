@@ -2979,7 +2979,7 @@ private fun MixerWorkspace(
             }
             val masterDbLabel = if (master <= 0.001f) "-∞ dB" else
                 String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(master))
-            Text("\${(master * 100).toInt()}%  \$masterDbLabel", color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
+            Text("${(master * 100).toInt()}%  $masterDbLabel", color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
         }
         }
     }
