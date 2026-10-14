@@ -2885,15 +2885,15 @@ private fun MixerWorkspace(
                     .background(mixerPalette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 6.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1, color = mixerPalette.text)
                 Spacer(Modifier.height(3.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    SmallAction(if (track.muted) "M✓" else "M") {
+                    MixerStateButton("M", track.muted, mixerPalette) {
                         onProjectChange(project.copy(tracks = project.tracks.map {
                             if (it.id == track.id) it.copy(muted = !it.muted) else it
                         }))
                     }
-                    SmallAction(if (track.solo) "S✓" else "S") {
+                    MixerStateButton("S", track.solo, mixerPalette) {
                         onProjectChange(project.copy(tracks = project.tracks.map {
                             if (it.id == track.id) it.copy(solo = !it.solo) else it
                         }))
@@ -2985,7 +2985,7 @@ private fun MixerWorkspace(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     if (track.muted) "MUTED" else if (track.solo) "SOLO" else track.kind.uppercase(),
-                    color = if (track.muted) Red else MutedText,
+                    color = if (track.muted) mixerPalette.danger else if (track.solo) mixerPalette.accent else mixerPalette.muted,
                     fontSize = 8.sp,
                     maxLines = 1
                 )
@@ -3171,19 +3171,22 @@ private fun DeviceDock(
                 } else if (selectedTrack != null) {
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         val devices = when (selectedTrack.kind) {
-                            "audio" -> listOf("SAMPLE", "WARP (NOT IMPLEMENTED)", "AUDIO EFFECTS")
-                            "drum" -> listOf("DRUM PATTERN", "INSTRUMENT (NOT IMPLEMENTED)", "AUDIO EFFECTS")
-                            else -> listOf("MIDI NOTES", "INSTRUMENT (NOT IMPLEMENTED)", "MIDI EFFECTS", "AUDIO EFFECTS")
+                            "audio" -> listOf("SAMPLE" to true, "WARP" to false, "AUDIO EFFECTS" to false)
+                            "drum" -> listOf("DRUM PATTERN" to true, "INSTRUMENT" to false, "AUDIO EFFECTS" to false)
+                            else -> listOf("MIDI NOTES" to true, "INSTRUMENT" to false, "MIDI EFFECTS" to false, "AUDIO EFFECTS" to false)
                         }
-                        devices.forEachIndexed { index, label ->
+                        devices.forEach { (label, available) ->
                             Column(
                                 Modifier.weight(1f).fillMaxHeight()
                                     .background(devicePalette.room, RoundedCornerShape(5.dp)).padding(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(5.dp)
                             ) {
-                                Text(label, color = if (index == 0) Mint else MutedText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Box(Modifier.size(5.dp).background(if (available) devicePalette.success else devicePalette.muted.copy(alpha = 0.55f), RoundedCornerShape(50)))
+                                    Text(label, color = if (available) devicePalette.accent else devicePalette.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                }
                                 Text(
-                                    if (index == 0) "Track data available" else "Belum ada processor audio terhubung",
+                                    if (available) "Track data available" else "Processor not connected",
                                     color = devicePalette.text, fontSize = 8.sp
                                 )
                             }
@@ -3501,3 +3504,24 @@ private fun StudioWavePanKnob(
     }
 }
 
+
+
+@Composable
+private fun MixerStateButton(
+    label: String,
+    active: Boolean,
+    palette: StudioWavePalette,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (active) palette.accent.copy(alpha = 0.2f) else palette.control,
+        contentColor = if (active) palette.accent else palette.muted,
+        shape = RoundedCornerShape(4.dp),
+        border = BorderStroke(1.dp, if (active) palette.accent.copy(alpha = 0.8f) else palette.border.copy(alpha = 0.7f)),
+        modifier = Modifier.size(width = 29.dp, height = 23.dp).clickable(onClick = onClick)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(if (active) "$label✓" else label, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        }
+    }
+}
