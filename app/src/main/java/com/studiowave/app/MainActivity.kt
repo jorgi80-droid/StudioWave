@@ -3510,7 +3510,7 @@ private fun BrowserWorkspace(
                     Spacer(Modifier.width(5.dp)); Text("IMPORT AUDIO", fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 }
                 Button(
-                    onClick = { onOpenEditor("ARRANGEMENT", null) },
+                    onClick = { onOpenEditor("ARRANGEMENT", null, null) },
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
@@ -3519,7 +3519,7 @@ private fun BrowserWorkspace(
             }
             "CLIPS" -> Row(Modifier.fillMaxWidth().height(31.dp), horizontalArrangement = Arrangement.End) {
                 Button(
-                    onClick = { onOpenEditor("ARRANGEMENT", null) },
+                    onClick = { onOpenEditor("ARRANGEMENT", null, null) },
                     modifier = Modifier.fillMaxHeight(),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
