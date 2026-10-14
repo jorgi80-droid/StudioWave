@@ -3174,6 +3174,15 @@ private fun BrowserWorkspace(
                     shape = RoundedCornerShape(4.dp)
                 ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Bold) }
             }
+            "CLIPS" -> Row(Modifier.fillMaxWidth().height(31.dp), horizontalArrangement = Arrangement.End) {
+                Button(
+                    onClick = { onOpenEditor("ARRANGEMENT", null) },
+                    modifier = Modifier.fillMaxHeight(),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
+                    shape = RoundedCornerShape(4.dp)
+                ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Bold) }
+            }
             "DEVICES" -> Surface(color = p.panel, shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("DEVICE LIBRARY", color = p.accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
