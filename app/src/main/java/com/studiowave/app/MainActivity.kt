@@ -2772,7 +2772,8 @@ private fun MixerWorkspace(
                                 }
                             }
                     ) {
-                    // This is a real, touch-draggable channel fader, not a fake signal meter.
+                        // Touch-drag channel gain fader.
+
                     val railWidth = (size.width * 0.18f).coerceAtLeast(5f)
                     val railLeft = (size.width - railWidth) / 2f
                     val railTop = size.height * 0.06f
