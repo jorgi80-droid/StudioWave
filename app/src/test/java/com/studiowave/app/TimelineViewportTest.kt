@@ -5,6 +5,38 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimelineViewportTest {
+    @Test fun pinchFrameReturnsToStartScaleAndScrollAfterRelease() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val initialZoom = 1f
+        val startScroll = 123_456.375
+        val anchorX = 417.25f
+        val baseViewport = TimelineViewport(timebase, 74f * initialZoom, startScroll, 900f)
+        val anchor = startScroll + anchorX / baseViewport.pixelsPerTick
+        val spans = listOf(180f, 220f, 255f, 230f, 190f, 180f)
+        val frames = spans.map { span ->
+            calculatePinchZoomFrame(timebase, initialZoom, startScroll, 180f, span, anchor, anchorX, 74f)
+        }
+        assertTrue(frames.first().zoom > initialZoom)
+        assertTrue(frames[2].zoom > frames[1].zoom)
+        assertEquals(initialZoom, frames.last().zoom, 0.001f)
+        assertEquals(startScroll, frames.last().scrollTicks, 1e-6)
+        frames.forEach { assertTrue(it.scrollTicks >= 0.0) }
+    }
+
+    @Test fun pinchFramesDoNotAccumulatePreviousFrameRounding() {
+        val timebase = TimelineTimebase(126, 7, 8, 960)
+        val start = TimelineViewport(timebase, 111f, 50_000.125, 900f)
+        val anchorX = 320f
+        val anchorTick = start.scrollTimeTicks + anchorX / start.pixelsPerTick
+        val shrunk = calculatePinchZoomFrame(timebase, 1.5f, start.scrollTimeTicks,
+            200f, 160f, anchorTick, anchorX, 74f)
+        val restored = calculatePinchZoomFrame(timebase, 1.5f, start.scrollTimeTicks,
+            200f, 200f, anchorTick, anchorX, 74f)
+        assertTrue(shrunk.zoom < 1.5f)
+        assertEquals(1.5f, restored.zoom, 0.001f)
+        assertEquals(start.scrollTimeTicks, restored.scrollTicks, 1e-6)
+    }
+
     @Test fun timebaseUsesProjectPpqAndMeter() {
         val common = TimelineTimebase(bpm = 120, numerator = 4, denominator = 4, ppq = 960)
         assertEquals(960L, common.ticksPerBeat)
