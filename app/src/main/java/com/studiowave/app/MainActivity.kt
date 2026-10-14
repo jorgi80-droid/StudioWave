@@ -2203,22 +2203,23 @@ private fun TimelineGrid(
                                 maxLines = 1
                             )
                             if (track.kind == "drum") {
-                                // A compact Live-style step lane: distinct cells show active hits instead of bars.
+                                // Step-sequencer thumbnail: 16 equal steps, stronger beat accents, active hits clearly visible.
                                 Row(
                                     Modifier.fillMaxSize().padding(top = 14.dp, bottom = 2.dp),
                                     horizontalArrangement = Arrangement.spacedBy(1.dp),
                                     verticalAlignment = Alignment.Bottom
                                 ) {
-                                    (0 until 16).forEach { step ->
+                                    val visibleStepCount = clip.drumSteps.size.coerceIn(16, 128)
+                                    (0 until visibleStepCount).forEach { step ->
                                         val active = clip.drumSteps.getOrNull(step) == true
+                                        val isBeat = step % 4 == 0
                                         Box(
-                                            Modifier.weight(1f)
-                                                .fillMaxHeight()
-                                                .padding(top = if (active) 1.dp else 0.dp)
+                                            Modifier.weight(1f).fillMaxHeight()
+                                                .padding(top = if (active) 0.dp else 3.dp)
                                                 .background(
-                                                    if (active) accent.copy(alpha = 0.96f)
-                                                    else timelinePalette.text.copy(alpha = if (isLightTheme) 0.18f else 0.28f),
-                                                    RoundedCornerShape(1.dp)
+                                                    if (active) accent.copy(alpha = if (isBeat) 1f else 0.82f)
+                                                    else timelinePalette.text.copy(alpha = if (isLightTheme) 0.16f else 0.24f),
+                                                    RoundedCornerShape(if (isBeat) 2.dp else 1.dp)
                                                 )
                                         )
                                     }
