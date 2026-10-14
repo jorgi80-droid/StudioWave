@@ -1091,16 +1091,16 @@ private fun ArrangementWorkspace(
                         detectDragGestures(
                             onDragStart = { start ->
                                 val end = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
-                                val fraction = (start.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f).toDouble()
+                                val fraction = (start.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f).toDouble()
                                 val visible = size.width.toDouble() /
-                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
                                 val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visible).coerceAtLeast(0.0)
                                 onScroll((end * fraction).coerceIn(0.0, maxScroll))
                             },
                             onDrag = { change, _ ->
                                 change.consume()
                                 val end = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
-                                val fraction = (change.position.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f).toDouble()
+                                val fraction = (change.position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f).toDouble()
                                 val visible = size.width.toDouble() /
                                     TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
                                 val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visible).coerceAtLeast(0.0)
@@ -2075,9 +2075,9 @@ private fun TimelineGrid(
                                 project.tracks.flatMap { it.clips }.maxOfOrNull { it.startTick + it.lengthTicks.coerceAtLeast(1L) } ?: timebase.ticksPerBar,
                                 timebase.ticksPerBar
                             ).coerceAtMost(maxArrangementTick(timebase))
-                            val fraction = (position.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            val fraction = (position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
                             val visibleTicks = size.width.toDouble() /
-                                TimelineViewport(timebase, 74f * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                                TimelineViewport(timebase, 74f * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
                             val maxScroll = (maxArrangementTick(timebase).toDouble() - visibleTicks).coerceAtLeast(0.0)
                             currentOnScroll((endTick.toDouble() * fraction).coerceIn(0.0, maxScroll))
                         }
@@ -2685,7 +2685,6 @@ private fun PianoRollWorkspace(
         }
         Text("Touch grid to add/remove notes • use −/+ to move by one page • project autosave",
             color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(start = 54.dp, top = 3.dp))
-    }
 }
 
 @Composable
