@@ -177,6 +177,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val endFrame: Long,
         val pitch: Int,
         val velocity: Int,
+        val pan: Float,
         val track: StudioTrack
     )
 
@@ -342,7 +343,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val noteDuration = ticksToFrames(note.durationTicks.coerceAtLeast(1L))
                         val noteEnd = min(clipEnd, if (noteStart > Long.MAX_VALUE - noteDuration) Long.MAX_VALUE else noteStart + noteDuration)
                         if (noteEnd > noteStart) {
-                            notes.add(NoteEvent(noteStart, noteEnd, note.pitch.coerceIn(0, 127), note.velocity.coerceIn(1, 127), track))
+                            notes.add(NoteEvent(
+                                noteStart, noteEnd, note.pitch.coerceIn(0, 127),
+                                note.velocity.coerceIn(1, 127), note.pan.coerceIn(-1f, 1f), track
+                            ))
                         }
                     }
                     "drum" -> {
@@ -642,7 +646,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
                     val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
                     val gain = channelGain * liveMasterGain
-                    val pan = channelMix.pan
+                    val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }

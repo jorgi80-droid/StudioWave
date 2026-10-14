@@ -56,6 +56,49 @@ class ProjectModelTest {
         })
     }
 
+    @Test fun perNotePanRoundTripsAndIsClampedToStereoRange() {
+        val project = StudioProject()
+        val midiTrack = project.tracks.first { it.kind == "midi" }
+        val firstClip = midiTrack.clips.first()
+        val note = firstClip.midiNotes.first()
+        val edited = project.copy(tracks = project.tracks.map { track ->
+            if (track.id != midiTrack.id) track else track.copy(clips = track.clips.map { clip ->
+                if (clip.id != firstClip.id) clip else clip.copy(midiNotes = clip.midiNotes.map {
+                    if (it.id == note.id) it.copy(pan = 0.65f) else it
+                })
+            })
+        })
+        val restored = StudioProject.fromJson(JSONObject(edited.toJson().toString()))
+        val restoredNote = restored.tracks.first { it.id == midiTrack.id }.clips.first()
+            .midiNotes.first { it.id == note.id }
+        assertEquals(0.65f, restoredNote.pan, 0.0001f)
+
+        val json = edited.toJson()
+        val tracks = json.getJSONArray("tracks")
+        val noteJson = tracks.getJSONObject(1).getJSONArray("clips").getJSONObject(0)
+            .getJSONArray("midiNotes").getJSONObject(0)
+        noteJson.put("pan", 4.0)
+        val clamped = StudioProject.fromJson(json).tracks.first { it.id == midiTrack.id }
+            .clips.first().midiNotes.first()
+        assertEquals(1f, clamped.pan, 0f)
+    }
+
+    @Test fun legacyMidiNotesWithoutPanLoadCentered() {
+        val json = StudioProject().toJson()
+        val tracks = json.getJSONArray("tracks")
+        for (i in 0 until tracks.length()) {
+            val clips = tracks.getJSONObject(i).getJSONArray("clips")
+            for (j in 0 until clips.length()) {
+                val notes = clips.getJSONObject(j).getJSONArray("midiNotes")
+                for (k in 0 until notes.length()) notes.getJSONObject(k).remove("pan")
+            }
+        }
+        val restored = StudioProject.fromJson(json)
+        restored.tracks.flatMap { it.clips }.flatMap { it.midiNotes }.forEach {
+            assertEquals(0f, it.pan, 0f)
+        }
+    }
+
     @Test fun MIDIStarterNotesAreWithinValidRange() {
         val project = StudioProject()
         val notes = project.tracks.flatMap { it.clips }.flatMap { it.midiNotes }

@@ -9,7 +9,9 @@ data class MidiNote(
     val pitch: Int,
     val startTick: Long,
     val durationTicks: Long,
-    val velocity: Int = 100
+    val velocity: Int = 100,
+    /** Per-note stereo balance in [-1, 1], added to the owning track's pan. */
+    val pan: Float = 0f
 )
 
 data class WaveClip(
@@ -96,7 +98,8 @@ data class StudioProject(
                                         .put("id", note.id).put("pitch", note.pitch.coerceIn(0, 127))
                                         .put("startTick", note.startTick)
                                         .put("durationTicks", note.durationTicks.coerceAtLeast(1))
-                                        .put("velocity", note.velocity.coerceIn(1, 127))) }
+                                        .put("velocity", note.velocity.coerceIn(1, 127))
+                                        .put("pan", note.pan.coerceIn(-1f, 1f).toDouble())) }
                                 })
                             })
                         }
@@ -145,7 +148,8 @@ data class StudioProject(
                                         pitch = n.optInt("pitch", 60).coerceIn(0, 127),
                                         startTick = n.optLong("startTick", 0).coerceAtLeast(0),
                                         durationTicks = n.optLong("durationTicks", 240).coerceAtLeast(1),
-                                        velocity = n.optInt("velocity", 100).coerceIn(1, 127)
+                                        velocity = n.optInt("velocity", 100).coerceIn(1, 127),
+                                        pan = n.optDouble("pan", 0.0).toFloat().coerceIn(-1f, 1f)
                                     ))
                                 }
                             }

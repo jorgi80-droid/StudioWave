@@ -2883,8 +2883,14 @@ private fun PianoRollWorkspace(
             SmallAction(if (virtualKeyboardVisible) "NOTE INPUT ON" else "NOTE INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
             SmallAction(if (editToolsExpanded) "TOOLS" else "TOOLS +") { editToolsExpanded = !editToolsExpanded }
             SmallAction(if (selectionMode) "SELECT ON" else "SELECT") { selectionMode = !selectionMode }
-            SmallAction(if (velocityMode) "VEL ON" else "VEL") { velocityMode = true; panMode = false }
-            SmallAction(if (panMode) "PAN ON" else "PAN") { panMode = true; velocityMode = false }
+            SmallAction(if (velocityMode) "VEL ON" else "VEL") {
+                velocityMode = !velocityMode
+                if (velocityMode) panMode = false
+            }
+            SmallAction(if (panMode) "PAN ON" else "PAN") {
+                panMode = !panMode
+                if (panMode) velocityMode = false
+            }
             SmallAction("OCT−") {
                 val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
                 if (ids.isNotEmpty()) updateNotes(notes.map { n -> if (n.id in ids) n.copy(pitch = (n.pitch - 12).coerceAtLeast(0)) else n })
@@ -3222,7 +3228,7 @@ private fun PianoRollWorkspace(
                                                 dragged = true
                                                 accumulatedDelta += delta
                                                 // Empty grid pans; note gestures edit the note; velocity mode edits only velocity.
-                                                if (keyboardVisible && touchedNote == null) {
+                                                if (keyboardVisible && touchedNote == null && !velocityMode && !panMode) {
                                                     horizontalRemainder += -delta.x / gestureColWidth
                                                     verticalRemainder += delta.y / gestureRowHeight
                                                     val stepDelta = horizontalRemainder.roundToInt()
@@ -3251,8 +3257,14 @@ private fun PianoRollWorkspace(
                                         val nearest = latestNotes.minByOrNull { note -> kotlin.math.abs(note.startTick.toDouble() - targetTick) }
                                         if (nearest != null) {
                                             selectedNoteId = nearest.id
-                                            if (panMode) editMessage = "Per-note pan is unsupported by current MIDI model; unchanged"
-                                            else {
+                                            if (panMode) {
+                                                val pan = ((finalPosition.x / viewportWidthPx.coerceAtLeast(1f)) * 2f - 1f)
+                                                    .coerceIn(-1f, 1f)
+                                                gestureNoteWriter.value(latestNotes.map { note ->
+                                                    if (note.id == nearest.id) note.copy(pan = pan) else note
+                                                })
+                                                editMessage = "Note pan " + (if (pan < -0.01f) "L" else if (pan > 0.01f) "R" else "C") + " · " + pan.format(2)
+                                            } else {
                                                 val velocity = (127f * (1f - finalPosition.y / viewportHeightPx.coerceAtLeast(1f))).roundToInt().coerceIn(1,127)
                                                 gestureNoteWriter.value(latestNotes.map { note -> if (note.id == nearest.id) note.copy(velocity = velocity) else note })
                                                 editMessage = "Velocity $velocity"
