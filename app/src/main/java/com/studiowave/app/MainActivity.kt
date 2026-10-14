@@ -203,8 +203,14 @@ private fun StudioWaveApp() {
     }
     fun seekToTick(tick: Long) {
         val target = tick.coerceAtLeast(0L)
-        if (playing || playbackLoading) stopPlayback()
-        playheadTick = target
+        // Match DAW transport semantics: seeking while the transport is active is a
+        // discontinuity, not an implicit STOP. Rebuild playback from the requested
+        // musical position so the audio and playhead remain together.
+        if (playing || playbackLoading) {
+            startPlaybackAt(target)
+        } else {
+            playheadTick = target
+        }
     }
     fun startPlaybackAt(tick: Long, projectSnapshot: StudioProject = project) {
         val session = playbackSession + 1L
@@ -1433,10 +1439,10 @@ private fun TimelineGrid(
                      // Use a progressive musical grid like FL Studio Mobile: the
                      // horizontal zoom decides which subdivisions are worth drawing.
                      val subdivision = when {
-                         beatPixels >= 80.0 -> beatTicks / 16L
-                         beatPixels >= 52.0 -> beatTicks / 8L
-                         beatPixels >= 30.0 -> beatTicks / 4L
-                         beatPixels >= 16.0 -> beatTicks / 2L
+                         beatPixels >= 80.0 -> (beatTicks / 16L).coerceAtLeast(1L)
+                         beatPixels >= 52.0 -> (beatTicks / 8L).coerceAtLeast(1L)
+                         beatPixels >= 30.0 -> (beatTicks / 4L).coerceAtLeast(1L)
+                         beatPixels >= 16.0 -> (beatTicks / 2L).coerceAtLeast(1L)
                          else -> 0L
                      }
                      for (beat in 0 until timebase.safeNumerator) {
