@@ -293,7 +293,9 @@ private fun StudioWaveApp() {
     var masterRmsDbfs by remember { mutableFloatStateOf(-120f) }
     var masterMomentaryLufs by remember { mutableFloatStateOf(-120f) }
     var masterPeakHistory by remember { mutableStateOf(List(48) { 0f }) }
-    var trackMeterReadings by remember { mutableStateOf<Map<String, Pair<Float, Float>>>(emptyMap()) }
+    var trackMeterReadings by remember {
+        mutableStateOf<Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot>>(emptyMap())
+    }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showSettings by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf("INTERFACE") }
@@ -592,8 +594,7 @@ private fun StudioWaveApp() {
     LaunchedEffect(arrangementPlayback, project.tracks.map { it.id }) {
         while (true) {
             trackMeterReadings = project.tracks.associate { track ->
-                val meter = arrangementPlayback.trackMeterSnapshot(track.id)
-                track.id to (meter.peak to meter.rms)
+                track.id to arrangementPlayback.trackMeterSnapshot(track.id)
             }
             delay(50)
         }
@@ -2946,7 +2947,7 @@ private fun MixerWorkspace(
     master: Float,
     onMasterChange: (Float) -> Unit,
     onProjectChange: (StudioProject) -> Unit,
-    trackMeterReadings: Map<String, Pair<Float, Float>>
+    trackMeterReadings: Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot>
 ) {
     val mixerPalette = LocalStudioWavePalette.current
     BoxWithConstraints(
@@ -3003,10 +3004,12 @@ private fun MixerWorkspace(
                     ) {
                         repeat(2) { channel ->
                             Canvas(Modifier.weight(1f).fillMaxHeight()) {
-                                val peak = (trackMeterReadings[track.id]?.first ?: 0f).coerceIn(0f, 1f)
-                                val rms = (trackMeterReadings[track.id]?.second ?: 0f).coerceIn(0f, 1f)
+                                val meter = trackMeterReadings[track.id]
+                                val channelPeak = (if (channel == 0) meter?.peakLeft else meter?.peakRight)
+                                    ?.coerceIn(0f, 1f) ?: 0f
+                                val channelRms = (if (channel == 0) meter?.rmsLeft else meter?.rmsRight)
+                                    ?.coerceIn(0f, 1f) ?: 0f
                                 val lane = (size.width * 0.76f).coerceAtLeast(2f)
-                                val channelPeak = (peak * if (channel == 0) 0.96f else 0.92f).coerceIn(0f, 1f)
                                 for (segment in 0 until 24) {
                                     val segmentHeight = size.height / 24f
                                     val y = size.height - (segment + 1) * segmentHeight
@@ -3022,8 +3025,8 @@ private fun MixerWorkspace(
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(lane / 3f))
                                 }
                                 drawLine(mixerPalette.text.copy(alpha = 0.84f),
-                                    Offset((size.width - lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)),
-                                    Offset((size.width + lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)), 1f)
+                                    Offset((size.width - lane) / 2f, size.height * (1f - channelRms).coerceIn(0f, 1f)),
+                                    Offset((size.width + lane) / 2f, size.height * (1f - channelRms).coerceIn(0f, 1f)), 1f)
                             }
                         }
                     }
