@@ -3148,8 +3148,9 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
 
 @Composable
 private fun SmallAction(label: String, onClick: () -> Unit) {
+    val p = LocalStudioWavePalette.current
     Button(onClick = onClick, modifier = Modifier.height(25.dp), contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
-        shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34383F), contentColor = Color(0xFFE4E8EF))) {
+        shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text)) {
         Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }
 }
