@@ -3051,7 +3051,7 @@ private fun DeviceDock(
         if (expanded) {
             if (project.tracks.isEmpty()) {
                 Text("Tambahkan track di Arrangement untuk melihat perangkat dan kontrol channel.",
-                    color = MutedText, fontSize = 9.sp)
+                    color = devicePalette.muted, fontSize = 9.sp)
             } else {
                 Row(
                     Modifier.fillMaxWidth().height(28.dp).horizontalScroll(rememberScrollState()),
@@ -3061,7 +3061,7 @@ private fun DeviceDock(
                     project.tracks.forEach { track ->
                         val isSelected = selectedTrack?.id == track.id
                         Surface(
-                            color = if (isSelected) LocalStudioWavePalette.current.accent.copy(alpha = 0.18f) else LocalStudioWavePalette.current.panel,
+                            color = if (isSelected) devicePalette.accent.copy(alpha = 0.18f) else devicePalette.room,
                             shape = RoundedCornerShape(5.dp),
                             modifier = Modifier.clickable { onSelectTrack(track.id) }
                         ) {
@@ -3079,7 +3079,7 @@ private fun DeviceDock(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text("VOLUME  ·  ${(selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt()}%",
-                                color = MutedText, fontSize = 9.sp)
+                                color = devicePalette.muted, fontSize = 9.sp)
                             Slider(
                                 value = selectedTrack.volume.coerceIn(0f, 1.5f),
                                 onValueChange = { value ->
