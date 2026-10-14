@@ -2931,7 +2931,7 @@ private fun MixerWorkspace(
                     val railTop = size.height * 0.06f
                     val railBottom = size.height * 0.94f
                     drawRoundRect(
-                        Color(0xFF111315),
+                        mixerPalette.room,
                         Offset(railLeft, railTop),
                         Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
@@ -2945,7 +2945,7 @@ private fun MixerWorkspace(
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f)
                     )
                     drawRoundRect(
-                        Color(0xFFE4E8EF),
+                        mixerPalette.text,
                         Offset(size.width * 0.18f, thumbY - 3f),
                         Size(size.width * 0.64f, 6f),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
@@ -2958,16 +2958,16 @@ private fun MixerWorkspace(
                     track.pan >= 0.95f -> "R"
                     else -> (track.pan * 100).toInt().toString()
                 }
-                Text("PAN  " + panLabel, color = Color(0xFFB6B9C0), fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                Slider(
+                Text("PAN  " + panLabel, color = mixerPalette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                StudioWavePanKnob(
                     value = track.pan.coerceIn(-1f, 1f),
+                    palette = mixerPalette,
                     onValueChange = { value ->
                         onProjectChange(project.copy(tracks = project.tracks.map {
                             if (it.id == track.id) it.copy(pan = value) else it
                         }))
                     },
-                    valueRange = -1f..1f,
-                    modifier = Modifier.fillMaxWidth().height(24.dp)
+                    modifier = Modifier.size(54.dp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -3376,3 +3376,70 @@ private fun AudioClipWaveform(sourceUri: String?, accent: Color) {
         }
     }
 }
+
+
+@Composable
+private fun StudioWavePanKnob(
+    value: Float,
+    palette: StudioWavePalette,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val sensitivity = with(density) { 1f / 38.dp.toPx() }
+    Canvas(
+        modifier
+            .pointerInput(value) {
+                detectDragGestures(
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onValueChange((value - dragAmount.y * sensitivity).coerceIn(-1f, 1f))
+                    }
+                )
+            }
+            .clickable(onClickLabel = "Reset pan to center") { onValueChange(0f) }
+    ) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        val radius = size.minDimension * 0.34f
+        val arcRadius = radius + size.minDimension * 0.09f
+        val arcSize = Size(arcRadius * 2f, arcRadius * 2f)
+        val arcTopLeft = Offset(center.x - arcRadius, center.y - arcRadius)
+        drawCircle(palette.room, radius, center)
+        drawCircle(palette.control, radius, center, style = androidx.compose.ui.graphics.drawscope.Stroke(size.minDimension * 0.055f))
+        drawArc(
+            color = palette.border,
+            startAngle = 135f,
+            sweepAngle = 270f,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(size.minDimension * 0.045f)
+        )
+        val sweep = ((value + 1f) / 2f) * 270f
+        drawArc(
+            color = palette.accent,
+            startAngle = 135f,
+            sweepAngle = sweep,
+            useCenter = false,
+            topLeft = arcTopLeft,
+            size = arcSize,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = size.minDimension * 0.055f,
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+        )
+        val angle = Math.toRadians((135f + sweep).toDouble())
+        drawLine(
+            palette.text,
+            center,
+            Offset(
+                center.x + kotlin.math.cos(angle).toFloat() * radius * 0.72f,
+                center.y + kotlin.math.sin(angle).toFloat() * radius * 0.72f
+            ),
+            strokeWidth = size.minDimension * 0.045f,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round
+        )
+        drawCircle(palette.text.copy(alpha = 0.25f), size.minDimension * 0.025f, center)
+    }
+}
+
