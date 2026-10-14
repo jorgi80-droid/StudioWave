@@ -1410,6 +1410,11 @@ private fun ArrangementWorkspace(
                     onScroll(0.0)
                     onScrollTracks(0f)
                 }
+                if (selectedClipModel != null) {
+                    FloatingTimelineControl(if (showClipView) "CLIP ✓" else "CLIP", "Show selected clip inspector") {
+                        showClipView = !showClipView
+                    }
+                }
                 FloatingTimelineControl(if (snapEnabled) "SN" else "SN×", if (snapEnabled) "Snap on" else "Snap off") {
                     snapEnabled = !snapEnabled
                 }
@@ -1417,6 +1422,68 @@ private fun ArrangementWorkspace(
                     snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it }
                 }
             }
+        if (showClipView && selectedClipTrack != null && selectedClipModel != null) {
+            val inspectorTrack = selectedClipTrack
+            val inspectorClip = selectedClipModel
+            val inspectorTimebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+            val barNumber = inspectorClip.startTick / inspectorTimebase.ticksPerBar + 1L
+            val endTick = (inspectorClip.startTick.coerceAtLeast(0L) + inspectorClip.lengthTicks.coerceAtLeast(1L))
+            val endBarNumber = (endTick - 1L).coerceAtLeast(0L) / inspectorTimebase.ticksPerBar + 1L
+            val typeLabel = when (inspectorTrack.kind) {
+                "audio" -> "AUDIO CLIP"
+                "drum" -> "DRUM CLIP"
+                else -> "MIDI CLIP"
+            }
+            Column(
+                Modifier.align(Alignment.TopEnd).padding(6.dp).width(228.dp)
+                    .background(arrangementPalette.panel.copy(alpha = 0.98f), RoundedCornerShape(6.dp))
+                    .border(1.dp, arrangementPalette.border, RoundedCornerShape(6.dp))
+                    .padding(7.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("CLIP VIEW", color = arrangementPalette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        Text(typeLabel, color = arrangementPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                    SmallAction("×") { showClipView = false }
+                }
+                Text(inspectorClip.name, color = arrangementPalette.text, fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(inspectorTrack.name, color = arrangementPalette.muted, fontSize = 8.sp, maxLines = 1)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(Modifier.weight(1f).background(arrangementPalette.room, RoundedCornerShape(4.dp)).padding(5.dp)) {
+                        Text("START", color = arrangementPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                        Text("BAR $barNumber", color = arrangementPalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Column(Modifier.weight(1f).background(arrangementPalette.room, RoundedCornerShape(4.dp)).padding(5.dp)) {
+                        Text("END", color = arrangementPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                        Text("BAR $endBarNumber", color = arrangementPalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                val detailText = when (inspectorTrack.kind) {
+                    "audio" -> if (inspectorClip.sourceUri != null) "SOURCE LOADED · trim offset ${inspectorClip.sourceOffsetTicks} ticks"
+                        else "NO SOURCE · import audio to attach a waveform"
+                    "drum" -> "${inspectorClip.drumSteps.count { it }} ACTIVE STEPS · ${inspectorClip.drumSteps.size} STEPS"
+                    else -> "${inspectorClip.midiNotes.size} NOTES · ${inspectorClip.midiNotes.sumOf { it.durationTicks.coerceAtLeast(1L) }} NOTE-TICKS"
+                }
+                Text(detailText, color = arrangementPalette.muted, fontSize = 8.sp, maxLines = 2)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    SmallAction("EDITOR") {
+                        showClipView = false
+                        onOpenEditor(
+                            when (inspectorTrack.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
+                            inspectorTrack.id
+                        )
+                    }
+                    SmallAction("DUP") { handleClipAction("Duplicate", inspectorClip.id) }
+                    SmallAction("NAME") {
+                        renameClipId = inspectorClip.id
+                        renameText = inspectorClip.name
+                    }
+                }
+            }
+        }
         Box(Modifier.align(Alignment.BottomEnd).fillMaxSize(), contentAlignment = Alignment.BottomEnd) {
             // Keep routine edit feedback out of the timeline; only validation errors appear inline.
             if (statusMessage != null) {
