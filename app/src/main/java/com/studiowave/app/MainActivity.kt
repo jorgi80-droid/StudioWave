@@ -2600,13 +2600,13 @@ private fun PianoRollWorkspace(
 
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(5.dp)) {
         Row(
-            Modifier.fillMaxWidth().height(28.dp).background(Color(0xFF222428), RoundedCornerShape(5.dp))
+            Modifier.fillMaxWidth().height(28.dp).background(pianoPalette.grid.copy(alpha = 0.55f), RoundedCornerShape(5.dp))
                 .padding(horizontal = 5.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically
         ) {
             Text("MIDI", color = AbletonOrange, fontSize = 10.sp, fontWeight = FontWeight.Black)
             Text("${track?.name ?: "NO TRACK"}  /  ${clip?.name ?: "NO CLIP"}",
-                color = Color(0xFFE4E8EF), fontSize = 9.sp, maxLines = 1)
+                color = pianoPalette.text, fontSize = 9.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             SmallAction("BACK", onBack)
         }
@@ -3059,11 +3059,11 @@ private fun DeviceDock(
                     project.tracks.forEach { track ->
                         val isSelected = selectedTrack?.id == track.id
                         Surface(
-                            color = if (isSelected) Color(0xFF18443F) else Color(0xFF202328),
+                            color = if (isSelected) LocalStudioWavePalette.current.accent.copy(alpha = 0.18f) else LocalStudioWavePalette.current.panel,
                             shape = RoundedCornerShape(5.dp),
                             modifier = Modifier.clickable { onSelectTrack(track.id) }
                         ) {
-                            Text(track.name.take(18), color = if (isSelected) Mint else Color(0xFFD5D9E0),
+                            Text(track.name.take(18), color = if (isSelected) Mint else pianoPalette.text,
                                 fontSize = 9.sp, maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
                         }
