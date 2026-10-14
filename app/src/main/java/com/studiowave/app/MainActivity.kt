@@ -952,6 +952,7 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
 
 @Composable
 private fun ArrangementWorkspace(
+    val arrangementPalette = LocalStudioWavePalette.current
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
     zoom: Float, onZoom: (Float) -> Unit,
@@ -960,8 +961,7 @@ private fun ArrangementWorkspace(
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
-    onPlaybackRestart: (StudioProject) -> Unit = {
-    val arrangementPalette = LocalStudioWavePalette.current},
+    onPlaybackRestart: (StudioProject) -> Unit = {},
     onScratchTrack: (String, Float) -> Unit = { _, _ -> },
     playheadTick: Long = 0L,
     isPlaying: Boolean = false,
