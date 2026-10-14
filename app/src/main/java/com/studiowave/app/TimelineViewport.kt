@@ -172,13 +172,4 @@ data class TimelineViewport(
         }
     }
 
-    fun visibleSubdivisionTicks(pixelsPerTickThreshold: Double = 0.35): Long {
-        val candidates = listOf(
-            timebase.ticksPerBeat / 4L,
-            timebase.ticksPerBeat / 2L,
-            timebase.ticksPerBeat
-        ).filter { it > 0L }
-        return candidates.firstOrNull { it * pixelsPerTick >= pixelsPerTickThreshold }
-            ?: timebase.ticksPerBeat
-    }
 }
