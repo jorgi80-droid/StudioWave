@@ -5,6 +5,16 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimelineViewportTest {
+    @Test fun arrangementExtentIsCappedAtExactly1800Bars() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val maxTick = maxArrangementTick(timebase)
+        assertEquals(1800L * timebase.ticksPerBar, maxTick)
+        val viewport = TimelineViewport(timebase, 74f, maxTick.toDouble(), 900f)
+        assertEquals(maxTick, viewport.screenXToTime(100_000f))
+        assertTrue(viewport.panByScreenPixels(-10_000f).scrollTimeTicks <= maxTick.toDouble())
+        assertEquals(1799L, viewport.lastVisibleBar(10))
+    }
+
     @Test fun pinchFrameReturnsToStartScaleAndScrollAfterRelease() {
         val timebase = TimelineTimebase(120, 4, 4, 960)
         val initialZoom = 1f
