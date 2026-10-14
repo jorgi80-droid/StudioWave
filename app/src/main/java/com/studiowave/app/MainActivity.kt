@@ -2798,6 +2798,7 @@ private fun MixerWorkspace(
                         Size(size.width * 0.64f, 6f),
                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
                     )
+                    }
                 }
                 Spacer(Modifier.height(3.dp))
                 val panLabel = when {
