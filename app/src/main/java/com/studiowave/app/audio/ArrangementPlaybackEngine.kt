@@ -1,9 +1,7 @@
 package com.studiowave.app.audio
 
 import android.content.Context
-import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -157,7 +155,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
     @Volatile private var worker: Thread? = null
-    @Volatile private var output: AudioTrack? = null
+    @Volatile private var output: NativeAudioEngine? = null
 
     private data class AudioAsset(
         val sampleRate: Int,
@@ -237,40 +235,24 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         runCatching {
             onProgress(ArrangementTiming.framesToTicks(startFrame, plan.bpm, plan.ppq, plan.sampleRate))
         }
-        val minBuffer = AudioTrack.getMinBufferSize(
-            plan.sampleRate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT
-        )
-        require(minBuffer > 0) { "Audio output buffer query failed: $minBuffer" }
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-            .setAudioFormat(AudioFormat.Builder().setSampleRate(plan.sampleRate)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setBufferSizeInBytes(maxOf(minBuffer, BLOCK_FRAMES * 4 * 4))
-            .build()
-        if (track.state != AudioTrack.STATE_INITIALIZED) {
-            track.release()
-            error("AudioTrack initialization failed")
-        }
+        val nativeOutput = NativeAudioEngine()
+        nativeOutput.start(plan.sampleRate)
         synchronized(this) {
             if (closed.get() || generation.get() != token) {
-                track.release()
+                nativeOutput.close()
                 error("Playback start was cancelled")
             }
-            output = track
+            output = nativeOutput
             running.set(true)
             try {
-                track.play()
                 worker = Thread({
                     Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-                    renderPlan(track, plan, token, startFrame, onProgress, onCompleted, onError)
+                    renderPlan(nativeOutput, plan, token, startFrame, onProgress, onCompleted, onError)
                 }, "StudioWave-Arrangement").also { it.start() }
             } catch (failure: Throwable) {
                 running.set(false)
                 output = null
-                runCatching { track.release() }
+                runCatching { nativeOutput.close() }
                 throw failure
             }
         }
@@ -535,7 +517,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
 
     private fun renderPlan(
-        track: AudioTrack,
+        track: NativeAudioEngine,
         plan: Plan,
         token: Long,
         startFrame: Long,
@@ -575,9 +557,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
         var lastReportedFrame = -1L
         fun reportPlaybackPosition(force: Boolean = false) {
-            // The playback head tracks audible output, unlike the mixer's submitted
-            // frame cursor which runs ahead by the AudioTrack buffer latency.
-            val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+            // Native callback consumption tracks frames read from the PCM queue.
+            val playedFrames = track.playedFrames()
             val absoluteFrame = (startFrame + playedFrames).coerceAtMost(plan.totalFrames)
             val reportInterval = (sampleRate / 30).toLong().coerceAtLeast(1L)
             if (force || lastReportedFrame < 0L || absoluteFrame - lastReportedFrame >= reportInterval) {
@@ -707,7 +688,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 var blockSquares = 0.0
                 for (i in 0 until sampleCount) {
                     val sample = mix[i].coerceIn(-0.98f, 0.98f)
-                    mix[i] = sample // Meter the same clipped master signal that is sent to AudioTrack.
+                    mix[i] = sample // Meter the same clipped master signal queued for native output.
                     val absolute = kotlin.math.abs(sample)
                     if (absolute > blockPeak) blockPeak = absolute
                     blockSquares += sample.toDouble() * sample.toDouble()
@@ -723,30 +704,24 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 mixState.tracks.keys.forEach { id ->
                     if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f)
                 }
-                var offset = 0
-                while (offset < sampleCount && running.get()) {
-                    val written = track.write(pcm, offset, sampleCount - offset, AudioTrack.WRITE_BLOCKING)
-                    if (written < 0) error("Audio output write failed: $written")
-                    if (written == 0) Thread.yield() else offset += written
-                }
+                if (!track.queuePcm(pcm, sampleCount) { running.get() && generation.get() == token }) break
                 position = blockEnd
                 reportPlaybackPosition()
             }
             if (position >= plan.totalFrames && generation.get() == token && running.get()) {
                 val expectedPlayedFrames = (plan.totalFrames - startFrame).coerceAtLeast(0L)
                 val drainDeadlineNanos = System.nanoTime() + 5_000_000_000L
-                // Do not tear down AudioTrack immediately after the last write: queued
-                // samples must reach the output before playback is declared complete.
+                // Wait until Oboe has consumed queued PCM before reporting completion.
                 while (running.get() && generation.get() == token) {
                     reportPlaybackPosition()
-                    val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+                    val playedFrames = track.playedFrames()
                     if (playedFrames >= expectedPlayedFrames) break
                     if (System.nanoTime() >= drainDeadlineNanos) {
                         error("Audio output did not drain before timeout")
                     }
                     Thread.sleep(4L)
                 }
-                val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+                val playedFrames = track.playedFrames()
                 if (running.get() && generation.get() == token &&
                     playedFrames >= expectedPlayedFrames && running.compareAndSet(true, false)
                 ) {
@@ -766,8 +741,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             synchronized(this) {
                 if (output === track) {
                     output = null
-                    runCatching { track.pause(); track.flush() }
-                    runCatching { track.release() }
+                    runCatching { track.close() }
                 }
                 worker = null
             }
@@ -820,10 +794,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private fun stopOutputOnly() {
         running.set(false)
         val current = synchronized(this) { output }
-        // Pause/flush before joining so a blocking AudioTrack.write can unwind.
-        current?.let { track ->
-            runCatching { track.pause(); track.flush() }
-        }
+        // Closing Oboe unblocks native queue operations before joining the producer.
+        current?.let { track -> runCatching { track.stop() } }
         val thread = worker
         if (thread != null && thread !== Thread.currentThread()) {
             try {
@@ -836,8 +808,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             if (output === current) {
                 output = null
                 current?.let { track ->
-                    runCatching { track.pause(); track.flush() }
-                    runCatching { track.release() }
+                    runCatching { track.close() }
                 }
             }
             if (worker === thread && (thread == null || !thread.isAlive)) worker = null

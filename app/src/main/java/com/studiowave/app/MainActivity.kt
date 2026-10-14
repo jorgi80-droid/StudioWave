@@ -2786,7 +2786,8 @@ private fun PianoRollWorkspace(
     var selectionMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
     var velocityMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
     var panMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
-    var clipboard by remember(track?.id, clip?.id) { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
+    var clipboard by remember(track?.id, clip?.id) { mutableStateOf<List<com.studiowave.app.data.MidiNote>>(emptyList()) }
+    var selectionDrag by remember(track?.id, clip?.id) { mutableStateOf<Pair<Offset, Offset>?>(null) }
     var editMessage by remember(track?.id, clip?.id) { mutableStateOf("Pinch to zoom · drag empty grid to scroll") }
 
     val safePpq = project.ppq.coerceIn(24, 3840).toLong()
@@ -2896,8 +2897,17 @@ private fun PianoRollWorkspace(
             ) {
                 SmallAction("COPY") {
                     val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
-                    clipboard = selected.firstOrNull()
-                    editMessage = if (selected.isNotEmpty()) "${selected.size} note(s) copied (clipboard stores first note)" else "Select a note first"
+                    if (selected.isNotEmpty()) {
+                        val anchorTick = selected.minOf { it.startTick }
+                        val anchorPitch = selected.minOf { it.pitch }
+                        clipboard = selected.map { note ->
+                            note.copy(startTick = (note.startTick - anchorTick).coerceAtLeast(0L), pitch = note.pitch - anchorPitch)
+                        }
+                        editMessage = "${selected.size} note(s) copied"
+                    } else {
+                        clipboard = emptyList()
+                        editMessage = "Select notes first"
+                    }
                 }
                 SmallAction("DEL") {
                     val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
@@ -2942,28 +2952,30 @@ private fun PianoRollWorkspace(
                 }
                 SmallAction("PASTE") {
                     val source = clipboard
-                    if (source == null) {
-                        editMessage = "Copy a note first"
+                    if (source.isEmpty()) {
+                        editMessage = "Copy notes first"
                     } else if (clip == null || track == null) {
                         editMessage = "Create a MIDI clip first"
                     } else {
-                        val requestedStart = if (source.startTick > Long.MAX_VALUE - stepTicks) Long.MAX_VALUE
-                            else source.startTick.coerceAtLeast(0L) + stepTicks
-                        if (requestedStart >= clip.lengthTicks.coerceAtLeast(1L)) {
-                            editMessage = "No room to paste after this note"
-                        } else {
-                            val candidate = source.copy(
+                        val anchor = notes.firstOrNull { it.id == selectedNoteId }
+                        val pasteOrigin = ((anchor?.startTick ?: pageStartStep.toLong() * stepTicks) + stepTicks)
+                            .coerceIn(0L, (clip.lengthTicks - 1L).coerceAtLeast(0L))
+                        val basePitch = anchor?.pitch ?: 60
+                        val candidates = source.map { note ->
+                            note.copy(
                                 id = java.util.UUID.randomUUID().toString(),
-                                startTick = requestedStart
+                                startTick = (pasteOrigin + note.startTick).coerceAtMost(clip.lengthTicks),
+                                pitch = (basePitch + note.pitch).coerceIn(0, 127)
                             )
-                            val pasted = fitMidiNotesToClip(listOf(candidate), clip.lengthTicks).firstOrNull()
-                            if (pasted == null) {
-                                editMessage = "Note does not fit in this clip"
-                            } else {
-                                updateNotes(notes + pasted)
-                                selectedNoteId = pasted.id
-                                editMessage = "Note pasted"
-                            }
+                        }
+                        val pasted = fitMidiNotesToClip(candidates, clip.lengthTicks)
+                        if (pasted.isEmpty()) {
+                            editMessage = "Notes do not fit in this clip"
+                        } else {
+                            updateNotes(notes + pasted)
+                            selectedNoteIds = pasted.map { it.id }.toSet()
+                            selectedNoteId = pasted.first().id
+                            editMessage = "${pasted.size} note(s) pasted"
                         }
                     }
                 }
@@ -3137,6 +3149,7 @@ private fun PianoRollWorkspace(
                                             if (change.pressed) {
                                                 current = change.position
                                                 if ((current - origin).getDistance() > with(pianoDensity) { 8.dp.toPx() }) {
+                                                    selectionDrag = origin to current
                                                     val left = minOf(origin.x, current.x)
                                                     val right = maxOf(origin.x, current.x)
                                                     val top = minOf(origin.y, current.y)
@@ -3154,6 +3167,7 @@ private fun PianoRollWorkspace(
                                                 }
                                             }
                                         } while (event.changes.any { it.pressed })
+                                        selectionDrag = null
                                         if (selectedNoteIds.isNotEmpty()) {
                                             selectedNoteId = selectedNoteIds.first()
                                             editMessage = "${selectedNoteIds.size} notes selected"
@@ -3293,6 +3307,16 @@ private fun PianoRollWorkspace(
                                     Offset(col * localColWidth, 0f), Offset(col * localColWidth, size.height),
                                     when { bar -> 1.4f; beat -> 0.9f; else -> 0.45f })
                             }
+                            selectionDrag?.let { (origin, current) ->
+                                val left = minOf(origin.x, current.x).coerceIn(0f, size.width)
+                                val top = minOf(origin.y, current.y).coerceIn(0f, size.height)
+                                val right = maxOf(origin.x, current.x).coerceIn(0f, size.width)
+                                val bottom = maxOf(origin.y, current.y).coerceIn(0f, size.height)
+                                val marqueeSize = Size((right-left).coerceAtLeast(1f), (bottom-top).coerceAtLeast(1f))
+                                drawRect(pianoPalette.orange.copy(alpha=0.16f), Offset(left,top), marqueeSize)
+                                drawRect(pianoPalette.orange, Offset(left,top), marqueeSize,
+                                    style=androidx.compose.ui.graphics.drawscope.Stroke(width=1.5f))
+                            }
                             notes.forEach { note ->
                                 val x = (note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep) * localColWidth
                                 val row = currentTopPitch - note.pitch
@@ -3300,7 +3324,7 @@ private fun PianoRollWorkspace(
                                 val width = (note.durationTicks.toDouble() / stepTicks.toDouble() * localColWidth).toFloat().coerceAtLeast(3f)
                                 if (note.pitch in 0..127 && x < size.width && x + width > 0 && y + localRowHeight > 0 && y < size.height) {
                                     drawRoundRect(
-                                        color = if (note.id == selectedNoteId) pianoPalette.orange else pianoPalette.accent,
+                                        color = if (note.id == selectedNoteId || note.id in selectedNoteIds) pianoPalette.orange else pianoPalette.accent,
                                         topLeft = Offset(x.toFloat(), y + 1f),
                                         size = Size(width, (localRowHeight - 2f).coerceAtLeast(2f)),
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
