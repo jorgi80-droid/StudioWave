@@ -886,8 +886,9 @@ private fun WorkspaceRail(
     onSelect: (String) -> Unit,
     onToggleDevices: () -> Unit
 ) {
+    val p = LocalStudioWavePalette.current
     Column(
-        Modifier.width(48.dp).fillMaxHeight().background(Color(0xFF242528), RoundedCornerShape(7.dp)).padding(3.dp),
+        Modifier.width(48.dp).fillMaxHeight().background(p.panel, RoundedCornerShape(7.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
@@ -905,10 +906,12 @@ private fun WorkspaceRail(
 
 @Composable
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    val p = LocalStudioWavePalette.current
     Surface(
-        color = if (selected) Color(0xFF4A2D24) else Color(0xFF191A1D),
-        contentColor = if (selected) AbletonOrange else MutedText,
+        color = if (selected) p.accent.copy(alpha = 0.18f) else p.room,
+        contentColor = if (selected) p.accent else p.muted,
         shape = RoundedCornerShape(6.dp),
+        border = if (selected) BorderStroke(1.dp, p.accent.copy(alpha = 0.65f)) else null,
         modifier = Modifier.fillMaxWidth().height(43.dp).clickable(onClick = onClick)
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
