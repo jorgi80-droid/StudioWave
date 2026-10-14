@@ -432,12 +432,20 @@ private fun StudioWaveApp() {
                                     currentProject.ppq / 60_000.0).toLong().coerceAtLeast(1L)
                             } else 15360L
                             val snapStep = SnapDivision.QUARTER_BEAT.ticks(timebase)
-                            val lengthTicks = if (durationMs > 0L) {
+                            val requestedLengthTicks = if (durationMs > 0L) {
                                 (((exactTicks + snapStep - 1L) / snapStep) * snapStep).coerceAtLeast(snapStep)
                             } else 15360L
+                            val arrangementEndTick = maxArrangementTick(timebase)
+                            val requestedStart = target.clips.maxOfOrNull { clip ->
+                                val end = clip.startTick.coerceAtLeast(0L)
+                                val length = clip.lengthTicks.coerceAtLeast(0L)
+                                if (end > Long.MAX_VALUE - length) Long.MAX_VALUE else end + length
+                            } ?: 0L
+                            val clipStart = requestedStart.coerceIn(0L, arrangementEndTick - 1L)
+                            val lengthTicks = requestedLengthTicks.coerceIn(1L, arrangementEndTick - clipStart)
                             val clip = com.studiowave.app.data.WaveClip(
                                 name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
-                                startTick = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L,
+                                startTick = clipStart,
                                 lengthTicks = lengthTicks,
                                 sourceUri = uri.toString()
                             )
@@ -1427,6 +1435,8 @@ private fun TimelineGrid(
     val currentVerticalZoom by rememberUpdatedState(verticalZoom)
     val currentOnVerticalZoom by rememberUpdatedState(onVerticalZoom)
     val currentOnScrollTracks by rememberUpdatedState(onScrollTracks)
+    val currentViewport by rememberUpdatedState(viewport)
+    val currentTrackHeightPx by rememberUpdatedState(trackHeightPx)
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
     val currentOnSeekTick by rememberUpdatedState(onSeekTick)
@@ -1699,7 +1709,8 @@ private fun TimelineGrid(
                         val resizeGripWidthPx = with(density) { resizeGripWidthDp.dp.toPx() }
                         val displayLeftPx = viewport.timeToViewportX(boundedClipStart)
                         // Avoid composing or drawing clips fully outside the viewport.
-                        if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
+                        if (boundedClipStart < arrangementEndTick &&
+                            displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
                         Column(
                             Modifier
@@ -1750,7 +1761,7 @@ private fun TimelineGrid(
                                                 startRow.topDp + startRow.heightDp / 2f +
                                                     dragDy / (density.density * currentVerticalZoom.coerceAtLeast(0.1f))
                                             val targetIndex = if (startRow == null || rowLayout.isEmpty()) {
-                                                (startIndex + kotlin.math.round(dragDy / trackHeightPx.coerceAtLeast(1f)).toInt())
+                                                (startIndex + kotlin.math.round(dragDy / currentTrackHeightPx.coerceAtLeast(1f)).toInt())
                                                     .coerceIn(0, currentTracks.lastIndex.coerceAtLeast(0))
                                             } else {
                                                 rowLayout.indices.minByOrNull { index ->
@@ -1758,7 +1769,7 @@ private fun TimelineGrid(
                                                 } ?: startIndex
                                             }
                                             val target = currentTracks.getOrNull(targetIndex)
-                                            val barWidthPx = viewport.effectivePixelsPerBar
+                                            val barWidthPx = currentViewport.effectivePixelsPerBar
                                             val dragViewport = TimelineViewport(
                                                 timebase, barWidthPx, currentScroll,
                                                 timelineWidthPx, trackHeaderWidthPx
