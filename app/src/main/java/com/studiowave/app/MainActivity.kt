@@ -1701,6 +1701,22 @@ private fun ArrangementWorkspace(
     }
 }
 
+/**
+ * Normalize the editor's drum-step view without discarding long stored patterns.
+ * A missing pattern gets one bar of editable empty steps; existing patterns retain
+ * their length up to the project model's explicit safety limit.
+ */
+internal fun normalizeDrumPatternForEditor(
+    steps: List<Boolean>,
+    minimumSteps: Int = 16,
+    maximumSteps: Int = StudioProject.MAX_DRUM_STEPS_PER_CLIP
+): List<Boolean> {
+    val safeMinimum = minimumSteps.coerceIn(1, maximumSteps.coerceAtLeast(1))
+    val safeMaximum = maximumSteps.coerceAtLeast(safeMinimum)
+    val length = steps.size.coerceIn(safeMinimum, safeMaximum)
+    return steps.take(length) + List((length - steps.size).coerceAtLeast(0)) { false }
+}
+
 @Composable
 private fun DrumSequencerWorkspace(
     track: StudioTrack?,
@@ -1712,14 +1728,12 @@ private fun DrumSequencerWorkspace(
     val palette = LocalStudioWavePalette.current
     val clip = track?.clips?.firstOrNull { it.id == selectedClipId } ?: track?.clips?.firstOrNull()
     val rawSteps = clip?.drumSteps ?: emptyList()
-    val stepCount = rawSteps.size.coerceIn(16, StudioProject.MAX_DRUM_STEPS_PER_CLIP)
-    val steps = rawSteps.take(stepCount) + List((stepCount - rawSteps.size).coerceAtLeast(0)) { false }
+    val steps = normalizeDrumPatternForEditor(rawSteps)
 
     fun updateSteps(updated: List<Boolean>) {
         val activeTrack = track ?: return
         val activeClip = clip ?: return
-        val safeLength = updated.size.coerceIn(16, StudioProject.MAX_DRUM_STEPS_PER_CLIP)
-        val normalized = updated.take(safeLength) + List((safeLength - updated.size).coerceAtLeast(0)) { false }
+        val normalized = normalizeDrumPatternForEditor(updated)
         onProjectChange(project.copy(tracks = project.tracks.map { item ->
             if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
                 if (current.id == activeClip.id) current.copy(drumSteps = normalized) else current
