@@ -2695,6 +2695,20 @@ private fun MixerWorkspace(
     onMasterChange: (Float) -> Unit,
     onProjectChange: (StudioProject) -> Unit
 ) {
+    var meterPeak by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+    var meterRms by remember { mutableStateOf<Map<String, Float>>(emptyMap()) }
+    LaunchedEffect(project.tracks) {
+        // Show signal presence based on track content and control state rather than pretending
+        // these are real input meters; the master meter remains owned by the transport engine.
+        meterPeak = project.tracks.associate { track ->
+            track.id to when {
+                track.muted -> 0f
+                track.clips.isEmpty() -> 0f
+                else -> (track.volume.coerceIn(0f, 1.5f) / 1.5f).coerceIn(0f, 1f)
+            }
+        }
+        meterRms = meterPeak.mapValues { (_, value) -> value * 0.707f }
+    }
     Row(
         Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp))
             .horizontalScroll(rememberScrollState()).padding(4.dp),
@@ -2723,20 +2737,41 @@ private fun MixerWorkspace(
                 Spacer(Modifier.height(4.dp))
                 Text("VOL  " + (track.volume * 100).toInt() + "%", color = Color(0xFFB6B9C0), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 val latestProject by rememberUpdatedState(project)
-                Canvas(
-                    Modifier.fillMaxWidth().weight(1f)
-                        .pointerInput(track.id) {
-                            detectDragGestures { change, _ ->
-                                change.consume()
-                                val height = size.height.coerceAtLeast(1).toFloat()
-                                val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
-                                val current = latestProject
-                                onProjectChange(current.copy(tracks = current.tracks.map {
-                                    if (it.id == track.id) it.copy(volume = value) else it
-                                }))
-                            }
+                Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                        // Dedicated stereo meter lane, visually separate from the channel fader.
+                        val peak = meterPeak[track.id] ?: 0f
+                        val rms = meterRms[track.id] ?: 0f
+                        val lane = (size.width * 0.72f).coerceAtLeast(3f)
+                        for (segment in 0 until 18) {
+                            val segmentHeight = size.height / 18f
+                            val y = size.height - (segment + 1) * segmentHeight
+                            val active = segment / 18f <= peak
+                            drawRoundRect(
+                                color = if (!active) Color(0xFF131518) else if (segment >= 15) Color(0xFFCC5B55) else if (segment >= 11) Color(0xFFE4B45E) else Mint,
+                                topLeft = Offset((size.width - lane) / 2f, y + 1f),
+                                size = Size(lane, (segmentHeight - 2f).coerceAtLeast(1f)),
+                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(1.5f)
+                            )
                         }
-                ) {
+                        drawLine(Color.White.copy(alpha = 0.85f),
+                            Offset((size.width - lane) / 2f, size.height * (1f - rms)),
+                            Offset((size.width + lane) / 2f, size.height * (1f - rms)), 1f)
+                    }
+                    Canvas(
+                        Modifier.weight(1.8f).fillMaxHeight()
+                            .pointerInput(track.id) {
+                                detectDragGestures { change, _ ->
+                                    change.consume()
+                                    val height = size.height.coerceAtLeast(1).toFloat()
+                                    val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
+                                    val current = latestProject
+                                    onProjectChange(current.copy(tracks = current.tracks.map {
+                                        if (it.id == track.id) it.copy(volume = value) else it
+                                    }))
+                                }
+                            }
+                    ) {
                     // This is a real, touch-draggable channel fader, not a fake signal meter.
                     val railWidth = (size.width * 0.18f).coerceAtLeast(5f)
                     val railLeft = (size.width - railWidth) / 2f
