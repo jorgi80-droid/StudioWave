@@ -190,9 +190,11 @@ class ProjectModelTest {
         assertTrue(left.midiNotes.all { it.startTick + it.durationTicks <= 2000L })
         assertTrue(right.midiNotes.all { it.startTick + it.durationTicks <= right.lengthTicks })
         assertEquals(listOf("after", "cross"), right.midiNotes.map { it.id }.sorted())
-        assertEquals(500L, right.midiNotes.first { it.id == "cross" }.startTick)
-        assertEquals(1500L, left.midiNotes.first { it.id == "cross" }.durationTicks)
-        assertEquals(500L, right.midiNotes.first { it.id == "cross" }.durationTicks)
+        // The note crosses the split boundary: 500 ticks remain in the left clip,
+        // and 1,500 ticks continue from source-relative zero in the right clip.
+        assertEquals(0L, right.midiNotes.first { it.id == "cross" }.startTick)
+        assertEquals(500L, left.midiNotes.first { it.id == "cross" }.durationTicks)
+        assertEquals(1500L, right.midiNotes.first { it.id == "cross" }.durationTicks)
         assertTrue(left.midiNotes.map { it.id }.intersect(right.midiNotes.map { it.id }.toSet()).isEmpty())
     }
 
