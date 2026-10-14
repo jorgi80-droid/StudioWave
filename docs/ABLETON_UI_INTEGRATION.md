@@ -34,3 +34,12 @@ This implementation uses the Ableton Live 12 Reference Manual as a workflow and 
 - https://www.ableton.com/en/live-manual/12/working-with-instruments-and-effects/
 - https://www.ableton.com/en/live-manual/12/instrument-drum-and-effect-racks/
 - https://www.ableton.com/en/live-manual/12/live-concepts/
+
+
+## Integration status after the next workspace pass
+
+- Piano Roll: the note grid is semitone-based (36 visible pitches), uses project PPQ for sixteenth-note timing, and exposes a velocity lane whose edits update the selected clip's persisted MIDI notes.
+- Clip View: selected clips can be shifted by one bar, shortened/extended by one bar, and audio source-in trim can be nudged by one beat. All actions update the existing project model and therefore flow through current autosave.
+- Mixer: existing channel volume, pan, mute, solo, master gain and meter UI remain in place and continue using the existing mix model.
+- Device and rack processing: this repository does not yet expose a serializable effect/device chain or DSP processors for warp/time-stretch. The UI must not present nonfunctional effect or warp controls as if they process audio. Those need an engine/model implementation before being marked complete.
+- Arrangement: preserve the existing shared TimelineViewport/timebase and playback-follow logic; avoid a parallel time-to-pixel mapping.

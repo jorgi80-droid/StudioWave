@@ -1289,6 +1289,58 @@ private fun ArrangementWorkspace(
                             }, selectedClipTrack.id)
                         }
                         SmallAction("DUPLICATE") { handleClipAction("Duplicate", clip.id) }
+                        SmallAction("− BAR") {
+                            val nextStart = (clip.startTick - timebase.ticksPerBar).coerceAtLeast(0L)
+                            onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
+                                    if (item.id == clip.id) item.copy(startTick = nextStart) else item
+                                }) else track
+                            }))
+                        }
+                        SmallAction("+ BAR") {
+                            val limit = maxArrangementTick(timebase)
+                            val nextStart = (clip.startTick + timebase.ticksPerBar).coerceAtMost(limit)
+                            onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
+                                    if (item.id == clip.id) item.copy(startTick = nextStart) else item
+                                }) else track
+                            }))
+                        }
+                        SmallAction("SHORTEN") {
+                            val nextLength = (clip.lengthTicks - timebase.ticksPerBar).coerceAtLeast(timebase.ticksPerBeat)
+                            onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
+                                    if (item.id == clip.id) item.copy(lengthTicks = nextLength) else item
+                                }) else track
+                            }))
+                        }
+                        SmallAction("LENGTH +") {
+                            val limit = maxArrangementTick(timebase)
+                            val nextLength = (clip.lengthTicks + timebase.ticksPerBar).coerceAtMost(limit)
+                            onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
+                                    if (item.id == clip.id) item.copy(lengthTicks = nextLength) else item
+                                }) else track
+                            }))
+                        }
+                        if (selectedClipTrack.kind == "audio") {
+                            SmallAction("TRIM IN −") {
+                                val nextOffset = (clip.sourceOffsetTicks - timebase.ticksPerBeat).coerceAtLeast(0L)
+                                onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                    if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
+                                        if (item.id == clip.id) item.copy(sourceOffsetTicks = nextOffset) else item
+                                    }) else track
+                                }))
+                            }
+                            SmallAction("TRIM IN +") {
+                                val nextOffset = (clip.sourceOffsetTicks + timebase.ticksPerBeat).coerceAtMost(maxArrangementTick(timebase))
+                                onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                    if (track.id == selectedClipTrack.id) track.copy(clips = track.clips.map { item ->
+                                        if (item.id == clip.id) item.copy(sourceOffsetTicks = nextOffset) else item
+                                    }) else track
+                                }))
+                            }
+                        }
                     }
                 }
             }
@@ -2211,59 +2263,135 @@ private fun PianoRollWorkspace(
 ) {
     val clip = track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
+    val stepTicks = (project.ppq.toLong() / 4L).coerceAtLeast(1L)
+    val visibleSteps = 32
+    val highestPitch = 83
+    val lowestPitch = 48
+    val pitchRows = highestPitch - lowestPitch + 1
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(5.dp)) {
-        WorkspaceTitleBar("CLIP VIEW / NOTES", track?.name ?: "Choose a MIDI track", onBack)
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        WorkspaceTitleBar("CLIP VIEW / MIDI EDITOR", track?.name ?: "Choose a MIDI track", onBack)
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             Surface(color = Color(0xFF29453D), shape = RoundedCornerShape(4.dp)) {
                 Text("NOTES", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
             }
             Surface(color = Color(0xFF25282D), shape = RoundedCornerShape(4.dp)) {
-                Text("GRID 1/16", color = MutedText, fontSize = 8.sp,
+                Text("SNAP 1/16", color = MutedText, fontSize = 8.sp,
                     modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp))
             }
             Spacer(Modifier.weight(1f))
-            Text("TAP: ADD / REMOVE", color = MutedText, fontSize = 8.sp,
-                modifier = Modifier.align(Alignment.CenterVertically))
+            Text("TAP GRID: ADD / REMOVE NOTE", color = MutedText, fontSize = 8.sp)
         }
-        Canvas(Modifier.fillMaxSize().padding(top = 4.dp).pointerInput(track?.id, clip?.id, notes) {
-            detectTapGestures { point ->
-                if (track == null || clip == null) return@detectTapGestures
-                val rowH = size.height / 24f
-                val colW = size.width / 32f
-                val row = (point.y / rowH).toInt().coerceIn(0, 23)
-                val col = (point.x / colW).toInt().coerceIn(0, 31)
-                val pitch = (84 - row * 3).coerceIn(0, 127)
-                val startTick = col * 240L
-                val existing = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
-                val updatedNotes = if (existing != null) notes.filterNot { it.id == existing.id }
-                    else notes + com.studiowave.app.data.MidiNote(pitch = pitch, startTick = startTick, durationTicks = 240)
-                onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c }) else item
-                }))
+        Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
+            Canvas(Modifier.width(38.dp).fillMaxHeight().background(Color(0xFF202328))) {
+                val rowH = size.height / pitchRows.toFloat()
+                for (row in 0 until pitchRows) {
+                    val pitch = highestPitch - row
+                    val pitchClass = pitch % 12
+                    val isBlack = pitchClass in setOf(1, 3, 6, 8, 10)
+                    drawRect(
+                        color = if (isBlack) Color(0xFF17191C) else Color(0xFF343840),
+                        topLeft = Offset(if (isBlack) size.width * 0.25f else 0f, row * rowH),
+                        size = Size(if (isBlack) size.width * 0.75f else size.width, rowH - 0.5f)
+                    )
+                    if (pitchClass == 0) {
+                        drawLine(Color(0xFF69717D), Offset(0f, row * rowH), Offset(size.width, row * rowH), 1f)
+                    }
+                }
             }
-        }) {
-            val rowH = size.height / 24f
-            val colW = size.width / 32f
-            for (r in 0..24) {
-                if (r < 24 && r % 3 == 1) drawRect(Color(0xFF202328), Offset(0f, r * rowH), Size(size.width, rowH))
-                val strong = r % 12 == 0
-                drawLine(if (strong) Color(0xFF69717D) else Color(0xFF343840),
-                    Offset(0f, r * rowH), Offset(size.width, r * rowH), if (strong) 1.2f else 0.55f)
-            }
-            for (col in 0..32) {
-                val strong = col % 4 == 0
-                drawLine(if (strong) Color(0xFF69717D) else Color(0xFF343840),
-                    Offset(col * colW, 0f), Offset(col * colW, size.height), if (strong) 1.2f else 0.55f)
-            }
-            notes.forEach { note ->
-                val x = note.startTick.toFloat() / 240f * colW
-                val y = (84 - note.pitch).toFloat() / 3f * rowH
-                val width = note.durationTicks.toFloat() / 240f * colW
-                drawRoundRect(Mint, Offset(x, y.coerceIn(0f, size.height - rowH)), Size(width.coerceAtLeast(3f), rowH * 0.72f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+            Canvas(
+                Modifier.weight(1f).fillMaxHeight().background(Color(0xFF1B1D21))
+                    .pointerInput(track?.id, clip?.id, notes, stepTicks) {
+                        detectTapGestures { point ->
+                            if (track == null || clip == null) return@detectTapGestures
+                            val rowH = size.height / pitchRows.toFloat()
+                            val colW = size.width / visibleSteps.toFloat()
+                            val row = (point.y / rowH).toInt().coerceIn(0, pitchRows - 1)
+                            val col = (point.x / colW).toInt().coerceIn(0, visibleSteps - 1)
+                            val pitch = (highestPitch - row).coerceIn(lowestPitch, highestPitch)
+                            val startTick = col * stepTicks
+                            val existing = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
+                            val updatedNotes = if (existing != null) notes.filterNot { it.id == existing.id }
+                                else notes + com.studiowave.app.data.MidiNote(
+                                    pitch = pitch, startTick = startTick, durationTicks = stepTicks, velocity = 100
+                                )
+                            onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                                if (item.id == track.id) item.copy(clips = item.clips.map { c ->
+                                    if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c
+                                }) else item
+                            }))
+                        }
+                    }
+            ) {
+                val rowH = size.height / pitchRows.toFloat()
+                val colW = size.width / visibleSteps.toFloat()
+                for (row in 0..pitchRows) {
+                    val pitch = highestPitch - row
+                    val isC = pitch >= lowestPitch && pitch % 12 == 0
+                    drawLine(
+                        if (isC) Color(0xFF69717D) else Color(0xFF343840),
+                        Offset(0f, row * rowH), Offset(size.width, row * rowH),
+                        if (isC) 1.2f else 0.45f
+                    )
+                }
+                for (col in 0..visibleSteps) {
+                    val strong = col % 4 == 0
+                    drawLine(if (strong) Color(0xFF69717D) else Color(0xFF343840),
+                        Offset(col * colW, 0f), Offset(col * colW, size.height), if (strong) 1.2f else 0.5f)
+                }
+                notes.forEach { note ->
+                    if (note.pitch !in lowestPitch..highestPitch) return@forEach
+                    val x = note.startTick.toDouble() / stepTicks.toDouble() * colW
+                    val y = (highestPitch - note.pitch).toFloat() * rowH
+                    val width = note.durationTicks.toDouble() / stepTicks.toDouble() * colW
+                    if (x < size.width && x + width > 0.0) {
+                        drawRoundRect(
+                            Mint, Offset(x.toFloat(), y + 1f),
+                            Size(width.toFloat().coerceAtLeast(3f), (rowH - 2f).coerceAtLeast(2f)),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
+                        )
+                    }
+                }
             }
         }
+        Row(Modifier.fillMaxWidth().height(48.dp).padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("VEL", color = MutedText, fontSize = 8.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.width(38.dp))
+            Canvas(
+                Modifier.weight(1f).fillMaxHeight().background(Color(0xFF202328), RoundedCornerShape(3.dp))
+                    .pointerInput(track?.id, clip?.id, notes, stepTicks) {
+                        detectTapGestures { point ->
+                            if (track == null || clip == null || notes.isEmpty()) return@detectTapGestures
+                            val colW = size.width / visibleSteps.toFloat()
+                            val targetTick = ((point.x / colW).toInt().coerceIn(0, visibleSteps - 1) * stepTicks)
+                            val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) } ?: return@detectTapGestures
+                            val velocity = (127f * (1f - point.y / size.height.coerceAtLeast(1f))).roundToInt().coerceIn(1, 127)
+                            val updatedNotes = notes.map { if (it.id == nearest.id) it.copy(velocity = velocity) else it }
+                            onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                                if (item.id == track.id) item.copy(clips = item.clips.map { c ->
+                                    if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c
+                                }) else item
+                            }))
+                        }
+                    }
+            ) {
+                val colW = size.width / visibleSteps.toFloat()
+                for (col in 0..visibleSteps) {
+                    drawLine(Color(0xFF343840), Offset(col * colW, 0f), Offset(col * colW, size.height), 0.5f)
+                }
+                notes.forEach { note ->
+                    val x = note.startTick.toDouble() / stepTicks.toDouble() * colW
+                    if (x in 0.0..size.width.toDouble()) {
+                        val barHeight = size.height * note.velocity.coerceIn(1, 127) / 127f
+                        drawRoundRect(Mint.copy(alpha = 0.9f), Offset(x.toFloat() + 2f, size.height - barHeight),
+                            Size((colW - 4f).coerceAtLeast(2f), barHeight), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                    }
+                }
+            }
+        }
+        Text("Velocity: tap below a note to edit its value • autosaved with the project",
+            color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(start = 38.dp, top = 3.dp))
     }
 }
 
