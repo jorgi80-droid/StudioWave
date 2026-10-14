@@ -2762,7 +2762,6 @@ private fun PianoRollWorkspace(
 }
 
 @Composable
-@Composable
 private fun Float.format(digits: Int): String = "%.${digits}f".format(java.util.Locale.US, this)
 
 private fun MixerWorkspace(
@@ -3057,7 +3056,6 @@ private fun DeviceDock(
     }
 }
 
-@Composable
 @Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
