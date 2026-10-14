@@ -2588,6 +2588,10 @@ private fun PianoRollWorkspace(
             })
         }))
     }
+    val gestureNotes = rememberUpdatedState(notes)
+    val gestureNoteWriter = rememberUpdatedState<(List<com.studiowave.app.data.MidiNote>) -> Unit> { updated ->
+        updateNotes(updated)
+    }
     fun snapStep(raw: Int): Int = (raw / 1).coerceAtLeast(0)
     fun pitchLabel(pitch: Int): String {
         val names = arrayOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
@@ -2644,6 +2648,14 @@ private fun PianoRollWorkspace(
                 SmallAction("COPY") {
                     clipboard = notes.firstOrNull { it.id == selectedNoteId }
                     editMessage = if (clipboard != null) "Note copied" else "Select a note first"
+                }
+                SmallAction("DEL") {
+                    val selected = notes.firstOrNull { it.id == selectedNoteId }
+                    if (selected != null) {
+                        updateNotes(notes.filterNot { it.id == selected.id })
+                        selectedNoteId = null
+                        editMessage = "Note deleted"
+                    } else editMessage = "Select a note first"
                 }
                 SmallAction("PASTE") {
                     val source = clipboard
@@ -2772,83 +2784,147 @@ private fun PianoRollWorkspace(
                                         }
                                     } while (event.changes.any { it.pressed })
                                 } else {
+                                    val currentStepsForGesture = (stepsPerBar.toFloat() * 2f / gestureZoomX.value)
+                                        .roundToInt().coerceIn(4, 96)
+                                    val gestureColWidth = (viewportWidthPx / currentStepsForGesture.toFloat()).coerceAtLeast(2f)
+                                    val gestureRowHeight = with(pianoDensity) {
+                                        (18f * gestureZoomY.value).coerceIn(10f, 44f).dp.toPx()
+                                    }.coerceAtLeast(1f)
+                                    val visibleStartStep = gestureStartStep.value.coerceIn(
+                                        0, (clipLengthSteps - currentStepsForGesture).coerceAtLeast(0)
+                                    )
+                                    val clickedStep = (visibleStartStep +
+                                        (down.position.x / gestureColWidth).toInt().coerceIn(0, currentStepsForGesture - 1))
+                                        .coerceIn(0, (clipLengthSteps - 1).coerceAtLeast(0))
+                                    val clickedPitch = (gestureTopPitch.value -
+                                        (down.position.y / gestureRowHeight).toInt()).coerceIn(0, 119)
+                                    val notesAtDown = gestureNotes.value
+                                    val touchedNote = if (keyboardVisible) notesAtDown.firstOrNull { note ->
+                                        val noteStartStep = (note.startTick / stepTicks).toInt()
+                                        val noteEndStep = noteStartStep +
+                                            kotlin.math.ceil(note.durationTicks.coerceAtLeast(1L).toDouble() / stepTicks.toDouble())
+                                                .toInt().coerceAtLeast(1)
+                                        note.pitch == clickedPitch && clickedStep >= noteStartStep && clickedStep < noteEndStep
+                                    } else null
+                                    val noteRightEdgePx = touchedNote?.let { note ->
+                                        ((note.startTick.toDouble() + note.durationTicks.coerceAtLeast(1L).toDouble()) /
+                                            stepTicks.toDouble() - visibleStartStep.toDouble()) * gestureColWidth.toDouble()
+                                    }?.toFloat()
+                                    val resizeNote = touchedNote != null && noteRightEdgePx != null &&
+                                        noteRightEdgePx >= 0f && kotlin.math.abs(down.position.x - noteRightEdgePx) <=
+                                        maxOf(with(pianoDensity) { 12.dp.toPx() }, gestureColWidth * 0.18f)
                                     var previous = down.position
+                                    var finalPosition = down.position
                                     var dragged = false
                                     var horizontalRemainder = 0f
                                     var verticalRemainder = 0f
                                     var dragStart = gestureStartStep.value
                                     var dragPitch = gestureTopPitch.value
-                                    val fixedColWidth = (viewportWidthPx /
-                                        (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96).toFloat()).coerceAtLeast(2f)
-                                    val fixedRowHeight = with(pianoDensity) {
-                                        (18f * gestureZoomY.value).coerceIn(10f, 44f).dp.toPx()
-                                    }.coerceAtLeast(1f)
+                                    var accumulatedDelta = Offset.Zero
                                     do {
                                         val event = awaitPointerEvent()
                                         val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                        finalPosition = change.position
                                         if (change.pressed) {
                                             val delta = change.position - previous
                                             if (kotlin.math.abs(delta.x) > 1f || kotlin.math.abs(delta.y) > 1f) {
                                                 dragged = true
-                                                horizontalRemainder += -delta.x / fixedColWidth
-                                                verticalRemainder += delta.y / fixedRowHeight
-                                                val stepDelta = horizontalRemainder.roundToInt()
-                                                val pitchDelta = verticalRemainder.roundToInt()
-                                                if (stepDelta != 0) {
-                                                    val currentSteps = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
-                                                    val maxScroll = (clipLengthSteps - currentSteps).coerceAtLeast(0)
-                                                    dragStart = (dragStart + stepDelta).coerceIn(0, maxScroll)
-                                                    startStep = dragStart
-                                                    horizontalRemainder -= stepDelta
-                                                }
-                                                if (pitchDelta != 0) {
-                                                    dragPitch = (dragPitch + pitchDelta).coerceIn(0, 119)
-                                                    topPitch = dragPitch
-                                                    verticalRemainder -= pitchDelta
+                                                accumulatedDelta += delta
+                                                // Empty grid pans; note gestures edit the note; velocity mode edits only velocity.
+                                                if (keyboardVisible && touchedNote == null) {
+                                                    horizontalRemainder += -delta.x / gestureColWidth
+                                                    verticalRemainder += delta.y / gestureRowHeight
+                                                    val stepDelta = horizontalRemainder.roundToInt()
+                                                    val pitchDelta = verticalRemainder.roundToInt()
+                                                    if (stepDelta != 0) {
+                                                        val maxScroll = (clipLengthSteps - currentStepsForGesture).coerceAtLeast(0)
+                                                        dragStart = (dragStart + stepDelta).coerceIn(0, maxScroll)
+                                                        startStep = dragStart
+                                                        horizontalRemainder -= stepDelta
+                                                    }
+                                                    if (pitchDelta != 0) {
+                                                        dragPitch = (dragPitch + pitchDelta).coerceIn(0, 119)
+                                                        topPitch = dragPitch
+                                                        verticalRemainder -= pitchDelta
+                                                    }
                                                 }
                                                 change.consume()
                                             }
                                             previous = change.position
                                         }
                                     } while (event.changes.any { it.pressed })
-                                    if (!dragged && track != null && clip != null && keyboardVisible) {
-                                        val liveStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
-                                        val liveColWidth = (viewportWidthPx / liveStepsOnScreen.toFloat()).coerceAtLeast(2f)
-                                        val step = (gestureStartStep.value + (down.position.x / liveColWidth).toInt().coerceIn(0, liveStepsOnScreen - 1))
-                                        val row = (down.position.y / rowHeightPx).toInt()
-                                        val pitch = (currentTopPitch - row).coerceIn(0, 119)
-                                        val startTick = snapStep(currentStart + step) * stepTicks
-                                        val hitNote = notes.firstOrNull { note ->
-                                            val noteStartStep = (note.startTick / stepTicks).toInt()
-                                            val noteEndStep = noteStartStep +
-                                                kotlin.math.ceil(note.durationTicks.toDouble() / stepTicks.toDouble()).toInt().coerceAtLeast(1)
-                                            note.pitch == pitch && step >= noteStartStep && step < noteEndStep
-                                        }
-                                        val found = hitNote ?: notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
-                                        if (found != null) {
-                                            selectedNoteId = found.id
-                                            updateNotes(notes.filterNot { it.id == found.id })
-                                            editMessage = "Note removed"
+
+                                    val latestNotes = gestureNotes.value
+                                    if (touchedNote != null && keyboardVisible && track != null && clip != null) {
+                                        selectedNoteId = touchedNote.id
+                                        if (dragged) {
+                                            val stepDelta = (accumulatedDelta.x / gestureColWidth).roundToInt().coerceIn(-100_000, 100_000)
+                                            val pitchDelta = (-accumulatedDelta.y / gestureRowHeight).roundToInt().coerceIn(-119, 119)
+                                            val updatedNote = if (resizeNote) {
+                                                val maxDuration = (clip.lengthTicks - touchedNote.startTick).coerceAtLeast(stepTicks)
+                                                val duration = (touchedNote.durationTicks.toDouble() +
+                                                    stepDelta.toDouble() * stepTicks.toDouble())
+                                                    .coerceIn(stepTicks.toDouble(), maxDuration.toDouble())
+                                                    .toLong().coerceAtLeast(stepTicks)
+                                                touchedNote.copy(durationTicks = duration)
+                                            } else {
+                                                val duration = touchedNote.durationTicks.coerceAtLeast(stepTicks)
+                                                val maxStart = (clip.lengthTicks - duration).coerceAtLeast(0L)
+                                                val rawStart = (touchedNote.startTick.toDouble() +
+                                                    stepDelta.toDouble() * stepTicks.toDouble())
+                                                    .coerceIn(0.0, maxStart.toDouble()).toLong()
+                                                val snappedStart = if (stepTicks > 0L) {
+                                                    val quotient = (rawStart.toDouble() / stepTicks.toDouble()).roundToInt().toLong()
+                                                    (quotient * stepTicks).coerceIn(0L, maxStart)
+                                                } else rawStart
+                                                touchedNote.copy(
+                                                    startTick = snappedStart,
+                                                    pitch = (touchedNote.pitch + pitchDelta).coerceIn(0, 119)
+                                                )
+                                            }
+                                            gestureNoteWriter.value(latestNotes.map { note ->
+                                                if (note.id == touchedNote.id) updatedNote else note
+                                            })
+                                            editMessage = if (resizeNote) "Note length changed" else "Note moved"
                                         } else {
-                                            val created = com.studiowave.app.data.MidiNote(
-                                                pitch = pitch, startTick = startTick, durationTicks = stepTicks, velocity = 100
-                                            )
-                                            selectedNoteId = created.id
-                                            updateNotes(notes + created)
-                                            editMessage = "Note added"
+                                            editMessage = "Note selected"
                                         }
-                                    } else if (!dragged && !keyboardVisible && notes.isNotEmpty()) {
-                                        val liveStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
-                                        val liveColWidth = (viewportWidthPx / liveStepsOnScreen.toFloat()).coerceAtLeast(2f)
-                                        val targetTick = (gestureStartStep.value + (down.position.x / liveColWidth).toInt().coerceIn(0, liveStepsOnScreen - 1)) * stepTicks
-                                        val nearest = notes.minByOrNull { kotlin.math.abs(it.startTick - targetTick) }
+                                    } else if (!keyboardVisible && track != null && clip != null) {
+                                        val targetTick = clickedStep.toDouble() * stepTicks.toDouble()
+                                        val nearest = latestNotes.minByOrNull { note ->
+                                            kotlin.math.abs(note.startTick.toDouble() - targetTick)
+                                        }
                                         if (nearest != null) {
                                             selectedNoteId = nearest.id
-                                            val velocity = (127f * (1f - down.position.y / viewportHeightPx.coerceAtLeast(1f))).roundToInt().coerceIn(1, 127)
-                                            updateNotes(notes.map { if (it.id == nearest.id) it.copy(velocity = velocity) else it })
+                                            val velocity = (127f * (1f - finalPosition.y /
+                                                viewportHeightPx.coerceAtLeast(1f))).roundToInt().coerceIn(1, 127)
+                                            gestureNoteWriter.value(latestNotes.map { note ->
+                                                if (note.id == nearest.id) note.copy(velocity = velocity) else note
+                                            })
+                                            editMessage = "Velocity $velocity"
+                                        } else {
+                                            editMessage = "Add notes before editing velocity"
                                         }
-                                    }
-                                }
+                                    } else if (!dragged && track != null && clip != null && keyboardVisible) {
+                                        val existing = latestNotes.firstOrNull { note ->
+                                            note.pitch == clickedPitch &&
+                                                (note.startTick / stepTicks).toInt() == clickedStep
+                                        }
+                                        if (existing != null) {
+                                            selectedNoteId = existing.id
+                                            editMessage = "Note selected"
+                                        } else {
+                                            val created = com.studiowave.app.data.MidiNote(
+                                                pitch = clickedPitch,
+                                                startTick = snapStep(clickedStep).toLong() * stepTicks,
+                                                durationTicks = stepTicks,
+                                                velocity = 100
+                                            )
+                                            gestureNoteWriter.value(latestNotes + created)
+                                            selectedNoteId = created.id
+                                            editMessage = "Note added"
+                                        }
+                                    }                                }
                             }
                         }
                     Box(contentModifier) {
