@@ -4210,20 +4210,20 @@ private fun DirectWaveDevicePanel(
     var showSamples by remember(trackId) { mutableStateOf(false) }
     val samples = remember {
         listOf(
-            BuiltInStudioSample("ARP", "Arp · Glass Sequence", "arp_glass.wav", "ARP", "Bright pluck sequence"),
-            BuiltInStudioSample("ARP", "Arp · Pulse Pattern", "arp_pulse.wav", "ARP", "Short rhythmic pluck"),
-            BuiltInStudioSample("BASS", "Bass · Deep Round", "bass_round.wav", "BASS", "Round low sine bass"),
-            BuiltInStudioSample("BASS", "Bass · Analog Bite", "bass_analog.wav", "BASS", "Saw-based analog bass"),
-            BuiltInStudioSample("LEAD", "Lead · Bright Mono", "lead_bright.wav", "LEAD", "Brassy saw lead"),
-            BuiltInStudioSample("LEAD", "Lead · Soft Edge", "lead_soft.wav", "LEAD", "Gentle filtered lead"),
-            BuiltInStudioSample("KEYBOARD", "Keyboard · Soft EP", "keyboard_ep.wav", "KEYBOARD", "Electric-piano style tone"),
-            BuiltInStudioSample("KEYBOARD", "Keyboard · Felt Keys", "keyboard_felt.wav", "KEYBOARD", "Soft felt-like keys"),
-            BuiltInStudioSample("ORCHESTRA", "Orchestra · Warm Strings", "orchestra_strings.wav", "ORCHESTRA", "Sustained ensemble tone"),
-            BuiltInStudioSample("ORCHESTRA", "Orchestra · Brass Pad", "orchestra_brass.wav", "ORCHESTRA", "Warm synthetic brass"),
-            BuiltInStudioSample("SYNTH", "Synth · FM Bell", "synth_bell.wav", "SYNTH", "Bell-like FM timbre"),
-            BuiltInStudioSample("SYNTH", "Synth · Digital Pulse", "synth_pulse.wav", "SYNTH", "Digital pulse tone"),
-            BuiltInStudioSample("PAD", "Pad · Aurora", "pad_aurora.wav", "PAD", "Slow evolving warm tone"),
-            BuiltInStudioSample("PAD", "Pad · Air Choir", "pad_air.wav", "PAD", "Airy synthetic choir")
+            BuiltInStudioSample("ARP", "Arp · Glass Sequence", "arp_glass", "Bright pluck sequence"),
+            BuiltInStudioSample("ARP", "Arp · Pulse Pattern", "arp_pulse", "Short rhythmic pluck"),
+            BuiltInStudioSample("BASS", "Bass · Deep Round", "bass_round", "Round low sine bass"),
+            BuiltInStudioSample("BASS", "Bass · Analog Bite", "bass_analog", "Saw-based analog bass"),
+            BuiltInStudioSample("LEAD", "Lead · Bright Mono", "lead_bright", "Brassy saw lead"),
+            BuiltInStudioSample("LEAD", "Lead · Soft Edge", "lead_soft", "Gentle filtered lead"),
+            BuiltInStudioSample("KEYBOARD", "Keyboard · Soft EP", "keyboard_ep", "Electric-piano style tone"),
+            BuiltInStudioSample("KEYBOARD", "Keyboard · Felt Keys", "keyboard_felt", "Soft felt-like keys"),
+            BuiltInStudioSample("ORCHESTRA", "Orchestra · Warm Strings", "orchestra_strings", "Sustained ensemble tone"),
+            BuiltInStudioSample("ORCHESTRA", "Orchestra · Brass Pad", "orchestra_brass", "Warm synthetic brass"),
+            BuiltInStudioSample("SYNTH", "Synth · FM Bell", "synth_bell", "Bell-like FM timbre"),
+            BuiltInStudioSample("SYNTH", "Synth · Digital Pulse", "synth_pulse", "Digital pulse tone"),
+            BuiltInStudioSample("PAD", "Pad · Aurora", "pad_aurora", "Slow evolving warm tone"),
+            BuiltInStudioSample("PAD", "Pad · Air Choir", "pad_air", "Airy synthetic choir")
         )
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -4308,7 +4308,7 @@ private fun DirectWaveDevicePanel(
                         Row(
                             Modifier.fillMaxWidth().background(palette.room, RoundedCornerShape(3.dp))
                                 .clickable {
-                                    val id = context.resources.getIdentifier(sample.assetName.removeSuffix(".wav"), "raw", context.packageName)
+                                    val id = context.resources.getIdentifier(sample.assetName, "raw", context.packageName)
                                     if (id != 0) {
                                         val uri = Uri.parse("android.resource://${context.packageName}/$id")
                                         sampleUri = uri.toString()
@@ -4326,7 +4326,7 @@ private fun DirectWaveDevicePanel(
                                 Text(sample.title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 Text(sample.description, color = palette.muted, fontSize = 8.sp)
                             }
-                            Text(if (sampleUri?.endsWith("/${context.resources.getIdentifier(sample.assetName.removeSuffix(".wav"), "raw", context.packageName)}") == true) "SELECTED" else "LOAD",
+                            Text(if (sampleUri == "android.resource://${context.packageName}/${context.resources.getIdentifier(sample.assetName, "raw", context.packageName)}") "SELECTED" else "LOAD",
                                 color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                         }
                     }
@@ -4408,7 +4408,6 @@ private data class BuiltInStudioSample(
     val category: String,
     val title: String,
     val assetName: String,
-    val categoryKey: String,
     val description: String
 )
 
