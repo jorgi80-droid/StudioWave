@@ -3991,20 +3991,12 @@ private fun AudioClipWaveform(
             drawLine(accentColor.copy(alpha = 0.3f), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), 1f)
         } else {
             val mid = size.height / 2f
-            val sourceOffset = safeOffset.toDouble()
-            val visibleSpan = safeLength.toDouble()
-            // Clip trims are represented in ticks, not source frames. Only the source's
-            // duration is known at this layer, so keep the viewport mapping monotonic and
-            // bounded instead of deriving the source duration from offset + visible span.
-            val estimatedSourceDuration = (sourceOffset + visibleSpan).coerceAtLeast(visibleSpan)
+            // Tick offsets are not source-time offsets until BPM/warp metadata is available.
+            // Until that mapping exists, draw the entire decoded source faithfully; do not
+            // pretend a guessed tick ratio identifies exact source frames.
             val peakCount = peaks.size
-            val startIndex = kotlin.math.floor(sourceOffset / estimatedSourceDuration * peakCount)
-                .toInt().coerceIn(0, peakCount - 1)
-            val endIndex = kotlin.math.ceil((sourceOffset + visibleSpan) / estimatedSourceDuration * peakCount)
-                .toInt().coerceIn(startIndex + 1, peakCount)
-            val visiblePeaks = peaks.subList(startIndex, endIndex)
-            val dx = size.width / visiblePeaks.size.coerceAtLeast(1)
-            visiblePeaks.forEachIndexed { index, peak ->
+            val dx = size.width / peakCount.coerceAtLeast(1)
+            peaks.forEachIndexed { index, peak ->
                 val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.46f
                 val x = (index + 0.5f) * dx
                 drawLine(accentColor.copy(alpha = 0.95f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
