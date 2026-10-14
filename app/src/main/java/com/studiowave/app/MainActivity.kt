@@ -2630,6 +2630,7 @@ private fun PianoRollWorkspace(
         Text("Touch grid to add/remove notes • use −/+ to move by one page • project autosave",
             color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(start = 54.dp, top = 3.dp))
     }
+}
 
 @Composable
 private fun MixerWorkspace(
