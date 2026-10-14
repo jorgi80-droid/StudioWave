@@ -1571,33 +1571,61 @@ private fun ArrangementWorkspace(
 @Composable
 private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (StudioProject) -> Unit, project: StudioProject, onBack: () -> Unit) {
     val clip = track?.clips?.firstOrNull()
-    val steps = clip?.drumSteps?.let { it.take(16) + List((16 - it.size).coerceAtLeast(0)) { false } } ?: List(16) { false }
-    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(12.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("‹ BACK", color = Mint, modifier = Modifier.clickable { onBack() }.padding(8.dp))
-            Text((track?.name ?: "DRUM").uppercase() + " • STEP SEQUENCER", color = Color.White, fontWeight = FontWeight.Bold)
+    val rawSteps = clip?.drumSteps ?: emptyList()
+    val steps = rawSteps.take(16) + List((16 - rawSteps.size).coerceAtLeast(0)) { false }
+    var selectedPad by remember(track?.id) { mutableIntStateOf(0) }
+    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(7.dp)) {
+        WorkspaceTitleBar("DRUM RACK  /  STEP SEQUENCER", track?.name ?: "No drum track", onBack)
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            SmallAction("16 STEPS") { }
+            SmallAction("CLEAR") {
+                if (track != null && clip != null) onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = List(16) { false }) else c }) else item
+                }))
+            }
+            SmallAction("ALL") {
+                if (track != null && clip != null) onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = List(16) { true }) else c }) else item
+                }))
+            }
             Spacer(Modifier.weight(1f))
-            Text("16 STEPS", color = MutedText, fontSize = 9.sp)
+            Text("PAD " + (selectedPad + 1), color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.height(12.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            (0..15).forEach { step ->
-                Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.fillMaxWidth().height(70.dp)
-                        .background(if (steps[step]) Mint else if (step % 4 == 0) Color(0xFF343A43) else Raised, RoundedCornerShape(4.dp))
-                        .clickable {
-                            if (track != null && clip != null) {
-                                val updated = steps.toMutableList().also { it[step] = !it[step] }
-                                onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = updated) else c }) else item
-                                }))
-                            }
-                        }.padding(2.dp))
-                    Text((step + 1).toString(), color = MutedText, fontSize = 8.sp)
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            (0..15).forEach { pad ->
+                Surface(
+                    color = if (selectedPad == pad) Color(0xFF4A2D24) else Color(0xFF292B30),
+                    shape = RoundedCornerShape(5.dp),
+                    modifier = Modifier.weight(1f).fillMaxHeight(0.72f).clickable { selectedPad = pad }
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text(if (pad == selectedPad) "●" else "○", color = if (selectedPad == pad) AbletonOrange else MutedText, fontSize = 12.sp)
+                        Text((pad + 1).toString().padStart(2, '0'), color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
-        Text("Tap a step to toggle trigger • autosave follows project state", color = MutedText, fontSize = 10.sp, modifier = Modifier.padding(top = 12.dp))
+        Row(Modifier.fillMaxWidth().height(44.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            (0..15).forEach { step ->
+                val isActive = steps[step]
+                val accent = step % 4 == 0
+                Surface(
+                    color = if (isActive) Mint else if (accent) Color(0xFF343A43) else Color(0xFF222428),
+                    shape = RoundedCornerShape(3.dp),
+                    modifier = Modifier.weight(1f).fillMaxHeight().clickable {
+                        if (track != null && clip != null) {
+                            val updated = steps.toMutableList().also { it[step] = !it[step] }
+                            onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                                if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(drumSteps = updated) else c }) else item
+                            }))
+                        }
+                    }
+                ) {
+                    Box(contentAlignment = Alignment.Center) { Text((step + 1).toString(), color = if (isActive) Color(0xFF141619) else Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold) }
+                }
+            }
+        }
+        Text("Select a pad, then tap steps to toggle triggers. Pattern changes update the project.", color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(top = 4.dp))
     }
 }
 
