@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1156,7 +1157,7 @@ private fun ArrangementWorkspace(
             } ?: 1L
         }.coerceAtLeast(1L)
         val fitZoom = remember(maxWidth, maxEndTick, fitTimebase, density) {
-            val timelineWidthPx = with(density) { (maxWidth - 8.dp - 104.dp).coerceAtLeast(1.dp).toPx() }
+            val timelineWidthPx = with(density) { (maxWidth - 8.dp - 94.dp).coerceAtLeast(1.dp).toPx() }
             val baseBarWidthPx = with(density) { 74.dp.toPx() }.coerceAtLeast(1f)
             (timelineWidthPx.toDouble() * fitTimebase.ticksPerBar.toDouble() /
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
@@ -1165,8 +1166,8 @@ private fun ArrangementWorkspace(
         Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
-            Column(Modifier.width(104.dp)) {
-                Row(Modifier.fillMaxWidth().height(22.dp).background(LocalStudioWavePalette.current.raised), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.width(94.dp)) {
+                Row(Modifier.fillMaxWidth().height(19.dp).background(LocalStudioWavePalette.current.raised), verticalAlignment = Alignment.CenterVertically) {
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = LocalStudioWavePalette.current.muted, modifier = Modifier.padding(start = 5.dp))
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth().weight(1f).clipToBounds()) {
@@ -1764,8 +1765,9 @@ private fun TimelineGrid(
     val timelineGridOpacity = LocalStudioWaveGridOpacity.current.coerceIn(0f, 1f)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
-    val rulerHeightPx = with(density) { 24.dp.toPx() }
-    val trackHeaderWidthPx = with(density) { 104.dp.toPx() }
+    // One compact time ruler; no separate overview/mini-map consumes workspace height.
+    val rulerHeightPx = with(density) { 18.dp.toPx() }
+    val trackHeaderWidthPx = with(density) { 94.dp.toPx() }
     val timebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
         TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
     }
@@ -2009,7 +2011,7 @@ private fun TimelineGrid(
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(24.dp)
+                .height(18.dp)
                 .pointerInput(scrollTicks, zoom, timebase) {
                     detectTapGestures(onTap = { offset ->
                         currentOnSeekTick(viewport.copy(viewportWidthPx = size.width.toFloat()).viewportXToTime(offset.x))
@@ -2044,7 +2046,7 @@ private fun TimelineGrid(
             }
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 24.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 18.dp)) {
             val timelineViewportHeightDp = maxHeight.value
             Box(Modifier.fillMaxSize()) {
                 project.tracks.forEachIndexed { trackIndex, track ->
@@ -2072,9 +2074,16 @@ private fun TimelineGrid(
                         // Avoid composing or drawing clips fully outside the viewport.
                         if (boundedClipStart < arrangementEndTick &&
                             displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
-                        val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
+                        val rawAccent = Color((clip.colorArgb ?: track.colorArgb).toInt())
+                        // Keep user-selected track colors readable against both Live Light and Live Dark surfaces.
+                        val isLightTheme = timelinePalette.room.luminance() > 0.45f
+                        val accent = if (isLightTheme) rawAccent.copy(
+                            red = rawAccent.red * 0.76f,
+                            green = rawAccent.green * 0.76f,
+                            blue = rawAccent.blue * 0.76f
+                        ) else rawAccent
                         val clipFill by androidx.compose.animation.animateColorAsState(
-                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f),
+                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.94f else 0.76f),
                             animationSpec = tween(durationMillis = 140),
                             label = "clipSelectionFill"
                         )
@@ -2198,7 +2207,7 @@ private fun TimelineGrid(
                                                 .padding(top = if (active) 1.dp else 0.dp)
                                                 .background(
                                                     if (active) accent.copy(alpha = 0.96f)
-                                                    else timelinePalette.room.copy(alpha = 0.5f),
+                                                    else timelinePalette.text.copy(alpha = if (isLightTheme) 0.18f else 0.28f),
                                                     RoundedCornerShape(1.dp)
                                                 )
                                         )
@@ -2211,7 +2220,7 @@ private fun TimelineGrid(
                                     val rowHeight = (size.height / 12f).coerceAtLeast(2f)
                                     for (beat in 1..3) {
                                         val x = size.width * beat / 4f
-                                        drawLine(timelinePalette.text.copy(alpha = 0.16f), Offset(x, 0f), Offset(x, size.height), 1f)
+                                        drawLine(timelinePalette.text.copy(alpha = if (isLightTheme) 0.30f else 0.18f), Offset(x, 0f), Offset(x, size.height), 1f)
                                     }
                                     clip.midiNotes.forEach { note ->
                                         val left = (note.startTick.toDouble() / duration * size.width).toFloat()
@@ -2219,7 +2228,7 @@ private fun TimelineGrid(
                                         val y = ((127 - note.pitch.coerceIn(0,127)).toFloat() / 128f * size.height)
                                             .coerceIn(0f, (size.height - rowHeight).coerceAtLeast(0f))
                                         drawRoundRect(
-                                            color = timelinePalette.text.copy(alpha = 0.94f),
+                                            color = timelinePalette.text.copy(alpha = 0.98f),
                                             topLeft = Offset(left, y),
                                             size = Size(noteWidth.coerceAtLeast(2f), rowHeight.coerceAtMost(size.height)),
                                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
