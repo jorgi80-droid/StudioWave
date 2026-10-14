@@ -1293,7 +1293,11 @@ private fun ArrangementWorkspace(
                         "${selectedClipTrack.kind.uppercase()}  •  BAR ${firstBar}–${lastBar}  •  ${String.format(java.util.Locale.US, "%.2f", clip.lengthTicks.toDouble() / timebase.ticksPerBar)} bars",
                         color = MutedText, fontSize = 8.sp, maxLines = 1
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         SmallAction("OPEN EDITOR") {
                             onOpenEditor(when (selectedClipTrack.kind) {
                                 "audio" -> "AUDIO EDITOR"
