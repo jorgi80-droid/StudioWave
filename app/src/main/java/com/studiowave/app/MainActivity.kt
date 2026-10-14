@@ -201,17 +201,6 @@ private fun StudioWaveApp() {
         playbackLoading = false
         audioError = null
     }
-    fun seekToTick(tick: Long) {
-        val target = tick.coerceAtLeast(0L)
-        // Match DAW transport semantics: seeking while the transport is active is a
-        // discontinuity, not an implicit STOP. Rebuild playback from the requested
-        // musical position so the audio and playhead remain together.
-        if (playing || playbackLoading) {
-            startPlaybackAt(target)
-        } else {
-            playheadTick = target
-        }
-    }
     fun startPlaybackAt(tick: Long, projectSnapshot: StudioProject = project) {
         val session = playbackSession + 1L
         playbackSession = session
@@ -273,6 +262,17 @@ private fun StudioWaveApp() {
                     playbackJob = null
                 }
             }
+        }
+    }
+    fun seekToTick(tick: Long) {
+        val target = tick.coerceAtLeast(0L)
+        // Match DAW transport semantics: seeking while the transport is active is a
+        // discontinuity, not an implicit STOP. Rebuild playback from the requested
+        // musical position so the audio and playhead remain together.
+        if (playing || playbackLoading) {
+            startPlaybackAt(target)
+        } else {
+            playheadTick = target
         }
     }
     val latestProject by rememberUpdatedState(project)
