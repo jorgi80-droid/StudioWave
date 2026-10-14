@@ -89,6 +89,7 @@ import com.studiowave.app.audio.ArrangementPlaybackEngine
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioProjectFile
 import com.studiowave.app.data.StudioTrack
+import com.studiowave.app.data.WaveClip
 import android.widget.Toast
 
 private val Room: Color @Composable get() = LocalStudioWavePalette.current.room
@@ -99,6 +100,24 @@ private val Mint: Color @Composable get() = LocalStudioWavePalette.current.accen
 private val AbletonOrange: Color @Composable get() = LocalStudioWavePalette.current.orange
 private val Green: Color @Composable get() = LocalStudioWavePalette.current.success
 private val Red: Color @Composable get() = LocalStudioWavePalette.current.danger
+
+internal fun arrangementClipSummary(kind: String, clip: WaveClip, project: StudioProject): String {
+    val beatTicks = (project.ppq.coerceIn(24, 3840).toLong() * 4L /
+        project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
+    val ticksPerBar = (beatTicks * project.numerator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
+    val bars = kotlin.math.ceil(clip.lengthTicks.coerceAtLeast(1L).toDouble() / ticksPerBar.toDouble())
+        .toInt().coerceAtLeast(1)
+    val barLabel = "$bars BAR" + if (bars == 1) "" else "S"
+    return when (kind.lowercase()) {
+        "midi" -> "MIDI · ${clip.midiNotes.size} NOTES · $barLabel"
+        "drum" -> "DRUM · ${clip.drumSteps.count { it }}/${clip.drumSteps.size} STEPS · $barLabel"
+        "audio" -> {
+            val source = clip.sourceUri?.substringAfterLast('/')?.take(16)?.ifBlank { "AUDIO" } ?: "NO SOURCE"
+            "AUDIO · $source · $barLabel"
+        }
+        else -> "${kind.uppercase()} · $barLabel"
+    }
+}
 
 internal fun choosePreferredRefreshRate(supportedRates: Iterable<Float>): Float? =
     supportedRates.asSequence()
@@ -2493,12 +2512,7 @@ private fun TimelineGrid(
                                     color = timelinePalette.text,
                                     maxLines = 1
                                 )
-                                val clipDetail = when (track.kind) {
-                                    "midi" -> "MIDI · ${clip.midiNotes.size} NOTES"
-                                    "drum" -> "DRUM · ${clip.drumSteps.count { it }} ACTIVE"
-                                    "audio" -> clip.sourceUri?.substringAfterLast('/')?.take(26) ?: "NO SOURCE"
-                                    else -> track.kind.uppercase()
-                                }
+                                val clipDetail = arrangementClipSummary(track.kind, clip, project)
                                 Text(
                                     clipDetail,
                                     fontSize = 6.sp,
@@ -2955,6 +2969,27 @@ private fun PianoRollWorkspace(
                         editMessage = "${ids.size} note(s) deleted"
                     } else editMessage = "Select a note first"
                 }
+                SmallAction("DUP") {
+                    val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
+                    if (selected.isEmpty()) {
+                        editMessage = "Select notes first"
+                    } else {
+                        val anchorTick = selected.minOf { it.startTick }
+                        val endTick = selected.maxOf { it.startTick + it.durationTicks }
+                        val span = (endTick - anchorTick).coerceAtLeast(stepTicks)
+                        if (endTick + span > (clip?.lengthTicks ?: 0L)) {
+                            editMessage = "Not enough clip space to duplicate selection"
+                        } else {
+                            val duplicates = selected.map { note ->
+                                note.copy(id = java.util.UUID.randomUUID().toString(), startTick = note.startTick + span)
+                            }
+                            updateNotes(notes + duplicates)
+                            selectedNoteIds = duplicates.map { it.id }.toSet()
+                            selectedNoteId = duplicates.firstOrNull()?.id
+                            editMessage = "${duplicates.size} note(s) duplicated"
+                        }
+                    }
+                }
                 SmallAction("SNAP") {
                     quantizeSelectedNotes()
                 }
@@ -2985,6 +3020,37 @@ private fun PianoRollWorkspace(
                         updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch + 12).coerceAtMost(127)) else note })
                         editMessage = "Selection up one octave"
                     } else editMessage = "Select notes first"
+                }
+                SmallAction("SCALE") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isEmpty()) {
+                        editMessage = "Select notes first"
+                    } else {
+                        val allowed = setOf(0, 2, 4, 5, 7, 9, 11)
+                        val changes = notes.filter { it.id in ids }.associate { note ->
+                            val nearest = (0..127).filter { Math.floorMod(it, 12) in allowed }
+                                .minByOrNull { kotlin.math.abs(it - note.pitch) } ?: note.pitch
+                            note.id to note.copy(pitch = nearest)
+                        }
+                        updateNotes(notes.map { changes[it.id] ?: it })
+                        editMessage = "Selection snapped to C major"
+                    }
+                }
+                SmallAction("−1") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isEmpty()) editMessage = "Select notes first"
+                    else {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch - 1).coerceAtLeast(0)) else note })
+                        editMessage = "Selection −1 semitone"
+                    }
+                }
+                SmallAction("+1") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isEmpty()) editMessage = "Select notes first"
+                    else {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch + 1).coerceAtMost(127)) else note })
+                        editMessage = "Selection +1 semitone"
+                    }
                 }
                 SmallAction("PASTE") {
                     val source = clipboard

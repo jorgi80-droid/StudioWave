@@ -40,7 +40,8 @@ class Callback final:public oboe::AudioStreamDataCallback {
    } else std::fill(out+count,out+wanted,int16_t(0));
    underruns.fetch_add(1U,std::memory_order_relaxed);
   }
-  readIndex.store(r+count,std::memory_order_release); playedFrames.fetch_add(count/2U,std::memory_order_relaxed);
+  readIndex.store(r+count,std::memory_order_release); // Advance the playback clock for every hardware output frame, including silence inserted on underrun.
+  playedFrames.fetch_add(uint32_t(frames),std::memory_order_relaxed);
   return oboe::DataCallbackResult::Continue;
  }
 };
