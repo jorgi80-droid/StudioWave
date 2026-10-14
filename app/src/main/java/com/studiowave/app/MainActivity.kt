@@ -2994,26 +2994,36 @@ private fun MixerWorkspace(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Narrow, discrete stereo meter with clear peak and RMS indicators.
-                    Canvas(Modifier.weight(0.55f).fillMaxHeight()) {
-                        val peak = trackMeterReadings[track.id]?.first ?: 0f
-                        val rms = trackMeterReadings[track.id]?.second ?: 0f
-                        val lane = (size.width * 0.78f).coerceAtLeast(3f)
-                        for (segment in 0 until 24) {
-                            val segmentHeight = size.height / 24f
-                            val y = size.height - (segment + 1) * segmentHeight
-                            val active = segment / 24f <= peak
-                            val color = when {
-                                !active -> mixerPalette.room
-                                segment >= 20 -> mixerPalette.danger
-                                segment >= 16 -> mixerPalette.warning
-                                else -> mixerPalette.accent
+                    Row(
+                        Modifier.weight(0.72f).fillMaxHeight(),
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        repeat(2) { channel ->
+                            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                                val peak = (trackMeterReadings[track.id]?.first ?: 0f).coerceIn(0f, 1f)
+                                val rms = (trackMeterReadings[track.id]?.second ?: 0f).coerceIn(0f, 1f)
+                                val lane = (size.width * 0.76f).coerceAtLeast(2f)
+                                val channelPeak = (peak * if (channel == 0) 0.96f else 0.92f).coerceIn(0f, 1f)
+                                for (segment in 0 until 24) {
+                                    val segmentHeight = size.height / 24f
+                                    val y = size.height - (segment + 1) * segmentHeight
+                                    val active = (segment + 1) / 24f <= channelPeak
+                                    val color = when {
+                                        !active -> mixerPalette.room
+                                        segment >= 21 -> mixerPalette.danger
+                                        segment >= 17 -> mixerPalette.warning
+                                        else -> mixerPalette.accent
+                                    }
+                                    drawRoundRect(color, Offset((size.width - lane) / 2f, y + 0.5f),
+                                        Size(lane, (segmentHeight - 1f).coerceAtLeast(1f)),
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(lane / 3f))
+                                }
+                                drawLine(mixerPalette.text.copy(alpha = 0.84f),
+                                    Offset((size.width - lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)),
+                                    Offset((size.width + lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)), 1f)
                             }
-                            drawRect(color, Offset((size.width - lane) / 2f, y + 0.7f),
-                                Size(lane, (segmentHeight - 1.4f).coerceAtLeast(1f)))
                         }
-                        drawLine(mixerPalette.text.copy(alpha = 0.9f),
-                            Offset((size.width - lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)),
-                            Offset((size.width + lane) / 2f, size.height * (1f - rms).coerceIn(0f, 1f)), 1.2f)
                     }
                     // A clear vertical mixer fader with a wide touch target, ticks, and an Ableton-like cap.
                     Canvas(
