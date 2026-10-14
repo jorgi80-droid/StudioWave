@@ -2676,12 +2676,14 @@ private fun PianoRollWorkspace(
                 BoxWithConstraints(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.canvas)) {
                     val viewportWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
                     val viewportHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxHeight.toPx() }
-                    val rowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowHeight.dp.toPx() }
+                    val currentStepsOnScreen = (stepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
+                    val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
+                    val rowHeightPx = with(androidx.compose.ui.platform.LocalDensity.current) { currentRowHeight.dp.toPx() }
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 120)
                     val maxTopPitch = (119 - visiblePitchRows + 1).coerceAtLeast(0)
                     val currentTopPitch = gestureTopPitch.value.coerceIn(maxTopPitch, 119)
-                    val colWidthPx = (viewportWidthPx / stepsOnScreen.toFloat()).coerceAtLeast(2f)
-                    val maxHorizontalScroll = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
+                    val colWidthPx = (viewportWidthPx / currentStepsOnScreen.toFloat()).coerceAtLeast(2f)
+                    val maxHorizontalScroll = (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0)
                     val currentStart = gestureStartStep.value
                     val contentModifier = Modifier
                         .fillMaxSize()
@@ -2813,7 +2815,7 @@ private fun PianoRollWorkspace(
                     Box(contentModifier) {
                         Canvas(Modifier.fillMaxSize()) {
                             val localRowHeight = rowHeightPx
-                            val localColWidth = size.width / stepsOnScreen.toFloat()
+                            val localColWidth = size.width / currentStepsOnScreen.toFloat()
                             val rowsVisible = (size.height / localRowHeight).toInt().coerceAtLeast(1)
                             for (row in 0..rowsVisible) {
                                 val pitch = currentTopPitch - row
@@ -2822,7 +2824,7 @@ private fun PianoRollWorkspace(
                                     Offset(0f, row * localRowHeight), Offset(size.width, row * localRowHeight),
                                     if (isC) 1.2f else 0.45f)
                             }
-                            for (col in 0..stepsOnScreen) {
+                            for (col in 0..currentStepsOnScreen) {
                                 val stepAbsolute = pageStartStep + col
                                 val bar = stepAbsolute % stepsPerBar == 0
                                 val beat = stepAbsolute % stepsPerBeat == 0
