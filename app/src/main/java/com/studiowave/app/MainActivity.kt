@@ -2692,6 +2692,7 @@ private fun PianoRollWorkspace(
     var zoomX by remember(track?.id, clip?.id) { mutableFloatStateOf(1.0f) }
     var zoomY by remember(track?.id) { mutableFloatStateOf(1.0f) }
     var startStep by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
+    var lastViewportWidthPx by remember(track?.id, clip?.id) { mutableFloatStateOf(0f) }
     var topPitch by remember(track?.id) { mutableIntStateOf(108) } // Start near C8; all 120 notes remain reachable
     var selectedNoteId by remember(track?.id, clip?.id) { mutableStateOf<String?>(null) }
     var clipboard by remember(track?.id, clip?.id) { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
@@ -2885,6 +2886,16 @@ private fun PianoRollWorkspace(
                 BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
                     val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
                     val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
+                    LaunchedEffect(viewportWidthPx, clipLengthSteps, stepsPerBar, zoomX) {
+                        if (lastViewportWidthPx > 0f && viewportWidthPx > 0f &&
+                            kotlin.math.abs(viewportWidthPx - lastViewportWidthPx) > 1f) {
+                            val stepsVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
+                            val anchor = pageStartStep + stepsVisible / 2
+                            startStep = (anchor - stepsVisible / 2)
+                                .coerceIn(0, (clipLengthSteps - stepsVisible).coerceAtLeast(0))
+                        }
+                        lastViewportWidthPx = viewportWidthPx
+                    }
                     val gridStepsPerBar = stepsPerBar.coerceAtLeast(1)
                     val currentStepsOnScreen = (gridStepsPerBar.toFloat() * 2f / gestureZoomX.value).roundToInt().coerceIn(4, 96)
                     val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
