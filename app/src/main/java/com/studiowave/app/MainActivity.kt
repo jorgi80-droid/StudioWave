@@ -960,7 +960,8 @@ private fun ArrangementWorkspace(
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
-    onPlaybackRestart: (StudioProject) -> Unit = {},
+    onPlaybackRestart: (StudioProject) -> Unit = {
+    val arrangementPalette = LocalStudioWavePalette.current},
     onScratchTrack: (String, Float) -> Unit = { _, _ -> },
     playheadTick: Long = 0L,
     isPlaying: Boolean = false,
@@ -1421,8 +1422,8 @@ private fun ArrangementWorkspace(
                 else clip.startTick + clip.lengthTicks.coerceAtLeast(1L) - 1L
             val lastBar = lastTick / timebase.ticksPerBar + 1L
             Surface(
-                color = Color(0xF21B1D21),
-                contentColor = Color.White,
+                color = arrangementPalette.panel.copy(alpha = 0.96f),
+                contentColor = arrangementPalette.text,
                 shape = RoundedCornerShape(9.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, LocalStudioWavePalette.current.border),
                 shadowElevation = 8.dp,
@@ -1531,7 +1532,7 @@ private fun ArrangementWorkspace(
                         shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.padding(4.dp).clickable { statusMessage = null }
                     ) {
-                        Text(feedback, color = Color(0xFFFFD4D4), fontSize = 9.sp,
+                        Text(feedback, color = LocalStudioWavePalette.current.text, fontSize = 9.sp,
                             modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp), maxLines = 2)
                     }
                 }
@@ -1707,7 +1708,7 @@ private fun AudioEditorWorkspace(
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(7.dp)) {
+    Column(Modifier.fillMaxSize().background(audioPalette.room).padding(7.dp)) {
         WorkspaceTitleBar("CLIP VIEW  /  SAMPLE EDITOR", track?.name ?: "No audio track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (clip?.sourceUri != null) "AUDIO SOURCE" else "NO AUDIO CLIP", color = AbletonOrange, fontSize = 8.sp, fontWeight = FontWeight.Black)
@@ -1913,7 +1914,7 @@ private fun TimelineGrid(
 
     BoxWithConstraints(
         modifier
-            .background(Color(0xFF17191C))
+            .background(timelinePalette.room)
             .clipToBounds()
             .pointerInput(baseBarWidthPx) {
                 awaitEachGesture {
@@ -2598,7 +2599,7 @@ private fun PianoRollWorkspace(
         return names[Math.floorMod(pitch, 12)] + (pitch / 12 - 1)
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF17191C), RoundedCornerShape(7.dp)).padding(5.dp)) {
+    Column(Modifier.fillMaxSize().background(pianoPalette.room, RoundedCornerShape(7.dp)).padding(5.dp)) {
         Row(
             Modifier.fillMaxWidth().height(28.dp).background(pianoPalette.grid.copy(alpha = 0.55f), RoundedCornerShape(5.dp))
                 .padding(horizontal = 5.dp),
@@ -2629,7 +2630,7 @@ private fun PianoRollWorkspace(
         if (editToolsExpanded) {
             Row(
                 Modifier.fillMaxWidth().padding(bottom = 3.dp)
-                    .background(Color(0xFF222428), RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+                    .background(pianoPalette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
             ) {
                 SmallAction("COPY") {
@@ -2686,7 +2687,7 @@ private fun PianoRollWorkspace(
                                     contentAlignment = Alignment.CenterStart
                                 ) {
                                     if (isC || pitch % 12 == 4 || pitch % 12 == 7) {
-                                        Text(pitchLabel(pitch), color = if (isC) Mint else Color(0xFFE4E8EF),
+                                        Text(pitchLabel(pitch), color = if (isC) pianoPalette.accent else pianoPalette.text,
                                             fontSize = 7.sp, modifier = Modifier.padding(start = 3.dp), maxLines = 1)
                                     }
                                 }
@@ -3064,7 +3065,7 @@ private fun DeviceDock(
                             shape = RoundedCornerShape(5.dp),
                             modifier = Modifier.clickable { onSelectTrack(track.id) }
                         ) {
-                            Text(track.name.take(18), color = if (isSelected) Mint else pianoPalette.text,
+                            Text(track.name.take(18), color = if (isSelected) devicePalette.accent else devicePalette.text,
                                 fontSize = 9.sp, maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp))
                         }
