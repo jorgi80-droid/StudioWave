@@ -100,12 +100,18 @@ internal fun StudioWaveSettingsScreen(
             HorizontalDivider(color = p.border)
             when (section) {
                 "AUDIO" -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsSection("OUTPUT", "Preferences are stored locally; engine routing is not changed by these controls.", p)
-                    SettingsChoiceRow("Output mode", "Preferred output profile.", listOf("SYSTEM" to "System", "LOW_LATENCY" to "Low latency", "COMPATIBILITY" to "Compatibility"), audioOutputMode, onAudioOutputModeChange, p)
-                    SettingsChoiceRow("Sample rate", "Stored preference until device negotiation is supported.", listOf("44100" to "44.1 kHz", "48000" to "48 kHz", "96000" to "96 kHz"), audioSampleRate.toString(), { onAudioSampleRateChange(it.toIntOrNull() ?: 48000) }, p)
-                    SettingsChoiceRow("Buffer size", "Stored preference; the current engine does not consume this setting yet.", listOf("128" to "128", "256" to "256", "512" to "512", "1024" to "1024"), audioBufferFrames.toString(), { onAudioBufferFramesChange(it.toIntOrNull() ?: 512) }, p)
-                    SettingsInfoCard("CURRENT ENGINE", audioStatus, p)
-                    SettingsInfoCard("NOTE", "The stored sample rate and buffer values do not reconfigure Android AudioTrack yet.", p)
+                    SettingsSection("OUTPUT", "Read-only settings from the active playback implementation.", p)
+                    SettingsInfoCard(
+                        "ACTIVE FORMAT",
+                        "Stereo PCM16 · 44.1 kHz output · 256-frame mixer blocks. The Android AudioTrack buffer uses the device minimum or at least 4096 bytes.",
+                        p
+                    )
+                    SettingsInfoCard("ENGINE STATUS", audioStatus, p)
+                    SettingsInfoCard(
+                        "CONFIGURATION",
+                        "Sample rate, output mode and buffer size are not user-configurable in this engine version, so no inactive selection controls are shown.",
+                        p
+                    )
                 }
                 "LOG" -> Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     SettingsInfoCard("SESSION DIAGNOSTICS", "Read-only snapshot. Values are not uploaded.", p)
