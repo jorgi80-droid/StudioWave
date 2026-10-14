@@ -4301,16 +4301,21 @@ private fun DirectWaveDevicePanel(
                                     }
                                     if (presetIndex >= 0) {
                                         val target = java.io.File(context.cacheDir, sample.assetName + ".wav")
-                                        runCatching { target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex)) }
-                                            .onFailure { Toast.makeText(context, "Gagal membuat sampel bawaan", Toast.LENGTH_SHORT).show() }
-                                        val uri = Uri.fromFile(target)
-                                        sampleUri = uri.toString()
-                                        sampleLabel = sample.title
-                                        sampleReady = false
-                                        preferences.edit().putString("sample.$trackId", uri.toString()).apply()
-                                        sampler.load(uri) { ready -> sampleReady = ready }
+                                        val generated = runCatching {
+                                            target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex))
+                                        }
+                                        if (generated.isSuccess) {
+                                            val uri = Uri.fromFile(target)
+                                            sampleUri = uri.toString()
+                                            sampleLabel = sample.title
+                                            sampleReady = false
+                                            preferences.edit().putString("sample.$trackId", uri.toString()).apply()
+                                            sampler.load(uri) { ready -> sampleReady = ready }
+                                        } else {
+                                            Toast.makeText(context, "Gagal menyiapkan preset bawaan.", Toast.LENGTH_SHORT).show()
+                                        }
                                     } else {
-                                        Toast.makeText(context, "Preset asset belum tersedia di build ini.", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Preset tidak ditemukan.", Toast.LENGTH_SHORT).show()
                                     }
                                 }.padding(horizontal = 6.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
