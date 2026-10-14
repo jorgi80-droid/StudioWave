@@ -2505,14 +2505,12 @@ private fun PianoRollWorkspace(
         .coerceAtMost(1_000_000L).toInt().coerceAtLeast(stepsOnScreen)
     val maxStartStep = (clipLengthSteps - stepsOnScreen).coerceAtLeast(0)
     val pageStartStep = startStep.coerceIn(0, maxStartStep)
-    val highestPitch = topPitch.coerceIn(23, 119)
-    val lowestPitch = (highestPitch - pitchRows + 1).coerceAtLeast(0)
-    val visiblePitchRows = (600f / rowHeight).roundToInt().coerceIn(12, 120)
-    val bottomPitch = (highestPitch - visiblePitchRows + 1).coerceAtLeast(0)
-    val safeHighestPitch = maxOf(highestPitch, bottomPitch + visiblePitchRows - 1).coerceAtMost(119)
-    val currentTopPitch = safeHighestPitch
-    val timelineScroll = rememberScrollState((pageStartStep * (stepTicks.toDouble() / stepTicks) * zoomX).roundToInt().coerceAtLeast(0))
-    val verticalScroll = rememberScrollState(((119 - currentTopPitch) * rowHeight).roundToInt().coerceAtLeast(0))
+    val currentTopPitch = topPitch.coerceIn(0, 119)
+    val highestPitch = currentTopPitch
+    val lowestPitch = (highestPitch - 119 + 1).coerceAtLeast(0)
+    val visiblePitchRows = 120
+    val timelineScroll = rememberScrollState()
+    val verticalScroll = rememberScrollState()
 
     fun updateNotes(updatedNotes: List<com.studiowave.app.data.MidiNote>) {
         val activeTrack = track ?: return
@@ -2580,8 +2578,8 @@ private fun PianoRollWorkspace(
         Row(Modifier.fillMaxWidth().weight(1f).padding(top = 3.dp)) {
             if (keyboardVisible) {
                 Column(Modifier.width(55.dp).fillMaxHeight().background(Color(0xFF202328))) {
-                    Column(Modifier.verticalScroll(verticalScroll).heightIn(min = 300.dp)) {
-                        for (pitch in (0..119).reversed()) {
+                    Column(Modifier.verticalScroll(verticalScroll).height((rowHeight * 120f).dp)) {
+                        for (pitch in 119 downTo 0) {
                             val isBlack = pitch % 12 in setOf(1, 3, 6, 8, 10)
                             val isC = pitch % 12 == 0
                             Box(
@@ -2663,7 +2661,7 @@ private fun PianoRollWorkspace(
                                             if (kotlin.math.abs(delta.x) > 2f || kotlin.math.abs(delta.y) > 2f) {
                                                 dragged = true
                                                 startStep = (startStep - (delta.x / colWidthPx).roundToInt()).coerceIn(0, maxStartStep)
-                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(23, 119)
+                                                topPitch = (topPitch + (delta.y / rowHeight).roundToInt()).coerceIn(0, 119)
                                                 change.consume()
                                             }
                                             previous = change.position
@@ -2674,7 +2672,12 @@ private fun PianoRollWorkspace(
                                         val row = (down.position.y / rowHeight).toInt()
                                         val pitch = (currentTopPitch - row).coerceIn(0, 119)
                                         val startTick = snapStep(step) * stepTicks
-                                        val found = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
+                                        val hitNote = notes.firstOrNull { note ->
+                                            val noteStartStep = (note.startTick / stepTicks).toInt()
+                                            val noteEndStep = noteStartStep + (note.durationTicks / stepTicks).toInt().coerceAtLeast(1)
+                                            note.pitch == pitch && step >= noteStartStep && step < noteEndStep
+                                        }
+                                        val found = hitNote ?: notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
                                         if (found != null) {
                                             selectedNoteId = found.id
                                             updateNotes(notes.filterNot { it.id == found.id })
