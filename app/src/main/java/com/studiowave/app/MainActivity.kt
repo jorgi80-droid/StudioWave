@@ -1602,9 +1602,6 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
 private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
     val context = LocalContext.current
     val clip = track?.clips?.firstOrNull { it.sourceUri != null }
-    var warpEnabled by remember(clip?.id) { mutableStateOf(false) }
-    var clipGain by remember(clip?.id) { mutableFloatStateOf(1f) }
-    var transpose by remember(clip?.id) { mutableIntStateOf(0) }
     var startFraction by remember(clip?.id) { mutableFloatStateOf(0f) }
     var endFraction by remember(clip?.id) { mutableFloatStateOf(1f) }
     var waveform by remember(clip?.sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
@@ -1639,11 +1636,9 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().background(Color(0xFF17191C)).padding(7.dp)) {
         WorkspaceTitleBar("CLIP VIEW  /  SAMPLE EDITOR", track?.name ?: "No audio track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            SmallAction(if (warpEnabled) "WARP ON" else "WARP OFF") { warpEnabled = !warpEnabled }
-            SmallAction("GAIN " + (clipGain * 100).toInt() + "%") { clipGain = if (clipGain >= 1.49f) 0f else (clipGain + 0.25f).coerceAtMost(1.5f) }
-            SmallAction("PITCH " + (if (transpose > 0) "+" else "") + transpose + " st") { transpose = if (transpose >= 12) -12 else transpose + 1 }
+            Text(if (clip?.sourceUri != null) "AUDIO SOURCE" else "NO AUDIO CLIP", color = AbletonOrange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.weight(1f))
-            Text(if (warpEnabled) "TEMPO SYNC" else "ORIGINAL TEMPO", color = MutedText, fontSize = 7.sp, maxLines = 1)
+            SmallAction("RESET RANGE") { startFraction = 0f; endFraction = 1f }
         }
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("START", color = MutedText, fontSize = 7.sp)
