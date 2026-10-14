@@ -44,6 +44,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val masterRmsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
     private val masterLufsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(MasterLoudnessMeter.SILENCE_LUFS))
     private val loudnessMeter = MasterLoudnessMeter(OUTPUT_SAMPLE_RATE)
+    private data class TrackMeterBits(
+        val peak: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val rms: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
+    )
+    private val trackMeterBits = java.util.concurrent.ConcurrentHashMap<String, TrackMeterBits>()
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
 
     data class MasterMeterSnapshot(val peakDbfs: Float, val rmsDbfs: Float, val momentaryLufs: Float) {
@@ -57,6 +62,22 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val rms = java.lang.Float.intBitsToFloat(masterRmsBits.get()).coerceIn(0f, 1f)
         val lufs = java.lang.Float.intBitsToFloat(masterLufsBits.get()).coerceIn(-120f, 6f)
         return MasterMeterSnapshot(linearToDbfs(peak), linearToDbfs(rms), lufs)
+    }
+
+    data class TrackMeterSnapshot(val peak: Float, val rms: Float)
+
+    fun trackMeterSnapshot(trackId: String): TrackMeterSnapshot {
+        val meter = trackMeterBits[trackId] ?: return TrackMeterSnapshot(0f, 0f)
+        return TrackMeterSnapshot(
+            java.lang.Float.intBitsToFloat(meter.peak.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.rms.get()).coerceIn(0f, 1f)
+        )
+    }
+
+    private fun publishTrackMeter(trackId: String, peak: Float, rms: Float) {
+        val meter = trackMeterBits.computeIfAbsent(trackId) { TrackMeterBits() }
+        meter.peak.set(java.lang.Float.floatToRawIntBits(peak.coerceIn(0f, 1f)))
+        meter.rms.set(java.lang.Float.floatToRawIntBits(rms.coerceIn(0f, 1f)))
     }
 
     private fun publishMasterMeter(peak: Float, rms: Float, momentaryLufs: Float) {
@@ -142,6 +163,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         liveMasterGain = masterGain.coerceIn(0f, 1f)
         loudnessMeter.reset()
         publishMasterMeter(0f, 0f, MasterLoudnessMeter.SILENCE_LUFS)
+        project.tracks.forEach { track ->
+            publishTrackMeter(track.id, 0f, 0f)
+        }
         updateMix(project)
         val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
         check(!closed.get()) { "Playback engine is closed" }
@@ -538,8 +562,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val sourceFrame = Math.floorMod(rawSourceFrame, event.asset.frames.toLong()).toInt()
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
-                        mix[outIndex] += event.asset.pcmStereo[sourceIndex] / 32768f * trackGain * leftPan
-                        mix[outIndex + 1] += event.asset.pcmStereo[sourceIndex + 1] / 32768f * trackGain * rightPan
+                        val leftSample = event.asset.pcmStereo[sourceIndex] / 32768f * trackGain * leftPan
+                        val rightSample = event.asset.pcmStereo[sourceIndex + 1] / 32768f * trackGain * rightPan
+                        mix[outIndex] += leftSample
+                        mix[outIndex + 1] += rightSample
+                        meterTrack(event.track.id, leftSample, rightSample)
                     }
                 }
 
@@ -561,8 +588,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val envelope = min(attack, release)
                         val wave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * gain * envelope
                         val outIndex = ((absolute - position) * 2).toInt()
-                        mix[outIndex] += wave * leftPan
-                        mix[outIndex + 1] += wave * rightPan
+                        val leftSample = wave * leftPan
+                        val rightSample = wave * rightPan
+                        mix[outIndex] += leftSample
+                        mix[outIndex + 1] += rightSample
+                        meterTrack(note.track.id, leftSample, rightSample)
                     }
                 }
 
@@ -581,11 +611,26 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
                         val wave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * gain
                         val outIndex = ((absolute - position) * 2).toInt()
-                        mix[outIndex] += wave * leftPan
-                        mix[outIndex + 1] += wave * rightPan
+                        val leftSample = wave * leftPan
+                        val rightSample = wave * rightPan
+                        mix[outIndex] += leftSample
+                        mix[outIndex + 1] += rightSample
+                        meterTrack(drum.track.id, leftSample, rightSample)
                     }
                 }
 
+                // Track meters read the post-fader, post-pan contributions before master summing.
+                // Each track contributes at most one peak/RMS publish per audio block.
+                val trackPeaks = HashMap<String, Float>()
+                val trackSquares = HashMap<String, Double>()
+                val trackSampleCounts = HashMap<String, Int>()
+                fun meterTrack(trackId: String, left: Float, right: Float) {
+                    val peak = max(abs(left), abs(right))
+                    if (peak > (trackPeaks[trackId] ?: 0f)) trackPeaks[trackId] = peak
+                    trackSquares[trackId] = (trackSquares[trackId] ?: 0.0) + left.toDouble() * left.toDouble() + right.toDouble() * right.toDouble()
+                    trackSampleCounts[trackId] = (trackSampleCounts[trackId] ?: 0) + 2
+                }
+                // NOTE: these accumulators are prepared per block, then published once per track.
                 var blockPeak = 0f
                 var blockSquares = 0.0
                 for (i in 0 until sampleCount) {
@@ -598,6 +643,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
                 val momentaryLufs = loudnessMeter.processBlock(mix, sampleCount)
                 publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat(), momentaryLufs)
+                trackPeaks.forEach { (id, peak) ->
+                    val squares = trackSquares[id] ?: 0.0
+                    val count = trackSampleCounts[id] ?: 1
+                    publishTrackMeter(id, peak, kotlin.math.sqrt(squares / count.coerceAtLeast(1)).toFloat())
+                }
+                // Tracks with no audible contribution return to silence instead of holding stale levels.
+                mixState.tracks.keys.forEach { id ->
+                    if (id !in trackPeaks) publishTrackMeter(id, 0f, 0f)
+                }
                 var offset = 0
                 while (offset < sampleCount && running.get()) {
                     val written = track.write(pcm, offset, sampleCount - offset, AudioTrack.WRITE_BLOCKING)
