@@ -99,7 +99,7 @@ private fun Modifier.timelineClipWidthPx(widthPx: Float): Modifier = layout { me
     }
     val childConstraints = constraints.copy(minWidth = desiredWidthPx, maxWidth = desiredWidthPx)
     val placeable = measurable.measure(childConstraints)
-    val reportedWidth = constraints.constrainWidth(desiredWidthPx)
+    val reportedWidth = desiredWidthPx.coerceIn(constraints.minWidth, constraints.maxWidth)
     layout(reportedWidth, placeable.height) {
         placeable.placeRelative(0, 0)
     }
