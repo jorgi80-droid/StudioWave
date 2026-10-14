@@ -1089,7 +1089,7 @@ private fun ArrangementWorkspace(
                             val projectEnd = maxOf(maxEndTick.toDouble(), fitTimebase.ticksPerBar.toDouble())
                             val requestedScroll = point.x / size.width.coerceAtLeast(1).toDouble() * projectEnd
                             val visibleTicks = size.width.toDouble() /
-                                TimelineViewport(fitTimebase, 74f * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                                TimelineViewport(fitTimebase, 74f * zoom, scrollTicks, size.width.toFloat()).pixelsPerTick.toDouble()
                             val maxScroll = (maxArrangementTick(fitTimebase).toDouble() - visibleTicks).coerceAtLeast(0.0)
                             onScroll(requestedScroll.coerceIn(0.0, maxScroll))
                         }
@@ -1110,8 +1110,8 @@ private fun ArrangementWorkspace(
                     }
                 }
                 val viewportStart = (scrollTicks / endTick * size.width).toFloat().coerceIn(0f, size.width)
-                val visibleTicks = with(density) { (maxWidth - 8.dp - 104.dp).coerceAtLeast(1.dp).toPx() } /
-                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, 1f).pixelsPerTick
+                val visibleTicks = size.width.toDouble() /
+                    TimelineViewport(fitTimebase, with(density) { 74.dp.toPx() } * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
                 val viewportWidth = (visibleTicks / endTick * size.width).toFloat().coerceIn(2f, size.width)
                 drawRoundRect(
                     Color.White.copy(alpha = 0.2f), Offset(viewportStart, 0f),
@@ -2020,7 +2020,10 @@ private fun TimelineGrid(
                                 timebase.ticksPerBar
                             ).coerceAtMost(maxArrangementTick(timebase))
                             val fraction = (position.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
-                            currentOnScroll((endTick.toDouble() * fraction).coerceAtLeast(0.0))
+                            val visibleTicks = size.width.toDouble() /
+                                TimelineViewport(timebase, 74f * zoom, scrollTicks, size.width).pixelsPerTick.toDouble()
+                            val maxScroll = (maxArrangementTick(timebase).toDouble() - visibleTicks).coerceAtLeast(0.0)
+                            currentOnScroll((endTick.toDouble() * fraction).coerceIn(0.0, maxScroll))
                         }
                     }
             ) {
@@ -2627,7 +2630,6 @@ private fun PianoRollWorkspace(
         Text("Touch grid to add/remove notes • use −/+ to move by one page • project autosave",
             color = MutedText, fontSize = 8.sp, modifier = Modifier.padding(start = 54.dp, top = 3.dp))
     }
-}
 
 @Composable
 private fun MixerWorkspace(
