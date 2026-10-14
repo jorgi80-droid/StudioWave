@@ -35,9 +35,9 @@ internal val LocalStudioWaveGridOpacity = compositionLocalOf { 0.72f }
 
 internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolean): StudioWavePalette {
     val base = when (theme) {
-        "Live Light" -> StudioWavePalette(Color(0xFFC8CCD3), Color(0xFFE5E7EB), Color(0xFFD8DBE1), Color(0xFFCED2D9),
-            Color(0xFFB7BDC6), Color(0xFF17191C), Color(0xFF3D444F), Color(0xFF007B6D), Color(0xFFBD4D2F),
-            Color(0xFFAFB5BE), Color(0xFF858D99), Color(0xFF167447), Color(0xFF835900), Color(0xFFB51F38))
+        "Live Light" -> StudioWavePalette(Color(0xFFBEC3CB), Color(0xFFF0F1F3), Color(0xFFDDE0E5), Color(0xFFCFD3DA),
+            Color(0xFFB8BEC7), Color(0xFF17191C), Color(0xFF3D444F), Color(0xFF006B61), Color(0xFFB74429),
+            Color(0xFFB0B7C0), Color(0xFF7D8794), Color(0xFF14683F), Color(0xFF775000), Color(0xFFA91D34))
         "Live Mid" -> StudioWavePalette(Color(0xFF282B30), Color(0xFF34383F), Color(0xFF3D424A), Color(0xFF474D56),
             Color(0xFF515761), Color(0xFFF0F1F3), Color(0xFFB6BBC3), Color(0xFF21D1B0), Color(0xFFFF865E),
             Color(0xFF555B64), Color(0xFF616873), Color(0xFF40D68A), Color(0xFFFFCD66), Color(0xFFFF6177))
@@ -51,7 +51,7 @@ internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolea
         else -> base
     }
     return if (highContrast) toned.copy(text = if (theme == "Live Light") Color.Black else Color.White,
-        muted = if (theme == "Live Light") Color(0xFF292D33) else Color(0xFFE0E4EA),
+        muted = if (theme == "Live Light") Color(0xFF252A31) else Color(0xFFE0E4EA),
         grid = if (theme == "Live Light") Color(0xFF8A9099) else Color(0xFF727984),
         border = if (theme == "Live Light") Color(0xFF777E88) else Color(0xFF737A85)) else toned
 }
