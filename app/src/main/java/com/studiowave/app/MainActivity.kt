@@ -2548,7 +2548,7 @@ private fun PianoRollWorkspace(
                 startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
             }
             Text("BAR ${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            TransportAction("−") {
+            TransportAction("+") {
                 val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = (stepsPerBar.toFloat() * 2f / zoomX).roundToInt().coerceIn(4, 96)
                 val newVisible = (stepsPerBar.toFloat() * 2f / nextZoom).roundToInt().coerceIn(4, 96)
