@@ -3563,6 +3563,9 @@ private fun BrowserWorkspace(
                             }
                         }
                     }
+                    if (tracks.isEmpty()) {
+                        Text("No tracks match this search.", color = p.muted, fontSize = 9.sp, modifier = Modifier.padding(8.dp))
+                    }
                 }
             }
             "DEVICES" -> {}
@@ -3590,8 +3593,15 @@ private fun BrowserWorkspace(
                             }
                         }
                     }
-                    if (clipEntries.isEmpty()) {
-                        Text("No matching project items.", color = p.muted, fontSize = 9.sp, modifier = Modifier.padding(8.dp))
+                    if (visibleClipEntries.isEmpty()) {
+                        Text(
+                            when (category) {
+                                "SAMPLES" -> "No imported audio sources match this search."
+                                "CLIPS" -> "No clips match this search."
+                                else -> "No matching project items."
+                            },
+                            color = p.muted, fontSize = 9.sp, modifier = Modifier.padding(8.dp)
+                        )
                     }
                 }
             }
