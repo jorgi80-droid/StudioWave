@@ -44,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.roundToInt
@@ -106,6 +107,28 @@ private fun Modifier.timelineClipWidthPx(widthPx: Float): Modifier = layout { me
 }
 
 private data class TrackRowLayout(val topDp: Float, val heightDp: Float)
+
+internal data class PinchZoomFrame(val zoom: Float, val scrollTicks: Double)
+
+/** Compute a pinch from an immutable gesture-start baseline and fractional tick anchor. */
+internal fun calculatePinchZoomFrame(
+    timebase: TimelineTimebase,
+    baseZoom: Float,
+    baseScrollTicks: Double,
+    baseSpanPx: Float,
+    currentSpanPx: Float,
+    anchorTick: Double,
+    centroidX: Float,
+    baseBarWidthPx: Float
+): PinchZoomFrame {
+    val ratio = if (baseSpanPx > 1f && currentSpanPx.isFinite() && currentSpanPx > 1f)
+        currentSpanPx / baseSpanPx else 1f
+    val zoom = (baseZoom * ratio).coerceIn(0.1f, 16f)
+    val scale = TimelineViewport(timebase, baseBarWidthPx * zoom, baseScrollTicks, 0f).effectivePixelsPerBar
+    val scroll = TimelineViewport(timebase, scale, baseScrollTicks, 0f)
+        .placeTickAtViewportX(anchorTick, centroidX).scrollTimeTicks
+    return PinchZoomFrame(zoom, scroll)
+}
 
 /** Split a clip at an absolute arrangement tick while keeping both halves tied to source time. */
 internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Long): Pair<com.studiowave.app.data.WaveClip, com.studiowave.app.data.WaveClip>? {
@@ -283,32 +306,42 @@ private fun StudioWaveApp() {
                     snapshot,
                     gain,
                     onCompleted = {
-                        playbackScope.launch {
-                            if (session == playbackSession) {
-                                playing = false
-                                playbackLoading = false
-                                playbackJob = null
-                            }
+                        if (session == playbackSession) {
+                            playheadTick = snapshot.tracks.asSequence().flatMap { it.clips.asSequence() }
+                                .maxOfOrNull { clip ->
+                                    val start = clip.startTick.coerceAtLeast(0L)
+                                    val length = clip.lengthTicks.coerceAtLeast(1L)
+                                    if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
+                                } ?: playheadTick
+                            playing = false
+                            playbackLoading = false
+                            playbackJob = null
                         }
                     },
                     onError = { message ->
-                        playbackScope.launch {
-                            if (session == playbackSession) {
-                                playing = false
-                                playbackLoading = false
-                                playbackJob = null
-                                audioError = message
-                            }
+                        if (session == playbackSession) {
+                            playing = false
+                            playbackLoading = false
+                            playbackJob = null
+                            audioError = message
                         }
                     },
                     startAtTick = startTick,
                     onProgress = { positionTicks ->
-                        playbackScope.launch {
-                            if (session == playbackSession) playheadTick = positionTicks.coerceAtLeast(0L)
+                        withContext(Dispatchers.Main.immediate) {
+                            if (session == playbackSession) {
+                                val nextTick = positionTicks.coerceAtLeast(0L)
+                                if (nextTick >= playheadTick) playheadTick = nextTick
+                            }
                         }
                     }
                 )
-                if (session == playbackSession) playing = true
+                if (session == playbackSession) {
+                    playing = true
+                    playbackLoading = false
+                    // Keep transport state until AudioTrack drains; start() only launches its worker.
+                    awaitCancellation()
+                }
             } catch (_: CancellationException) {
                 if (session == playbackSession) {
                     playing = false
@@ -1417,7 +1450,9 @@ private fun TimelineGrid(
                     var previousCentroid = Offset.Zero
                     var previousSpan = 0f
                     var initialized = false
+                    var multiTouchGestureOccurred = false
                     var gestureBaseSpan = 0f
+                    var gesturePointerCount = 0
                     var gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
                     var gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                     var gestureBaseScrollTicks = currentScroll
@@ -1427,25 +1462,25 @@ private fun TimelineGrid(
                         val event = awaitPointerEvent()
                         val pointers = event.changes.filter { it.pressed }
                         if (pointers.size >= 2) {
+                            multiTouchGestureOccurred = true
                             val centroid = Offset(
                                 pointers.map { it.position.x }.average().toFloat(),
                                 pointers.map { it.position.y }.average().toFloat()
                             )
                             val span = pointers.map { (it.position - centroid).getDistance() }.average().toFloat() * 2f
-                            if (initialized) {
+                            if (initialized && pointers.size == gesturePointerCount) {
                                 // Derive zoom from the starting pinch span instead of multiplying each
                                 // move event. This avoids cumulative clamping jumps and scale drift.
+                                val frame = calculatePinchZoomFrame(
+                                    timebase, gestureBaseZoom, gestureBaseScrollTicks, gestureBaseSpan, span,
+                                    gestureAnchorTick, centroid.x, baseBarWidthPx
+                                )
                                 val spanRatio = if (gestureBaseSpan > 1f && span > 1f) span / gestureBaseSpan else 1f
-                                val newZoom = (gestureBaseZoom * spanRatio).coerceIn(0.1f, 16f)
+                                val newZoom = frame.zoom
                                 val oldZoom = currentZoom.coerceIn(0.1f, 16f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
-                                val newBarWidth = TimelineViewport(
-                                    timebase, baseBarWidthPx * newZoom, gestureBaseScrollTicks, size.width.toFloat()
-                                ).effectivePixelsPerBar
-                                val newScroll = TimelineViewport(
-                                    timebase, newBarWidth, gestureBaseScrollTicks, size.width.toFloat()
-                                ).placeTickAtViewportX(gestureAnchorTick, centroid.x).scrollTimeTicks
+                                val newScroll = frame.scrollTicks
                                 val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
                                     (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
@@ -1453,9 +1488,10 @@ private fun TimelineGrid(
                                 if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
                                 if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
                             }
-                            if (!initialized) {
+                            if (!initialized || pointers.size != gesturePointerCount) {
                                 gestureBaseSpan = span.coerceAtLeast(1f)
                                 gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
+                                gesturePointerCount = pointers.size
                                 gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 gestureBaseScrollTicks = currentScroll
                                 val baseViewport = TimelineViewport(
@@ -1472,12 +1508,13 @@ private fun TimelineGrid(
                             event.changes.forEach { change -> if (change.position != change.previousPosition) change.consume() }
                         } else {
                             initialized = false
-                            previousSpan = 0f
                             gestureBaseSpan = 0f
+                            gesturePointerCount = 0
                             val pointer = pointers.firstOrNull()
                             if (pointer != null) {
                                 val delta = pointer.position - previousSinglePosition
-                                if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
+                                if (!multiTouchGestureOccurred && !startsOnClip &&
+                                    (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
                                        val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
                                     val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks
