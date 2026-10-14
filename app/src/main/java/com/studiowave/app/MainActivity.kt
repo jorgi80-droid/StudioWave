@@ -658,7 +658,7 @@ private fun ArrangementWorkspace(
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
     zoom: Float, onZoom: (Float) -> Unit,
-    scrollTicks: Float, onScroll: (Float) -> Unit,
+    scrollTicks: Double, onScroll: (Double) -> Unit,
     verticalZoom: Float, onVerticalZoom: (Float) -> Unit,
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
