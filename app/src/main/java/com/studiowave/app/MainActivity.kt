@@ -3119,7 +3119,7 @@ private fun PianoRollWorkspace(
     Column(Modifier.fillMaxSize().background(pianoPalette.room).border(1.dp, pianoPalette.border, RoundedCornerShape(1.dp)).padding(2.dp)) {
         // Clip identity and editing actions share one shallow strip so the note grid wins height.
         Row(
-            Modifier.fillMaxWidth().height(28.dp)
+            Modifier.fillMaxWidth().height(36.dp).horizontalScroll(rememberScrollState())
                 .background(pianoPalette.panel, RoundedCornerShape(1.dp))
                 .border(1.dp, pianoPalette.border, RoundedCornerShape(1.dp))
                 .padding(horizontal = 4.dp),
@@ -3129,18 +3129,18 @@ private fun PianoRollWorkspace(
             Text("MIDI", color = pianoPalette.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
                 modifier = Modifier.widthIn(max = 90.dp))
-            Spacer(Modifier.weight(1f))
-            SmallAction("×") { onBack() }
-            SmallAction(if (keyboardVisible) "NOTES" else "VEL LANE") {
+            Spacer(Modifier.width(4.dp))
+            SmallAction("×", minHeight = 32) { onBack() }
+            SmallAction(if (keyboardVisible) "NOTES" else "VEL LANE", minHeight = 32) {
                 keyboardVisible = !keyboardVisible
                 velocityMode = !keyboardVisible
                 panMode = false
             }
-            SmallAction(if (virtualKeyboardVisible) "INPUT ON" else "INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
-            SmallAction("1/${snapDenominator}") {
+            SmallAction(if (virtualKeyboardVisible) "INPUT ON" else "INPUT", minHeight = 32) { virtualKeyboardVisible = !virtualKeyboardVisible }
+            SmallAction("1/${snapDenominator}", minHeight = 32) {
                 snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
             }
-            TransportAction("−") {
+            TransportAction("−", heightDp = 32) {
                 val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
                 val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
@@ -3149,7 +3149,7 @@ private fun PianoRollWorkspace(
                 startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
             }
             Text("BAR ${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            TransportAction("+") {
+            TransportAction("+", heightDp = 32) {
                 val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
                 val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
                 val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
@@ -3157,10 +3157,10 @@ private fun PianoRollWorkspace(
                 zoomX = nextZoom
                 startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
             }
-            TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
-            TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
+            TransportAction("P−", heightDp = 32) { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
+            TransportAction("P+", heightDp = 32) { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
             Box {
-                SmallAction("⋮") { noteContextMenuExpanded = true }
+                SmallAction("⋮", minHeight = 32) { noteContextMenuExpanded = true }
                 DropdownMenu(
                     expanded = noteContextMenuExpanded,
                     onDismissRequest = { noteContextMenuExpanded = false },
@@ -3736,6 +3736,12 @@ private fun PianoRollWorkspace(
                                         Offset(x.toFloat(), y + 1f), Offset(x.toFloat() + width, y + 1f), 1f)
                                     drawRect(Color.White.copy(alpha = if (selected) 0.95f else 0.72f),
                                         Offset(x.toFloat() + width - 2f, y + 1f), Size(2f, noteHeight))
+                                    // Selected notes expose a trailing grip; the touch hit-zone remains wider.
+                                    if (selected && width >= 8f && noteHeight >= 7f) {
+                                        drawLine(Color.White.copy(alpha = 0.95f),
+                                            Offset(x.toFloat() + width - 5f, y + 3f),
+                                            Offset(x.toFloat() + width - 5f, y + noteHeight - 3f), 1.2f)
+                                    }
                                 }
                             }
                         }
@@ -5350,9 +5356,9 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
 
 
 @Composable
-private fun SmallAction(label: String, onClick: () -> Unit) {
+private fun SmallAction(label: String, minHeight: Int = 25, onClick: () -> Unit) {
     val p = LocalStudioWavePalette.current
-    Button(onClick = onClick, modifier = Modifier.height(25.dp), contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
+    Button(onClick = onClick, modifier = Modifier.height(minHeight.dp), contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
         shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border.copy(alpha = 0.9f)),
         colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text)) {
         Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold)
@@ -5774,14 +5780,14 @@ private fun MixerStateButton(
 }
 
 @Composable
-internal fun TransportAction(label: String, onClick: () -> Unit) {
+internal fun TransportAction(label: String, heightDp: Int = 23, onClick: () -> Unit) {
     val p = LocalStudioWavePalette.current
     Surface(
         color = p.control,
         contentColor = p.text,
         shape = RoundedCornerShape(2.dp),
         border = BorderStroke(1.dp, p.border.copy(alpha = 0.65f)),
-        modifier = Modifier.height(23.dp).clickable(onClick = onClick)
+        modifier = Modifier.height(heightDp.dp).clickable(onClick = onClick)
     ) {
         Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) {
             Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
