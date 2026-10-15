@@ -176,3 +176,11 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - Neither commit changes audio DSP, timeline coordinates, clip data, Piano Roll note mapping, project serialization, or the 1,800-bar limit.
 - Validation gate: verify Android CI for the latest head `7ea19bfee25e864a63542da9c747efca6dc261f9`, including `assembleDebug`, `testDebugUnitTest`, and APK artifact upload. Physical Android landscape visual/gesture checks remain required.
 - Scope note: this is a native, Live-inspired interface pass, not a claim of pixel-identical reproduction or copied proprietary Ableton assets/code.
+
+
+## Continuation update — Arrangement ruler and Browser responsive pass (2026-10-16)
+
+- Commit `f438207edbc1215938ccdfdefae8e6b28185ccfc` updates Arrangement ruler typography to use the active palette, emphasizes major bars, highlights the playhead's current bar in orange, and changes the ruler playhead marker from generic danger red to Live-style orange. Timeline time mapping and hit-testing are unchanged.
+- The Browser pass is in `8ddcae3347887402d05b698c2407f7b72cf5e0bc`: square palette-matched search, tighter category/action surfaces, and bordered clip/track rows.
+- Commit `7ea19bfee25e864a63542da9c747efca6dc261f9` makes the Browser Device Library placeholder use available width on mobile landscape without changing Device Dock module widths.
+- Validation must cover the latest head: debug APK build, unit tests and artifact upload. Physical Android landscape comparison is still outstanding.
