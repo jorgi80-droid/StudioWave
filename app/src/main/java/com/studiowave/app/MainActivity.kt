@@ -689,6 +689,7 @@ private fun StudioWaveApp() {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
+                    returnToAudioEditorAfterImport = false
                     audioError = failure.message ?: "Could not inspect the audio file."
                 }
             }
