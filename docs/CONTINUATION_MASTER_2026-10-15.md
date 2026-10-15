@@ -203,3 +203,9 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - The main Arrangement playhead now uses the same orange as the ruler playhead, avoiding two competing playhead colors.
 - DirectWave device surfaces use the same 1 dp corner treatment as the rest of the DAW. Mixer meter segments, channel fader caps and master rail have tighter geometry to match the graphite hardware-style visual language.
 - No timeline math, clip resize gesture mapping, sample loading, parameter ranges, DSP routing or project serialization was intentionally changed. CI for this exact commit must confirm build, unit tests and APK artifact upload; device visual testing remains outstanding.
+
+
+## Continuation update — Piano Roll surface pass (2026-10-16)
+- Commit `761fd14d0ac883bf64ea76df090716d76cd631eb` standardizes the remaining Piano Roll edit-tools surfaces to the 1 dp square geometry and adds a hairline border around the expanded edit-tools strip. Note editing, pitch/tick transforms, snap divisions, zoom mapping and velocity/pan state were not changed.
+- Combined with `e0735f8a`, this pass aligns clip resize affordances, clip menus, DirectWave panel surfaces, Mixer faders/meters and Piano Roll tool strips under one compact visual language.
+- Build and unit tests for the latest source commit must pass before this batch is considered validated; phone landscape interaction review is still outstanding.
