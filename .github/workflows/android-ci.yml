@@ -35,12 +35,11 @@ jobs:
           set +o pipefail
           yes | "$SDKMANAGER" --licenses >/dev/null
           set -o pipefail
-          # Install native tools because app/build.gradle.kts compiles the C++ audio engine.
           "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.0.12077973" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Download CC0 DirectWave factory samples
+      - name: Download factory sample pack
         shell: bash
         run: |
           set -euo pipefail
@@ -54,7 +53,7 @@ jobs:
           curl --fail --location --retry 3 "$base/02-bounce/kicks/bounce-kick-01.wav" -o "$target/bounce-kick-01.wav"
           curl --fail --location --retry 3 "$base/03-soulful-vintage/kicks/vintage-kick-01.wav" -o "$target/vintage-kick-01.wav"
           test "$(find "$target" -maxdepth 1 -name '*.wav' | wc -l)" -eq 6
-          for sample in "$target"/*.wav; do test "$(od -An -tx1 -N4 "$sample" | tr -d ' \n')" = "52494646"; done
+          for sample in "$target"/*.wav; do test "$(od -An -tx1 -N4 "$sample" | tr -d ' \\n')" = "52494646"; done
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
       - name: Run unit tests
