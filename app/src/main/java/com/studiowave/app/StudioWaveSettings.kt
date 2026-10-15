@@ -74,6 +74,7 @@ internal fun StudioWaveSettingsScreen(
     highContrast: Boolean, onHighContrastChange: (Boolean) -> Unit, gridOpacity: Float, onGridOpacityChange: (Float) -> Unit,
     uiScale: Float, onUiScaleChange: (Float) -> Unit,
     audioStatus: String, audioProfile: String, onAudioProfileChange: (String) -> Unit,
+    metronomeEnabled: Boolean, onMetronomeEnabledChange: (Boolean) -> Unit,
     metronomeLevel: Float, onMetronomeLevelChange: (Float) -> Unit,
     parallelPreparation: Boolean, onParallelPreparationChange: (Boolean) -> Unit,
     audioDiagnostics: List<String>, appLog: List<String>,
@@ -136,6 +137,7 @@ internal fun StudioWaveSettingsScreen(
                         }, p
                     )
                     SettingsSection("METRONOME", "Click is mixed into the master output during playback.", p)
+                    SettingsToggleRow("Metronome enabled", "Play a beat-aligned click on the master output.", metronomeEnabled, onMetronomeEnabledChange, p)
                     SettingsSliderRow("Metronome level", "0% = silent; 100% = maximum click level.", metronomeLevel,
                         "${(metronomeLevel * 100).toInt()}%", onMetronomeLevelChange, p)
                     SettingsSection("PREPARATION & PROCESSING", "Multicore option parallelizes sample preparation only; realtime mixing remains a dedicated worker.", p)
