@@ -836,10 +836,10 @@ private fun StudioWaveApp() {
                         selected = selectedWorkspace,
                         devicesOpen = showDock,
                         onSelect = {
-                        selectedWorkspace = it
-                        showDock = false
-                    },
-                    onToggleDevices = { showDock = !showDock }
+                            selectedWorkspace = it
+                            showDock = false
+                        },
+                        onToggleDevices = { showDock = !showDock }
                     )
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -1032,9 +1032,9 @@ private fun TransportBar(
 @Composable
 private fun WorkspaceRail(
     selected: String,
-    devicesOpen: Boolean,
+    devicesOpen: Boolean = false,
     onSelect: (String) -> Unit,
-    onToggleDevices: () -> Unit
+    onToggleDevices: () -> Unit = {}
 ) {
     val p = LocalStudioWavePalette.current
     Column(
@@ -1042,15 +1042,8 @@ private fun WorkspaceRail(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
-        RailButton("EDIT", selected == "PIANO ROLL" || selected == "AUDIO EDITOR" || selected == "DRUM SEQUENCER", Icons.Default.Keyboard) {
-            onSelect(when (selected) {
-                "PIANO ROLL", "AUDIO EDITOR", "DRUM SEQUENCER" -> "ARRANGEMENT"
-                "ARRANGEMENT" -> "PIANO ROLL"
-                else -> selected
-            })
-        }
         RailButton("MIX", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
-        RailButton("DEV", devicesOpen, Icons.Default.GraphicEq, onToggleDevices)
+        // Device View and Browser now open from the selected track or the unified bottom action dock.
         RailButton("FILES", selected == "BROWSER", Icons.Default.LibraryMusic) { onSelect("BROWSER") }
     }
 }
@@ -1368,13 +1361,16 @@ private fun ArrangementWorkspace(
                         addAnchorY >= 0f && addAnchorY + 44f <= headerViewportHeightDp
                     if (showBottomAddTrack) {
                         Surface(
-                            color = LocalStudioWavePalette.current.accent,
-                            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp),
-                            shadowElevation = 5.dp,
+                            color = LocalStudioWavePalette.current.control,
+                            contentColor = LocalStudioWavePalette.current.text,
+                            shape = RoundedCornerShape(7.dp),
+                            border = BorderStroke(1.dp, LocalStudioWavePalette.current.border),
+                            shadowElevation = 3.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
-                                .offset(y = (addAnchorY + 8f).coerceAtLeast(0f).dp)
+                                .offset(y = (addAnchorY + 6f).coerceAtLeast(0f).dp)
                                 .padding(end = 5.dp)
-                                .size(34.dp).clickable {
+                                .height(30.dp).widthIn(min = 66.dp)
+                                .clickable {
                                     addTrackMenu = !addTrackMenu
                                     if (addTrackMenu) {
                                         showTimelineMenu = false
@@ -1383,8 +1379,8 @@ private fun ArrangementWorkspace(
                                     }
                                 }
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(if (addTrackMenu) "×" else "✦", color = Room, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                            Box(Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+                                Text(if (addTrackMenu) "× CLOSE" else "Track +", color = LocalStudioWavePalette.current.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -1398,7 +1394,7 @@ private fun ArrangementWorkspace(
                                 .padding(end = 40.dp)
                         ) {
                             Column(Modifier.width(174.dp).padding(5.dp)) {
-                                Text("ADD TRACK", color = LocalStudioWavePalette.current.accent, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
+                                Text("TRACK +", color = LocalStudioWavePalette.current.orange, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                                 listOf(
                                     "MIDI / Instrument track" to "midi",
                                     "Audio track" to "audio",
@@ -2995,7 +2991,7 @@ private fun PianoRollWorkspace(
                     })
                 }
             }
-            SmallAction("BACK", onBack)
+            SmallAction("×", onBack)
 
         }
         if (editToolsExpanded) {
@@ -4006,39 +4002,13 @@ private fun DeviceDock(
             Spacer(Modifier.width(8.dp))
             Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = devicePalette.text, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            SmallAction(if (page == "MIX") "DEVICES" else "MIXER") { page = if (page == "MIX") "DEVICES" else "MIX" }
             SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
-            SmallAction("× CLOSE") { onToggle() }
+            SmallAction("×") { onToggle() }
         }
         if (expanded) {
             if (selectedTrack == null) {
                 Text("Add a track in Arrangement to see its controls.", color = devicePalette.muted, fontSize = 9.sp)
             } else {
-                Row(
-                    Modifier.fillMaxWidth().height(28.dp).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    project.tracks.forEach { track ->
-                        val isSelected = selectedTrack.id == track.id
-                        Surface(
-                            color = if (isSelected) devicePalette.accent.copy(alpha = 0.18f) else devicePalette.room,
-                            shape = RoundedCornerShape(5.dp),
-                            border = if (isSelected) BorderStroke(1.dp, devicePalette.accent) else null,
-                            modifier = Modifier.clickable { onSelectTrack(track.id) }
-                        ) {
-                            Row(
-                                Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp)
-                            ) {
-                                Box(Modifier.size(5.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(2.dp)))
-                                Text(track.name.take(18), color = if (isSelected) devicePalette.accent else devicePalette.text,
-                                    fontSize = 9.sp, maxLines = 1)
-                            }
-                        }
-                    }
-                }
                 if (page == "MIX") {
                     Row(
                         Modifier.fillMaxWidth().weight(1f),
@@ -4155,22 +4125,7 @@ private fun DeviceDock(
                                 body = "Select an audio clip to inspect the source waveform and trim it in Clip View."
                             )
                         }
-                        DeviceModuleCard(
-                            title = "SATURATOR", subtitle = "AUDIO EFFECT", palette = devicePalette,
-                            body = "DSP is not connected yet. This module deliberately exposes no fake knobs."
-                        )
-                        DeviceModuleCard(
-                            title = "EQUALIZER", subtitle = "AUDIO EFFECT", palette = devicePalette,
-                            body = "Equalizer processing is not implemented in the current audio graph."
-                        )
-                        DeviceModuleCard(
-                            title = "COMPRESSOR", subtitle = "AUDIO EFFECT", palette = devicePalette,
-                            body = "Compression is not yet connected to playback; no decorative controls are presented."
-                        )
-                        DeviceModuleCard(
-                            title = "END OF CHAIN", subtitle = "DEVICE INSERT", palette = devicePalette,
-                            body = "More processors can be added here once they have working DSP implementations."
-                        )
+
                     }
                 }
             }
