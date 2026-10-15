@@ -123,4 +123,44 @@ class TimelineViewportTest {
         assertEquals(anchorTick, resultingTick, 1e-6)
     }
 
+    @Test fun zoomAfterHorizontalScrollKeepsFractionalAnchorAndRoundTripsTicks() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val initial = arrangementPaneViewport(timebase, 96f, 0.0, 920f)
+            .panByScreenPixels(-173.25f)
+        val anchorX = 417.5f
+        val anchorTick = initial.effectiveScrollTimeTicks + anchorX / initial.pixelsPerTick
+        val zoomed = initial.zoomKeepingAnchor(312f, anchorX)
+        val tickAfterZoom = zoomed.effectiveScrollTimeTicks + anchorX / zoomed.pixelsPerTick
+        assertEquals(anchorTick, tickAfterZoom, 1e-5)
+        listOf(0L, 3840L, 7680L, 145920L, maxArrangementTick(timebase)).forEach { tick ->
+            val x = zoomed.timeToViewportX(tick)
+            assertTrue(kotlin.math.abs(zoomed.viewportXToTime(x) - tick) <= 1L)
+        }
+    }
+
+    @Test fun playbackFollowKeepsPlayheadVisibleAtBothArrangementEdges() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val initial = arrangementPaneViewport(timebase, 120f, 0.0, 900f)
+        val startFollow = initial.followPlayhead(0L)
+        assertTrue(startFollow.timeToViewportX(0L) in -0.01f..900.01f)
+        val endTick = maxArrangementTick(timebase) - timebase.ticksPerBeat
+        val endFollow = initial.followPlayhead(endTick)
+        val endX = endFollow.timeToViewportX(endTick)
+        assertTrue("playhead should remain visible near arrangement end: x=$endX", endX >= -0.01f && endX <= 900.01f)
+        assertTrue(endFollow.effectiveScrollTimeTicks <= maxArrangementTick(timebase).toDouble())
+    }
+
+    @Test fun clipDurationWidthRemainsInvariantAcrossScrollThenZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val base = arrangementPaneViewport(timebase, 74f, 32000.25, 860f)
+        val moved = base.panByScreenPixels(-267f)
+        val zoomed = moved.zoomKeepingAnchor(444f, 302.25f)
+        val start = 43L * timebase.ticksPerBar + 120L
+        val duration = 2L * timebase.ticksPerBar + 720L
+        val renderedWidth = zoomed.tickDeltaToPixels(duration)
+        val mappedWidth = zoomed.timeToViewportX(start + duration) - zoomed.timeToViewportX(start)
+        assertEquals(renderedWidth, mappedWidth, 0.01f)
+        assertTrue(kotlin.math.abs(zoomed.pixelsToTickDelta(renderedWidth) - duration) <= 1L)
+    }
+
 }
