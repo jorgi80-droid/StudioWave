@@ -813,7 +813,15 @@ private fun StudioWaveApp() {
             onSurface = swatch.text
         )
     }
-    MaterialTheme(colorScheme = studioColorScheme) {
+    // Keep Material defaults (dialogs/cards/menus) inside the same crisp Live-style geometry.
+    val liveShapes = Shapes(
+        extraSmall = RoundedCornerShape(1.dp),
+        small = RoundedCornerShape(1.dp),
+        medium = RoundedCornerShape(1.dp),
+        large = RoundedCornerShape(1.dp),
+        extraLarge = RoundedCornerShape(1.dp)
+    )
+    MaterialTheme(colorScheme = studioColorScheme, shapes = liveShapes) {
         CompositionLocalProvider(
             LocalStudioWavePalette provides swatch,
             LocalStudioWaveGridOpacity provides gridOpacity,
