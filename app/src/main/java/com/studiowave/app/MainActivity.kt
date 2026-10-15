@@ -1832,9 +1832,11 @@ private fun PianoRollWorkspace(
     }
     var horizontalZoom by remember(clip?.id) { mutableFloatStateOf(1f) }
     var horizontalScroll by remember(clip?.id) { mutableFloatStateOf(0f) }
-    var verticalScroll by remember(clip?.id) { mutableIntStateOf(48) }
+    var verticalScroll by remember(clip?.id) { mutableIntStateOf(24) }
     var selectedNoteId by remember(clip?.id) { mutableStateOf<String?>(null) }
-    var dragOrigin by remember { mutableStateOf<Triple<String, Long, Int>?>(null) }
+    var dragOrigin by remember { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
+    var dragPreview by remember { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
+    var dragMode by remember { mutableStateOf("MOVE") }
     var dragTotalX by remember { mutableFloatStateOf(0f) }
     var dragTotalY by remember { mutableFloatStateOf(0f) }
     var snapTicks by remember { mutableLongStateOf((timebase.ticksPerBeat / 4L).coerceAtLeast(1L)) }
@@ -1842,7 +1844,7 @@ private fun PianoRollWorkspace(
     val pianoBlack = Color(0xFF383A3F)
     val accent = Color(0xFFFFA65A)
     val ticksPerBar = timebase.ticksPerBar.coerceAtLeast(1L)
-    val visibleBars = (8.0 / horizontalZoom.coerceAtLeast(0.25f)).coerceAtLeast(1.0)
+    val visibleBars = (2.0 / horizontalZoom.coerceAtLeast(0.25f)).coerceAtLeast(0.5)
     val clipEnd = clip?.let { it.startTick + it.lengthTicks.coerceAtLeast(ticksPerBar) } ?: ticksPerBar * 8L
     val viewTicks = (ticksPerBar * visibleBars).toLong().coerceAtLeast(1L)
     fun commitNotes(updated: List<com.studiowave.app.data.MidiNote>) {
@@ -1951,36 +1953,72 @@ private fun PianoRollWorkspace(
                             commitNotes(notes + note)
                         }
                     }
-                }.pointerInput(horizontalZoom, horizontalScroll, verticalScroll, snapTicks, notes) {
+                }.pointerInput(track?.id, clip?.id, horizontalZoom, horizontalScroll, verticalScroll, snapTicks) {
                     detectDragGestures(
                         onDragStart = { point ->
                             val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
                             val pitch = (verticalScroll + 47 - (point.y / rowHeight).toInt()).coerceIn(0, 127)
                             val pxPerTick = size.width / viewTicks.toFloat()
                             val tick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
-                            selectedNoteId = notes.firstOrNull { it.pitch == pitch && tick >= it.startTick && tick <= it.startTick + it.durationTicks }?.id
-                            val selected = notes.firstOrNull { it.id == selectedNoteId }
-                            dragOrigin = selected?.let { Triple(it.id, it.startTick, it.pitch) }
+                            val selected = notes.firstOrNull { it.pitch == pitch && tick >= it.startTick && tick <= it.startTick + it.durationTicks }
+                            selectedNoteId = selected?.id
+                            dragOrigin = selected
+                            dragPreview = selected
                             dragTotalX = 0f
                             dragTotalY = 0f
+                            val handleTolerance = 12.dp.toPx()
+                            val noteLeft = selected?.let { (it.startTick - horizontalScroll) * pxPerTick }
+                            val noteRight = selected?.let { (it.startTick + it.durationTicks - horizontalScroll) * pxPerTick }
+                            dragMode = when {
+                                selected == null -> "MOVE"
+                                noteLeft != null && kotlin.math.abs(point.x - noteLeft) <= handleTolerance -> "LEFT"
+                                noteRight != null && kotlin.math.abs(point.x - noteRight) <= handleTolerance -> "RIGHT"
+                                else -> "MOVE"
+                            }
                         },
                         onDrag = { change, drag ->
                             change.consume()
                             val origin = dragOrigin ?: return@detectDragGestures
-                            val original = notes.firstOrNull { it.id == origin.first } ?: return@detectDragGestures
                             dragTotalX += drag.x
                             dragTotalY += drag.y
                             val deltaTicks = (dragTotalX / size.width * viewTicks).toLong()
                             val deltaPitch = (-dragTotalY / (size.height / 48f).coerceAtLeast(1f)).toInt()
                             val step = snapTicks.coerceAtLeast(1L)
-                            val moved = original.copy(
-                                startTick = (origin.second + deltaTicks).coerceAtLeast(0L) / step * step,
-                                pitch = (origin.third + deltaPitch).coerceIn(0, 127)
-                            )
-                            commitNotes(notes.map { if (it.id == origin.first) moved else it })
+                            val updated = when (dragMode) {
+                                "RIGHT" -> {
+                                    val rawLength = (origin.durationTicks + deltaTicks).coerceAtLeast(step)
+                                    val snappedLength = (((rawLength + step / 2L) / step) * step).coerceAtLeast(step)
+                                    origin.copy(durationTicks = snappedLength)
+                                }
+                                "LEFT" -> {
+                                    val fixedEnd = origin.startTick + origin.durationTicks
+                                    val latestStart = (fixedEnd - step).coerceAtLeast(0L)
+                                    val rawStart = (origin.startTick + deltaTicks).coerceIn(0L, latestStart)
+                                    val snappedStart = ((rawStart + step / 2L) / step * step).coerceIn(0L, latestStart)
+                                    origin.copy(startTick = snappedStart, durationTicks = (fixedEnd - snappedStart).coerceAtLeast(step))
+                                }
+                                else -> origin.copy(
+                                    startTick = (origin.startTick + deltaTicks).coerceAtLeast(0L) / step * step,
+                                    pitch = (origin.pitch + deltaPitch).coerceIn(0, 127)
+                                )
+                            }
+                            dragPreview = updated
                         },
-                        onDragEnd = { dragOrigin = null },
-                        onDragCancel = { dragOrigin = null }
+                        onDragEnd = {
+                            val preview = dragPreview
+                            val origin = dragOrigin
+                            if (preview != null && origin != null && preview != origin) {
+                                commitNotes(notes.map { if (it.id == origin.id) preview else it })
+                            }
+                            dragOrigin = null
+                            dragPreview = null
+                        },
+                        onDragCancel = {
+                            dragOrigin = null
+                            dragPreview = null
+                            dragTotalX = 0f
+                            dragTotalY = 0f
+                        }
                     )
                 }) {
                     val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
@@ -2011,7 +2049,8 @@ private fun PianoRollWorkspace(
                             }
                         }
                     }
-                    notes.forEach { note ->
+                    notes.forEach { storedNote ->
+                        val note = if (dragPreview?.id == storedNote.id) dragPreview!! else storedNote
                         val x = (note.startTick - horizontalScroll) * pxPerTick
                         val y = (verticalScroll + 47 - note.pitch) * rowHeight
                         val width = note.durationTicks * pxPerTick
