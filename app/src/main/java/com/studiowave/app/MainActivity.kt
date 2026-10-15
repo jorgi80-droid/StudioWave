@@ -2030,106 +2030,92 @@ private fun MixerWorkspace(
     onMasterChange: (Float) -> Unit,
     onProjectChange: (StudioProject) -> Unit
 ) {
-    Row(
-        Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        project.tracks.forEach { track ->
-            Column(
-                Modifier.weight(1f).fillMaxHeight()
-                    .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Spacer(Modifier.height(3.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    SmallAction(if (track.muted) "M✓" else "M") {
-                        onProjectChange(project.copy(tracks = project.tracks.map {
-                            if (it.id == track.id) it.copy(muted = !it.muted) else it
-                        }))
+    val panel = Color(0xFF292B2F)
+    val panelHeader = Color(0xFF36383D)
+    val textPrimary = Color(0xFFE4E5E7)
+    Row(Modifier.fillMaxSize().background(Color(0xFF202124)).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        project.tracks.forEachIndexed { index, track ->
+            val accent = Color(track.colorArgb.toInt())
+            Column(Modifier.weight(1f).fillMaxHeight().background(panel).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.fillMaxWidth().height(24.dp).background(accent.copy(alpha = 0.92f), RoundedCornerShape(2.dp)).padding(horizontal = 5.dp), contentAlignment = Alignment.CenterStart) {
+                    Text(track.name.uppercase(), color = Color(0xFF202124), fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Surface(color = if (track.muted) Color(0xFFE85D5D) else panelHeader, shape = RoundedCornerShape(3.dp), modifier = Modifier.weight(1f).height(23.dp).clickable { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) }) {
+                        Box(contentAlignment = Alignment.Center) { Text("M", color = if (track.muted) Color.White else textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
                     }
-                    SmallAction(if (track.solo) "S✓" else "S") {
-                        onProjectChange(project.copy(tracks = project.tracks.map {
-                            if (it.id == track.id) it.copy(solo = !it.solo) else it
-                        }))
+                    Surface(color = if (track.solo) Color(0xFFFFB347) else panelHeader, shape = RoundedCornerShape(3.dp), modifier = Modifier.weight(1f).height(23.dp).clickable { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) }) {
+                        Box(contentAlignment = Alignment.Center) { Text("S", color = if (track.solo) Color(0xFF202124) else textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
                     }
                 }
-                Spacer(Modifier.height(4.dp))
-                val panLabel = when {
-                    track.pan <= -0.95f -> "L"
-                    track.pan >= 0.95f -> "R"
-                    else -> (track.pan * 100).toInt().toString()
+                Spacer(Modifier.height(5.dp))
+                Column(Modifier.fillMaxWidth().height(66.dp).background(Color(0xFF242629), RoundedCornerShape(2.dp)).padding(2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
+                    AbletonKnob("VOL", track.volume.coerceIn(0f, 1.5f) / 1.5f, { amount ->
+                        val volume = amount * 1.5f
+                        onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(volume = volume) else it }))
+                    }, "%.0f%%".format(track.volume.coerceIn(0f, 1.5f) / 1.5f * 100f), Modifier.fillMaxWidth(), accent, dialSize = 26.dp)
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    AbletonKnob(
-                        "VOL",
-                        track.volume.coerceIn(0f, 1.5f) / 1.5f,
-                        { amount ->
-                            val mapped = amount * 1.5f
-                            onProjectChange(project.copy(tracks = project.tracks.map {
-                                if (it.id == track.id) it.copy(volume = mapped) else it
-                            }))
-                        },
-                        ((track.volume.coerceIn(0f, 1.5f) / 1.5f) * 100).toInt().toString() + "%",
-                        Modifier.weight(1f).height(52.dp),
-                        dialSize = 24.dp
-                    )
-                    AbletonKnob(
-                        "PAN",
-                        (track.pan + 1f) / 2f,
-                        { amount ->
-                            val mapped = amount * 2f - 1f
-                            onProjectChange(project.copy(tracks = project.tracks.map {
-                                if (it.id == track.id) it.copy(pan = mapped) else it
-                            }))
-                        },
-                        panLabel,
-                        Modifier.weight(1f).height(52.dp),
-                        accent = Color(0xFFFFB347),
-                        dialSize = 24.dp
-                    )
+                Row(Modifier.fillMaxWidth().height(51.dp).background(Color(0xFF242629), RoundedCornerShape(2.dp)).padding(horizontal = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+                    AbletonKnob("PAN", (track.pan + 1f) / 2f, { amount ->
+                        val pan = amount * 2f - 1f
+                        onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(pan = pan) else it }))
+                    }, when { track.pan < -0.95f -> "L"; track.pan > 0.95f -> "R"; else -> (track.pan * 100).toInt().toString() }, Modifier.weight(1f), Color(0xFFFFB347), dialSize = 23.dp)
                 }
                 Spacer(Modifier.height(4.dp))
-                Canvas(Modifier.fillMaxWidth().weight(1f)) {
-                    drawRoundRect(Color(0xFF131518), Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                    val h = size.height * track.volume.coerceIn(0f, 1.5f) / 1.5f
-                    drawRoundRect(
-                        if (track.muted) Red else Mint,
-                        Offset(size.width * 0.34f, size.height - h),
-                        Size(size.width * 0.32f, h),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f)
-                    )
+                Row(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF242629), RoundedCornerShape(2.dp)).padding(5.dp), horizontalArrangement = Arrangement.Center) {
+                    Canvas(Modifier.width(12.dp).fillMaxHeight().padding(vertical = 2.dp)) {
+                        drawRect(Color(0xFF151619))
+                        for (segment in 0 until 32) {
+                            val fraction = segment / 32f
+                            val y = size.height * (1f - fraction) - size.height / 32f + 1f
+                            val lit = fraction < track.volume.coerceIn(0f, 1f)
+                            val color = when { fraction > 0.90f -> Color(0xFFFF5E57); fraction > 0.72f -> Color(0xFFFFC857); else -> Color(0xFF70D8A5) }
+                            drawRect(if (lit) color else Color(0xFF303338), Offset(0f, y), Size(size.width, (size.height / 32f - 1f).coerceAtLeast(1f)))
+                        }
+                    }
+                    Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        Canvas(Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
+                            val railX = size.width / 2f
+                            drawRoundRect(Color(0xFF151619), Offset(railX - 5.dp.toPx(), 0f), Size(10.dp.toPx(), size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
+                            val value = track.volume.coerceIn(0f, 1.5f) / 1.5f
+                            val y = (1f - value) * (size.height - 12.dp.toPx())
+                            drawRoundRect(Color(0xFFBFC2C6), Offset(railX - 12.dp.toPx(), y), Size(24.dp.toPx(), 12.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+                            drawLine(accent, Offset(railX - 8.dp.toPx(), y + 6.dp.toPx()), Offset(railX + 8.dp.toPx(), y + 6.dp.toPx()), 1.dp.toPx())
+                        }
+                    }
                 }
-                Text(
-                    if (track.muted) "MUTED" else if (track.solo) "SOLO" else track.kind.uppercase(),
-                    color = if (track.muted) Red else MutedText,
-                    fontSize = 8.sp,
-                    maxLines = 1
-                )
+                Row(Modifier.fillMaxWidth().height(20.dp).background(panelHeader).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text((index + 1).toString().padStart(2, '0'), color = accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.weight(1f))
+                    Text(if (track.muted) "MUTED" else if (track.solo) "SOLO" else track.kind.uppercase(), color = Color(0xFFBABDC2), fontSize = 6.sp, maxLines = 1)
+                }
             }
         }
-        Column(
-            Modifier.weight(1f).fillMaxHeight()
-                .background(Color(0xFF25282D), RoundedCornerShape(6.dp)).padding(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Canvas(Modifier.fillMaxWidth().weight(1f)) {
-                drawRoundRect(Color(0xFF131518), Offset(size.width * 0.34f, 0f), Size(size.width * 0.32f, size.height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                val h = size.height * master.coerceIn(0f, 1f)
-                drawRoundRect(Mint, Offset(size.width * 0.34f, size.height - h), Size(size.width * 0.32f, h),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF303236)).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.fillMaxWidth().height(24.dp).background(Color(0xFFB8B9B6), RoundedCornerShape(2.dp)), contentAlignment = Alignment.Center) { Text("MASTER", color = Color(0xFF202124), fontSize = 8.sp, fontWeight = FontWeight.Black) }
+            Spacer(Modifier.height(5.dp))
+            AbletonKnob("MASTER", master, onMasterChange, "%.0f%%".format(master * 100f), Modifier.fillMaxWidth().height(55.dp), Color(0xFF75DCCC), dialSize = 31.dp)
+            Canvas(Modifier.fillMaxWidth().weight(1f).padding(vertical = 4.dp, horizontal = 8.dp)) {
+                val railWidth = size.width * 0.28f
+                val gap = size.width * 0.08f
+                val left = (size.width - railWidth * 2f - gap) / 2f
+                drawRoundRect(Color(0xFF17191C), Offset(left, 0f), Size(railWidth, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+                drawRoundRect(Color(0xFF17191C), Offset(left + railWidth + gap, 0f), Size(railWidth, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
+                for (segment in 0 until 40) {
+                    val fraction = segment / 40f
+                    val y = size.height * (1f - fraction) - size.height / 40f + 1f
+                    val color = when { fraction > 0.9f -> Color(0xFFFF5E57); fraction > 0.74f -> Color(0xFFFFC857); else -> Color(0xFF70D8A5) }
+                    if (fraction < master) {
+                        drawRect(color, Offset(left, y), Size(railWidth, (size.height / 40f - 1f).coerceAtLeast(1f)))
+                        drawRect(color, Offset(left + railWidth + gap, y), Size(railWidth, (size.height / 40f - 1f).coerceAtLeast(1f)))
+                    }
+                }
             }
-            Text("GAIN " + (master * 100).toInt() + "%", color = MutedText, fontSize = 8.sp)
-            Slider(value = master, onValueChange = onMasterChange, valueRange = 0f..1f,
-                modifier = Modifier.fillMaxWidth().height(24.dp))
+            Text("%.1f dB".format(20f * kotlin.math.log10(master.coerceAtLeast(0.0001f))), color = Color(0xFFE4E5E7), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            Slider(value = master, onValueChange = onMasterChange, valueRange = 0f..1f, modifier = Modifier.fillMaxWidth().height(25.dp))
         }
     }
 }
-
 @Composable
 private fun BrowserWorkspace(onImportAudio: () -> Unit) {
     val entries = listOf(
