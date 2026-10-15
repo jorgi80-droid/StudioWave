@@ -1886,7 +1886,7 @@ private fun PianoRollWorkspace(
             Text("×", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(start = 5.dp))
         }
         Spacer(Modifier.height(3.dp))
-        Row(Modifier.fillMaxSize().background(Color(0xFF232528))) {
+        Row(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF232528))) {
             Column(Modifier.width(48.dp).fillMaxHeight().background(Color(0xFF292B2F))) {
                 Box(Modifier.fillMaxWidth().height(20.dp).background(Color(0xFF3A3C40)), contentAlignment = Alignment.Center) {
                     Text("NOTE", color = Color(0xFFBFC1C4), fontSize = 7.sp, fontWeight = FontWeight.Bold)
@@ -1960,14 +1960,17 @@ private fun PianoRollWorkspace(
                             val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
                             val pitch = (verticalScroll + 47 - (point.y / rowHeight).toInt()).coerceIn(0, 127)
                             val pxPerTick = size.width / viewTicks.toFloat()
-                            val tick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
-                            val selected = notes.firstOrNull { it.pitch == pitch && tick >= it.startTick && tick <= it.startTick + it.durationTicks }
+                            val handleTolerance = 12.dp.toPx()
+                            val selected = notes.firstOrNull { note ->
+                                val left = (note.startTick - horizontalScroll) * pxPerTick
+                                val right = (note.startTick + note.durationTicks - horizontalScroll) * pxPerTick
+                                note.pitch == pitch && point.x >= left - handleTolerance && point.x <= right + handleTolerance
+                            }
                             selectedNoteId = selected?.id
                             dragOrigin = selected
                             dragPreview = selected
                             dragTotalX = 0f
                             dragTotalY = 0f
-                            val handleTolerance = 12.dp.toPx()
                             val noteLeft = selected?.let { (it.startTick - horizontalScroll) * pxPerTick }
                             val noteRight = selected?.let { (it.startTick + it.durationTicks - horizontalScroll) * pxPerTick }
                             dragMode = when {
@@ -2061,6 +2064,42 @@ private fun PianoRollWorkspace(
                             drawLine(Color(0xFFFFE0C4), Offset(x + 2f, y + 2f), Offset((x + width - 2f).coerceAtLeast(x + 2f), y + 2f), 1f)
                             if (width > 14f) drawLine(Color(0xFF7B4A2A), Offset(x + width - 4f, y + 2f), Offset(x + width - 4f, y + rowHeight - 2f), 2f)
                         }
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().height(43.dp).background(Color(0xFF292B2F))) {
+            Column(Modifier.width(48.dp).fillMaxHeight().background(Color(0xFF383A3F)).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("VEL", color = Color(0xFFE4E5E7), fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Text("1–127", color = Color(0xFFB8BBC0), fontSize = 6.sp)
+            }
+            Canvas(Modifier.weight(1f).fillMaxHeight().padding(horizontal = 1.dp).pointerInput(track?.id, clip?.id, notes, horizontalScroll, viewTicks) {
+                detectTapGestures { point ->
+                    val pxPerTick = size.width / viewTicks.toFloat()
+                    val nearest = notes.minByOrNull { note -> kotlin.math.abs((note.startTick - horizontalScroll) * pxPerTick - point.x) } ?: return@detectTapGestures
+                    val noteX = (nearest.startTick - horizontalScroll) * pxPerTick
+                    if (kotlin.math.abs(noteX - point.x) > 22.dp.toPx()) return@detectTapGestures
+                    val velocityValue = ((1f - point.y / size.height.coerceAtLeast(1f)) * 127f).toInt().coerceIn(1, 127)
+                    selectedNoteId = nearest.id
+                    commitNotes(notes.map { if (it.id == nearest.id) it.copy(velocity = velocityValue) else it })
+                }
+            }) {
+                val pxPerTick = size.width / viewTicks.toFloat()
+                val barTicks = timebase.ticksPerBar.coerceAtLeast(1L)
+                var bar = (horizontalScroll / barTicks).toInt().coerceAtLeast(0)
+                val lastBar = bar + kotlin.math.ceil(viewTicks.toDouble() / barTicks).toInt() + 1
+                while (bar <= lastBar) {
+                    val x = (bar * barTicks - horizontalScroll) * pxPerTick
+                    drawLine(Color(0xFF4B4E53), Offset(x, 0f), Offset(x, size.height), 0.8f)
+                    bar++
+                }
+                notes.forEach { note ->
+                    val x = (note.startTick - horizontalScroll) * pxPerTick
+                    if (x in 0f..size.width) {
+                        val top = size.height * (1f - note.velocity.coerceIn(1, 127) / 127f)
+                        val tint = if (selectedNoteId == note.id) accent else accent.copy(alpha = 0.68f)
+                        drawLine(tint, Offset(x, size.height), Offset(x, top), 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        drawCircle(tint, 2.dp.toPx(), Offset(x, top))
                     }
                 }
             }
