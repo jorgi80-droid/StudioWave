@@ -4175,6 +4175,7 @@ private fun DirectWaveDevicePanel(
     var sustain by remember(trackId) { mutableFloatStateOf(0.8f) }
     var release by remember(trackId) { mutableFloatStateOf(180f) }
     var loop by remember(trackId) { mutableStateOf(false) }
+    var outputGain by remember(trackId) { mutableFloatStateOf(0.85f) }
     var category by remember(trackId) { mutableStateOf("ALL") }
     var showSamples by remember(trackId) { mutableStateOf(false) }
     val samples = remember {
@@ -4205,6 +4206,8 @@ private fun DirectWaveDevicePanel(
         sustain = (preferences.getInt("sustain.$trackId", 80) / 100f).coerceIn(0f, 1f)
         release = preferences.getInt("release.$trackId", 180).toFloat().coerceIn(0f, 2000f)
         loop = preferences.getBoolean("loop.$trackId", false)
+        outputGain = preferences.getFloat("outputGain.$trackId", 0.85f).coerceIn(0f, 1f)
+        sampler.outputGain = outputGain
         sampler.pitchSemitones = pitch.toInt().coerceIn(-12, 12)
         sampler.fineTuneCents = fineTune.toInt()
         sampler.attackMs = attack.toInt()
@@ -4222,9 +4225,10 @@ private fun DirectWaveDevicePanel(
 
     val isBuiltIn = sampleUri?.startsWith("android.resource://${context.packageName}/") == true
     Column(
-        Modifier.fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState())
-            .background(palette.room, RoundedCornerShape(5.dp)).padding(6.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+        Modifier.width(430.dp).height(188.dp).verticalScroll(rememberScrollState())
+            .background(palette.room, RoundedCornerShape(5.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(5.dp)).padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         // Device-strip header: status light, device title and a clear sample picker like Ableton.
         Row(
@@ -4317,7 +4321,14 @@ private fun DirectWaveDevicePanel(
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            DirectWaveMiniKnob("VOL", 100f, "100%", palette, Modifier.weight(0.7f))
+            Column(Modifier.weight(0.9f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Text("OUT", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                Text("${(outputGain * 100).toInt()}%", color = palette.text, fontSize = 8.sp)
+                Slider(value = outputGain, onValueChange = {
+                    outputGain = it.coerceIn(0f, 1f); sampler.outputGain = outputGain
+                }, onValueChangeFinished = { preferences.edit().putFloat("outputGain.$trackId", outputGain).apply() },
+                    valueRange = 0f..1f, modifier = Modifier.height(24.dp))
+            }
             DirectWaveEnvelopeControl("A", attack, 0f..2000f, palette, Modifier.weight(1f)) {
                 attack = it; sampler.attackMs = it.toInt()
                 preferences.edit().putInt("attack.$trackId", it.toInt()).apply()
@@ -4342,7 +4353,7 @@ private fun DirectWaveDevicePanel(
                     color = if (note % 12 in setOf(1, 3, 6, 8, 10)) palette.control else palette.panel,
                     contentColor = palette.text, shape = RoundedCornerShape(3.dp),
                     border = BorderStroke(1.dp, palette.border),
-                    modifier = Modifier.weight(1f).height(30.dp).pointerInput(note, sampleReady) {
+                    modifier = Modifier.weight(1f).height(23.dp).pointerInput(note, sampleReady) {
                         detectTapGestures(onPress = {
                             if (sampleReady) sampler.noteOn(note)
                             tryAwaitRelease()
@@ -4417,7 +4428,7 @@ private fun DirectWaveSampleWaveform(
             }
         } catch (_: Exception) { peaks = emptyList() }
     }
-    Column(Modifier.fillMaxWidth().height(64.dp).background(palette.panel, RoundedCornerShape(4.dp)).padding(5.dp),
+    Column(Modifier.fillMaxWidth().height(48.dp).background(palette.panel, RoundedCornerShape(4.dp)).padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("SAMPLE WAVEFORM", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
