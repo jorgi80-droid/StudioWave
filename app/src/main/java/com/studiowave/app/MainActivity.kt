@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -2533,9 +2534,17 @@ private fun TimelineGrid(
              val firstVisibleBar = rulerViewport.firstVisibleBar().coerceAtMost(4096L).toInt()
              val lastVisibleBar = rulerViewport.lastVisibleBar().coerceAtMost(4096L).toInt()
              val labelEveryBar = barWidth >= with(density) { 52.dp.toPx() }
+             val playheadBar = playheadTick.coerceAtLeast(0L) / timebase.ticksPerBar.coerceAtLeast(1L)
              for (bar in firstVisibleBar..lastVisibleBar) {
                  val x = rulerViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
                  if (bar % 4 == 0 || labelEveryBar) {
+                    rulerPaint.color = when {
+                        bar.toLong() == playheadBar -> timelinePalette.orange.toArgb()
+                        bar % 4 == 0 -> timelinePalette.text.toArgb()
+                        else -> timelinePalette.muted.toArgb()
+                    }
+                    rulerPaint.typeface = if (bar.toLong() == playheadBar || bar % 4 == 0)
+                        android.graphics.Typeface.DEFAULT_BOLD else android.graphics.Typeface.DEFAULT
                     drawContext.canvas.nativeCanvas.drawText(
                         (bar + 1).toString(),
                         x + with(density) { 5.dp.toPx() },
@@ -2551,8 +2560,8 @@ private fun TimelineGrid(
             val playheadX = rulerViewport.timeToViewportX(playheadTick)
             if (playheadX >= 0f && playheadX <= size.width) {
                 val markerRadius = with(density) { 3.dp.toPx() }
-                drawLine(timelinePalette.danger, Offset(playheadX, 0f), Offset(playheadX, size.height), 1.6f)
-                drawCircle(timelinePalette.danger, markerRadius, Offset(playheadX, markerRadius))
+                drawLine(timelinePalette.orange, Offset(playheadX, 0f), Offset(playheadX, size.height), 1.6f)
+                drawCircle(timelinePalette.orange, markerRadius, Offset(playheadX, markerRadius))
             }
         }
 
