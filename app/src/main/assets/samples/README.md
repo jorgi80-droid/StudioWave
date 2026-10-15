@@ -1,9 +1,19 @@
-# DirectWave Factory One-Shots
+# StudioWave DirectWave factory samples
 
-The Android CI workflow downloads six real WAV samples into this directory before packaging the APK. They are sourced from [Boochi44/free-drum-samples](https://github.com/Boochi44/free-drum-samples); the upstream README states the one-shot samples are licensed Creative Commons Zero (CC0 1.0).
+The Android CI workflow downloads six WAV one-shots from
+[Boochi44/free-drum-samples](https://github.com/Boochi44/free-drum-samples).
+The upstream project README states that these samples are dedicated to CC0 1.0.
 
-Included: hard-kick-01.wav, hard-snare-01.wav, hi-hat-closed-01.wav, 808-bass-sub.wav, bounce-kick-01.wav, vintage-kick-01.wav.
+Included files:
+- `hard-kick-01.wav`
+- `hard-snare-01.wav`
+- `hi-hat-closed-01.wav`
+- `808-bass-sub.wav`
+- `bounce-kick-01.wav`
+- `vintage-kick-01.wav`
 
-CI checks that exactly six files exist and that each begins with the RIFF header before running the build. Source/license: https://github.com/Boochi44/free-drum-samples/blob/main/README.md
+Source/license reference:
+https://github.com/Boochi44/free-drum-samples/blob/main/README.md
 
-Current limitation: the audio engine does not yet instantiate sampler voices from these WAV files. DirectWave playback and filter/envelope/FX DSP still require engine integration.
+CI verifies all six files exist and have a RIFF WAV header before building the APK.
+The DirectWave browser copies selected samples from Android app assets into app-private storage.

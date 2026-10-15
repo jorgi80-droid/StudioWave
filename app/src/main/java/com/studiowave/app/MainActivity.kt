@@ -62,6 +62,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.studiowave.app.audio.NativeAudioEngine
+import com.studiowave.app.DirectWaveDevicePanel
 import com.studiowave.app.audio.ArrangementPlaybackEngine
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioProjectFile
@@ -493,14 +494,27 @@ private fun StudioWaveApp() {
                     }
                 }
                 if (showDock) {
-                    Box(Modifier.fillMaxWidth().height(105.dp)) {
-                        DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
-                        Surface(
-                            color = Raised.copy(alpha = 0.96f),
-                            shape = RoundedCornerShape(50),
-                            modifier = Modifier.align(Alignment.TopEnd).padding(top = 3.dp, end = 5.dp)
-                                .size(24.dp).clickable { showDock = false }
-                        ) { Box(contentAlignment = Alignment.Center) { Text("×", color = MutedText, fontSize = 16.sp) } }
+                    val activeTrack = project.tracks.firstOrNull { it.id == editorTrackId }
+                        ?: project.tracks.firstOrNull { it.kind == "midi" }
+                        ?: project.tracks.firstOrNull()
+                    Box(Modifier.fillMaxWidth().height(235.dp)) {
+                        if (activeTrack?.kind == "midi") {
+                            DirectWaveDevicePanel(
+                                trackId = activeTrack.id,
+                                trackName = activeTrack.name,
+                                onClose = { showDock = false },
+                                fullScreen = false
+                            )
+                        } else {
+                            Column(
+                                Modifier.fillMaxSize().background(Raised, RoundedCornerShape(4.dp)).padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text("DEVICE VIEW", color = Mint, fontWeight = FontWeight.Black, fontSize = 10.sp)
+                                Text("Select a MIDI track to open DirectWave. Audio effect controls remain hidden until a real processor is available.", color = MutedText, fontSize = 9.sp)
+                                SmallAction("HIDE") { showDock = false }
+                            }
+                        }
                     }
                 }
             }
