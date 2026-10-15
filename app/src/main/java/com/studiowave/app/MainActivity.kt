@@ -692,7 +692,10 @@ private fun StudioWaveApp() {
                                 name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
                                 startTick = clipStart,
                                 lengthTicks = lengthTicks,
-                                sourceUri = uri.toString()
+                                sourceUri = uri.toString(),
+                                sourceOffsetMicros = 0L,
+                                sourceLengthMicros = if (durationMs > 0L && durationMs <= Long.MAX_VALUE / 1000L)
+                                    (durationMs * 1000L).coerceAtLeast(1L) else null
                             )
                             val updatedTrack = target.copy(clips = target.clips + clip)
                             changeProject(currentProject.copy(tracks = if (audioTrack == null) {
