@@ -1903,30 +1903,53 @@ private fun DrumSequencerWorkspace(
                 if (track != null && clip != null) updateSteps(List(steps.size) { true })
             }
             Spacer(Modifier.weight(1f))
-            Text("SCROLL FOR MORE", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Text("DRAG HORIZONTALLY", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
         }
         LazyRow(
-            modifier = Modifier.fillMaxWidth().height(46.dp),
+            modifier = Modifier.fillMaxWidth().height(52.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             itemsIndexed(steps) { step, isActive ->
                 val isBeat = step % 4 == 0
+                val stepInk = if (isActive) palette.room else palette.text
                 Surface(
                     color = if (isActive) palette.accent else if (isBeat) palette.control else palette.room,
                     shape = RoundedCornerShape(2.dp),
-                    border = BorderStroke(1.dp, if (isActive) palette.accent else palette.border.copy(alpha = 0.8f)),
-                    modifier = Modifier.width(34.dp).fillMaxHeight().clickable {
+                    border = BorderStroke(
+                        if (isBeat || isActive) 1.5.dp else 1.dp,
+                        if (isActive) palette.orange else if (isBeat) palette.muted.copy(alpha = 0.8f)
+                        else palette.border.copy(alpha = 0.8f)
+                    ),
+                    modifier = Modifier.width(42.dp).fillMaxHeight().clickable {
                         if (track != null && clip != null) {
                             updateSteps(steps.toMutableList().also { it[step] = !it[step] })
                         }
                     }
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
+                    Column(
+                        Modifier.fillMaxSize().padding(horizontal = 3.dp, vertical = 3.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Box(
+                            Modifier.fillMaxWidth().height(3.dp)
+                                .background(if (isActive) palette.room.copy(alpha = 0.8f)
+                                else if (isBeat) palette.accent else palette.border)
+                        )
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            Text(
+                                (step + 1).toString().padStart(2, '0'),
+                                color = stepInk,
+                                fontSize = 9.sp,
+                                fontWeight = if (isBeat || isActive) FontWeight.Black else FontWeight.Medium
+                            )
+                        }
                         Text(
-                            (step + 1).toString(),
-                            color = if (isActive) palette.room else palette.text,
-                            fontSize = 8.sp,
-                            fontWeight = if (isBeat || isActive) FontWeight.Black else FontWeight.Medium
+                            if (isActive) "ON" else if (isBeat) "BEAT" else "·",
+                            color = if (isActive) stepInk else palette.muted,
+                            fontSize = 6.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1934,7 +1957,7 @@ private fun DrumSequencerWorkspace(
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            "Tap a step to toggle its trigger. CLEAR and ALL preserve the current pattern length.",
+            "Tap to toggle a trigger. Beat steps have a stronger marker; swipe horizontally to reach later steps. CLEAR and ALL keep the current pattern length.",
             color = palette.muted, fontSize = 8.sp
         )
     }
