@@ -98,3 +98,17 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - The changes do not modify clip musical positions/durations, PPQ, snap math, hit testing, the shared viewport transform, or the 1,800-bar limit.
 - CI must be checked for the latest branch head before reporting build/tests/artifact success. Physical Android landscape checks remain required for clip visual fit, touch interactions, playback-follow and Piano Roll note editing.
 - Current scope remains an Ableton Live-inspired native implementation, not a claim of pixel-identical proprietary UI. Do not copy Ableton code/assets or claim unsupported DSP/instruments as complete.
+
+## Continuation update — 2026-10-16 (Piano Roll + viewport hardening)
+- Native Piano Roll toolbar cleanup committed as `8a4a3daaf7e80ff194bdd653e67a1f7b2c723c7d`.
+  - Removed a duplicate trailing close action from the Piano Roll header; the header had already exposed a close action near the clip identity.
+  - Flattened the toolbar panel geometry to a 1 dp radius with a thin palette border, matching the graphite/industrial reference more closely and preserving existing actions.
+- Added viewport regression coverage in `7b4da3f714762df8b10a6524db4b670cdfd3632e`.
+  - Malformed NaN/infinite viewport inputs are normalized before coordinate mapping.
+  - Hit testing beyond the left and right arrangement bounds clamps to tick 0 and the 1,800-bar endpoint.
+- Source files:
+  - `app/src/main/java/com/studiowave/app/MainActivity.kt`
+  - `app/src/test/java/com/studiowave/app/TimelineViewportTest.kt`
+- Validation status: no workflow run or status check has yet been returned for commit `7b4da3f714762df8b10a6524db4b670cdfd3632e`; do not mark the latest batch green until a corresponding Android CI run confirms Build debug APK, Run unit tests, and Upload debug APK. Device-level touch/playback validation remains outstanding.
+- Existing visual/audio limitations remain: no pixel-identical Ableton claim; Parametric EQ Eight still lacks full per-band frequency/Q/type model + DSP integration; Full Analyzer/Multi FX and complete SuperSaw/MiniSynth/GMS/DirectWave arrangement MIDI voice integration remain unfinished.
+
