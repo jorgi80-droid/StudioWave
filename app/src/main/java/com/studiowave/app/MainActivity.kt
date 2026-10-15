@@ -3914,7 +3914,7 @@ private fun DeviceDock(
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     val devicePalette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
-    var page by remember { mutableStateOf("MIX") }
+    var page by remember { mutableStateOf("DEVICES") }
     val gainDb = selectedTrack?.volume?.takeIf { it > 0.001f }?.let {
         String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(it))
     } ?: "−∞ dB"
@@ -3924,12 +3924,12 @@ private fun DeviceDock(
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (page == "MIX") "TRACK CONTROLS" else "DEVICE VIEW", fontSize = 9.sp,
+            Text(if (page == "MIX") "TRACK MIXER" else "DEVICE VIEW", fontSize = 9.sp,
                 fontWeight = FontWeight.Black, color = devicePalette.orange)
             Spacer(Modifier.width(8.dp))
             Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = devicePalette.text, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            SmallAction(if (page == "MIX") "DEVICE CHAIN" else "TRACK MIX") { page = if (page == "MIX") "DEVICES" else "MIX" }
+            SmallAction(if (page == "MIX") "DEVICES" else "MIXER") { page = if (page == "MIX") "DEVICES" else "MIX" }
             SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
             SmallAction("× CLOSE") { onToggle() }
         }
