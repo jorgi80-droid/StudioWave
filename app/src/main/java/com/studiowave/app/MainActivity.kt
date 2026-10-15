@@ -3968,170 +3968,209 @@ private fun BrowserWorkspace(
     val categories = listOf("ALL", "SAMPLES", "CLIPS", "TRACKS", "DEVICES")
     val normalizedQuery = query.trim().lowercase()
     val tracks = project.tracks.filter { track ->
-        (normalizedQuery.isEmpty() || track.name.lowercase().contains(normalizedQuery) ||
+        normalizedQuery.isEmpty() || track.name.lowercase().contains(normalizedQuery) ||
             track.kind.lowercase().contains(normalizedQuery) ||
-            track.clips.any { it.name.lowercase().contains(normalizedQuery) })
+            track.clips.any { it.name.lowercase().contains(normalizedQuery) }
     }
-    val clipEntries = project.tracks.flatMap { track -> track.clips.map { track to it } }
+    val allClips = project.tracks.flatMap { track -> track.clips.map { track to it } }
         .filter { (track, clip) ->
-            val matchesCategory = when (category) {
-                "SAMPLES" -> track.kind == "audio" && clip.sourceUri != null
-                "CLIPS" -> true
-                else -> true
-            }
-            matchesCategory && (normalizedQuery.isEmpty() ||
-                clip.name.lowercase().contains(normalizedQuery) ||
-                track.name.lowercase().contains(normalizedQuery))
+            (category != "SAMPLES" || (track.kind == "audio" && clip.sourceUri != null)) &&
+                (normalizedQuery.isEmpty() || clip.name.lowercase().contains(normalizedQuery) ||
+                    track.name.lowercase().contains(normalizedQuery) ||
+                    clip.sourceUri?.substringAfterLast('/')?.lowercase()?.contains(normalizedQuery) == true)
         }
-    val visibleClipEntries = when (category) {
-        "SAMPLES" -> clipEntries.filter { (track, clip) -> track.kind == "audio" && clip.sourceUri != null }
-        "CLIPS" -> clipEntries
-        else -> clipEntries
-    }
     Column(Modifier.fillMaxSize().background(p.room).padding(5.dp)) {
-        Row(
-            Modifier.fillMaxWidth().height(30.dp).background(p.panel, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("BROWSER", color = p.orange, fontSize = 10.sp, fontWeight = FontWeight.Black)
-            Spacer(Modifier.width(8.dp))
-            Text("LIBRARY", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.weight(1f))
-            Text("${project.tracks.size} TRACKS  ·  ${project.tracks.sumOf { it.clips.size }} CLIPS",
-                color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(4.dp))
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth().height(47.dp),
-            singleLine = true,
-            placeholder = { Text("Search current project…", fontSize = 10.sp) },
-            leadingIcon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Search project", modifier = Modifier.size(15.dp)) },
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
-                focusedTextColor = p.text, unfocusedTextColor = p.text
-            )
-        )
-        Spacer(Modifier.height(4.dp))
-        Row(Modifier.fillMaxWidth().height(28.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            categories.forEach { item ->
-                val active = category == item
-                Surface(
-                    color = if (active) p.accent.copy(alpha = 0.18f) else p.panel,
-                    shape = RoundedCornerShape(4.dp),
-                    border = BorderStroke(1.dp, if (active) p.accent else p.border),
-                    modifier = Modifier.weight(1f).fillMaxHeight().clickable { category = item }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(item, color = if (active) p.accent else p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    }
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(
+                Modifier.width(150.dp).fillMaxHeight()
+                    .background(p.canvas, RoundedCornerShape(4.dp))
+                    .border(1.dp, p.border, RoundedCornerShape(4.dp)).padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("BROWSER", color = p.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.weight(1f))
+                    Text("⌕", color = p.muted, fontSize = 17.sp)
                 }
-            }
-        }
-        Spacer(Modifier.height(4.dp))
-        when (category) {
-            "ALL", "SAMPLES" -> Row(Modifier.fillMaxWidth().height(31.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                Button(
-                    onClick = onImportAudio, modifier = Modifier.weight(1f).fillMaxHeight(),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = p.accent.copy(alpha = 0.18f), contentColor = p.accent),
-                    shape = RoundedCornerShape(4.dp)
-                ) {
-                    Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(5.dp)); Text("IMPORT AUDIO", fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = { onOpenEditor("ARRANGEMENT", null, null) },
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
-                    shape = RoundedCornerShape(4.dp)
-                ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Bold) }
-            }
-            "CLIPS" -> Row(Modifier.fillMaxWidth().height(31.dp), horizontalArrangement = Arrangement.End) {
-                Button(
-                    onClick = { onOpenEditor("ARRANGEMENT", null, null) },
-                    modifier = Modifier.fillMaxHeight(),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
-                    shape = RoundedCornerShape(4.dp)
-                ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Bold) }
-            }
-            "DEVICES" -> Surface(color = p.panel, shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("DEVICE LIBRARY", color = p.accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
-                    Text("No built-in instrument or FX processor registry is connected yet. This view intentionally does not offer fake device entries.",
-                        color = p.muted, fontSize = 9.sp)
-                }
-            }
-            else -> {}
-        }
-        Spacer(Modifier.height(3.dp))
-        when (category) {
-            "TRACKS" -> {
-                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    tracks.forEach { track ->
-                        val selected = track.id == selectedTrackId
-                        Row(
-                            Modifier.fillMaxWidth().background(if (selected) p.raised else p.panel, RoundedCornerShape(4.dp))
-                                .clickable { onSelectTrack(track.id) }.padding(horizontal = 8.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(Modifier.width(3.dp).height(25.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(2.dp)))
-                            Spacer(Modifier.width(8.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(track.name, color = p.text, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text("${track.kind.uppercase()}  ·  ${track.clips.size} CLIPS", color = p.muted, fontSize = 7.sp)
-                            }
-                            SmallAction("SELECT") { onSelectTrack(track.id) }
-                            SmallAction("EDIT") {
-                                onSelectTrack(track.id)
-                                onOpenEditor(
-                                    when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
-                                    track.id,
-                                    track.clips.minByOrNull { it.startTick }?.id
-                                )
-                            }
+                HorizontalDivider(color = p.border)
+                Text("LIBRARY", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(top = 4.dp, start = 4.dp))
+                categories.forEach { item ->
+                    val active = category == item
+                    Surface(
+                        color = if (active) p.accent.copy(alpha = 0.16f) else Color.Transparent,
+                        shape = RoundedCornerShape(3.dp),
+                        border = BorderStroke(1.dp, if (active) p.accent.copy(alpha = 0.65f) else Color.Transparent),
+                        modifier = Modifier.fillMaxWidth().height(34.dp).clickable { category = item }
+                    ) {
+                        Row(Modifier.padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            Box(Modifier.width(3.dp).height(19.dp)
+                                .background(if (active) p.accent else p.border, RoundedCornerShape(1.dp)))
+                            Text(
+                                when (item) {
+                                    "ALL" -> "All Items"
+                                    "SAMPLES" -> "Samples"
+                                    "CLIPS" -> "Clips"
+                                    "TRACKS" -> "Tracks"
+                                    else -> "Devices"
+                                },
+                                color = if (active) p.accent else p.text,
+                                fontSize = 9.sp,
+                                fontWeight = if (active) FontWeight.Black else FontWeight.Medium,
+                                maxLines = 1
+                            )
                         }
                     }
-                    if (tracks.isEmpty()) {
-                        Text("No tracks match this search.", color = p.muted, fontSize = 9.sp, modifier = Modifier.padding(8.dp))
+                }
+                Spacer(Modifier.height(5.dp))
+                Text("PLACES", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(start = 4.dp))
+                Row(Modifier.fillMaxWidth().height(29.dp)
+                    .background(p.panel, RoundedCornerShape(3.dp)).padding(horizontal = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("▣", color = p.accent, fontSize = 11.sp)
+                    Text("Current Project", color = p.text, fontSize = 8.sp, maxLines = 1)
+                }
+                Spacer(Modifier.weight(1f))
+                HorizontalDivider(color = p.border)
+                Text("STUDIOWAVE", color = p.orange, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Text("Offline Library", color = p.muted, fontSize = 7.sp)
+            }
+
+            Column(
+                Modifier.weight(1f).fillMaxHeight()
+                    .background(p.canvas, RoundedCornerShape(4.dp))
+                    .border(1.dp, p.border, RoundedCornerShape(4.dp)).padding(6.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Row(Modifier.fillMaxWidth().height(28.dp)
+                    .background(p.panel, RoundedCornerShape(3.dp)).padding(horizontal = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        when (category) {
+                            "SAMPLES" -> "SAMPLES"
+                            "CLIPS" -> "CLIP LIBRARY"
+                            "TRACKS" -> "TRACK LIST"
+                            "DEVICES" -> "DEVICE LIBRARY"
+                            else -> "PROJECT CONTENT"
+                        },
+                        color = p.text, fontSize = 9.sp, fontWeight = FontWeight.Black
+                    )
+                    Spacer(Modifier.weight(1f))
+                    Text(project.tracks.size.toString() + " TRACKS   /   " +
+                        project.tracks.sumOf { it.clips.size }.toString() + " CLIPS",
+                        color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                }
+                OutlinedTextField(
+                    value = query, onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth().height(45.dp), singleLine = true,
+                    placeholder = { Text("Search library…", fontSize = 10.sp) },
+                    leadingIcon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Search library", modifier = Modifier.size(15.dp)) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                        focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent
+                    )
+                )
+                if (category == "ALL" || category == "SAMPLES" || category == "CLIPS") {
+                    Row(Modifier.fillMaxWidth().height(30.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Button(
+                            onClick = onImportAudio, modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = p.accent.copy(alpha = 0.18f), contentColor = p.accent),
+                            shape = RoundedCornerShape(3.dp)
+                        ) {
+                            Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(5.dp)); Text("IMPORT AUDIO", fontSize = 8.sp, fontWeight = FontWeight.Black)
+                        }
+                        Button(
+                            onClick = { onOpenEditor("ARRANGEMENT", null, null) },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                            contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
+                            shape = RoundedCornerShape(3.dp)
+                        ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Black) }
                     }
                 }
-            }
-            "DEVICES" -> {}
-            else -> {
-                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    visibleClipEntries.forEach { (track, clip) ->
-                        Row(
-                            Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(Modifier.width(3.dp).height(31.dp).background(Color((clip.colorArgb ?: track.colorArgb).toInt()), RoundedCornerShape(2.dp)))
-                            Spacer(Modifier.width(7.dp))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(clip.name, color = p.text, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text("${track.name}  ·  ${track.kind.uppercase()}  ·  ${clip.lengthTicks} TICKS",
-                                    color = p.muted, fontSize = 7.sp, maxLines = 1)
-                            }
-                            SmallAction("OPEN") {
-                                onSelectTrack(track.id)
-                                onOpenEditor(
-                                    when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
-                                    track.id,
-                                    clip.id
-                                )
+                when (category) {
+                    "DEVICES" -> DeviceModuleCard(
+                        title = "DEVICE LIBRARY", subtitle = "AVAILABLE INSTRUMENTS", palette = p,
+                        body = "DirectWave is available on MIDI tracks from Device View. Active effect inserts are listed only when an engine-backed processor exists."
+                    )
+                    "TRACKS" -> Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        tracks.forEach { track ->
+                            val selected = track.id == selectedTrackId
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .background(if (selected) p.raised else p.panel, RoundedCornerShape(3.dp))
+                                    .border(1.dp, if (selected) p.accent else p.border.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
+                                    .clickable { onSelectTrack(track.id) }
+                                    .padding(horizontal = 7.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(Modifier.width(4.dp).height(30.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
+                                Spacer(Modifier.width(8.dp))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(track.name.uppercase(), color = p.text, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                                    Text(track.kind.uppercase() + "  ·  " + track.clips.size + " CLIPS", color = p.muted, fontSize = 7.sp)
+                                }
+                                SmallAction("SELECT") { onSelectTrack(track.id) }
+                                SmallAction("EDIT") {
+                                    onSelectTrack(track.id)
+                                    onOpenEditor(
+                                        when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
+                                        track.id, track.clips.minByOrNull { it.startTick }?.id
+                                    )
+                                }
                             }
                         }
+                        if (tracks.isEmpty()) Text("No matching tracks.", color = p.muted, fontSize = 9.sp, modifier = Modifier.padding(8.dp))
                     }
-                    if (visibleClipEntries.isEmpty()) {
-                        Text(
-                            when (category) {
-                                "SAMPLES" -> "No imported audio sources match this search."
-                                "CLIPS" -> "No clips match this search."
-                                else -> "No matching project items."
-                            },
+                    else -> Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Row(Modifier.fillMaxWidth().height(23.dp).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("NAME", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                            Text("TYPE / LENGTH", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(170.dp))
+                            Text("ACTION", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(58.dp))
+                        }
+                        HorizontalDivider(color = p.border)
+                        allClips.forEachIndexed { index, entry ->
+                            val (track, clip) = entry
+                            Row(
+                                Modifier.fillMaxWidth()
+                                    .background(if (index % 2 == 0) p.panel else p.control.copy(alpha = 0.55f), RoundedCornerShape(2.dp))
+                                    .clickable { onSelectTrack(track.id) }
+                                    .padding(horizontal = 7.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(Modifier.width(4.dp).height(29.dp).background(Color((clip.colorArgb ?: track.colorArgb).toInt()), RoundedCornerShape(1.dp)))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(clip.name.uppercase(), color = p.text, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                                    Text(track.name, color = p.muted, fontSize = 7.sp, maxLines = 1)
+                                }
+                                Column(Modifier.width(164.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(track.kind.uppercase(), color = p.accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                                    Text((kotlin.math.ceil(clip.lengthTicks.toDouble() / project.ppq.coerceAtLeast(1) / 4.0).toInt().coerceAtLeast(1)).toString() + " BARS",
+                                        color = p.muted, fontSize = 7.sp)
+                                }
+                                SmallAction("OPEN") {
+                                    onSelectTrack(track.id)
+                                    onOpenEditor(
+                                        when (track.kind) { "audio" -> "AUDIO EDITOR"; "drum" -> "DRUM SEQUENCER"; else -> "PIANO ROLL" },
+                                        track.id, clip.id
+                                    )
+                                }
+                            }
+                        }
+                        if (allClips.isEmpty()) Text(
+                            if (category == "SAMPLES") "No imported audio sources match this search." else "No matching clips.",
                             color = p.muted, fontSize = 9.sp, modifier = Modifier.padding(8.dp)
                         )
                     }
