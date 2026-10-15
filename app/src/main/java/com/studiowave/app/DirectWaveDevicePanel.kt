@@ -380,7 +380,7 @@ private fun decodeDirectWavePreview(context: android.content.Context, uri: Uri, 
                             val pcm = slice.slice().order(java.nio.ByteOrder.nativeOrder())
                             val frames = info.size / 2 / channels
                             for (frame in 0 until frames) {
-                                val magnitude = (pcm.getShort(frame * channels * 2).toInt() / 32768f).let(kotlin.math::abs)
+                                val magnitude = kotlin.math.abs(pcm.getShort(frame * channels * 2).toInt() / 32768f)
                                 val timeUs = info.presentationTimeUs + frame.toLong() * 1000000L / sr
                                 val bin = ((timeUs.toDouble() / durationUs) * bins).toInt().coerceIn(0,bins-1)
                                 peaks[bin] = maxOf(peaks[bin], magnitude)
