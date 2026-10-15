@@ -1679,6 +1679,67 @@ private fun ArrangementWorkspace(
                 Text(inspectorClip.name, color = arrangementPalette.text, fontSize = 10.sp,
                     fontWeight = FontWeight.Bold, maxLines = 1)
                 Text(inspectorTrack.name, color = arrangementPalette.muted, fontSize = 8.sp, maxLines = 1)
+                Spacer(Modifier.height(2.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("CLIP CONTENT", color = arrangementPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Black,
+                        modifier = Modifier.weight(1f))
+                    Text(when (inspectorTrack.kind) { "audio" -> "SAMPLE"; "drum" -> "STEP GRID"; else -> "MIDI NOTES" },
+                        color = arrangementPalette.orange, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                }
+                if (inspectorTrack.kind == "midi" || inspectorTrack.kind == "drum") {
+                    Canvas(Modifier.fillMaxWidth().height(40.dp)
+                        .background(arrangementPalette.room, RoundedCornerShape(1.dp))
+                        .border(1.dp, arrangementPalette.border.copy(alpha = 0.75f), RoundedCornerShape(1.dp))) {
+                        val laneColor = arrangementPalette.border.copy(alpha = 0.5f)
+                        for (division in 1..7) {
+                            val x = size.width * division / 8f
+                            drawLine(laneColor, Offset(x, 0f), Offset(x, size.height), 0.5f)
+                        }
+                        if (inspectorTrack.kind == "midi") {
+                            val duration = inspectorClip.lengthTicks.coerceAtLeast(1L).toDouble()
+                            val noteHeight = (size.height / 12f).coerceIn(2f, 5f)
+                            inspectorClip.midiNotes.forEach { note ->
+                                val start = note.startTick.coerceAtLeast(0L).toDouble()
+                                val end = (start + note.durationTicks.coerceAtLeast(1L)).coerceAtMost(duration)
+                                if (start < duration && end > start) {
+                                    val left = (start / duration * size.width).toFloat().coerceIn(0f, size.width)
+                                    val right = (end / duration * size.width).toFloat().coerceIn(left, size.width)
+                                    val y = (1f - note.pitch.coerceIn(0, 127) / 127f) * (size.height - noteHeight)
+                                    drawRect(arrangementPalette.accent.copy(alpha = 0.92f),
+                                        Offset(left, y), androidx.compose.ui.geometry.Size((right - left).coerceAtLeast(1f), noteHeight))
+                                }
+                            }
+                        } else {
+                            val steps = inspectorClip.drumSteps
+                            if (steps.isNotEmpty()) {
+                                val cellWidth = size.width / steps.size
+                                steps.forEachIndexed { index, active ->
+                                    if (active) {
+                                        val cellHeight = size.height * 0.62f
+                                        drawRect(arrangementPalette.accent.copy(alpha = 0.92f),
+                                            Offset(index * cellWidth + 1f, (size.height - cellHeight) / 2f),
+                                            androidx.compose.ui.geometry.Size((cellWidth - 2f).coerceAtLeast(1f), cellHeight))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Row(Modifier.fillMaxWidth().background(arrangementPalette.room, RoundedCornerShape(1.dp))
+                        .border(1.dp, arrangementPalette.border.copy(alpha = 0.75f), RoundedCornerShape(1.dp))
+                        .padding(horizontal = 6.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (inspectorClip.sourceUri != null) "●" else "○",
+                            color = if (inspectorClip.sourceUri != null) arrangementPalette.accent else arrangementPalette.muted,
+                            fontSize = 10.sp, fontWeight = FontWeight.Black)
+                        Spacer(Modifier.width(5.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(if (inspectorClip.sourceUri != null) "AUDIO SOURCE ATTACHED" else "NO AUDIO SOURCE",
+                                color = arrangementPalette.text, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                            Text(inspectorClip.sourceUri?.substringAfterLast('/')?.take(30) ?: "Open Sample Editor to import audio",
+                                color = arrangementPalette.muted, fontSize = 7.sp, maxLines = 1)
+                        }
+                    }
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Column(Modifier.weight(1f).background(arrangementPalette.room, RoundedCornerShape(2.dp)).padding(5.dp)) {
                         Text("START", color = arrangementPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
