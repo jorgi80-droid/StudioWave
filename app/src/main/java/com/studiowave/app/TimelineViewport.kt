@@ -64,6 +64,23 @@ fun maxArrangementTick(timebase: TimelineTimebase): Long {
 }
 
 /**
+ * Arrangement pane-local viewport factory. Track headers are a sibling column;
+ * all x coordinates passed to this viewport are local to the timeline canvas.
+ */
+fun arrangementPaneViewport(
+    timebase: TimelineTimebase,
+    pixelsPerBar: Float,
+    scrollTimeTicks: Double,
+    viewportWidthPx: Float
+): TimelineViewport = TimelineViewport(
+    timebase = timebase,
+    pixelsPerBar = pixelsPerBar,
+    scrollTimeTicks = scrollTimeTicks,
+    viewportWidthPx = viewportWidthPx,
+    trackHeaderWidthPx = 0f
+)
+
+/**
  * Shared horizontal mapping for the arrangement. scrollTimeTicks represents the musical
  * tick at the left edge of the timeline pane, excluding the fixed track-header column.
  * All viewport navigation and conversions use one scale and bounded project extent.
