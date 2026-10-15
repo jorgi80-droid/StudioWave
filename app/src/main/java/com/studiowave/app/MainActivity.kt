@@ -941,6 +941,10 @@ private fun StudioWaveApp() {
                             },
                             showDevices = showDock,
                             onToggleDevices = { showDock = !showDock },
+                            onRequestAudioAtTick = { trackId, tick ->
+                                pendingAudioTrackId = trackId
+                                pendingAudioStartTick = tick
+                            },
                             trackHeights = trackHeightsDp,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) },
                             playheadTick = playheadTick,
@@ -1120,6 +1124,7 @@ private fun ArrangementWorkspace(
     onScratchTrack: (String, Float) -> Unit = { _, _ -> },
     playheadTick: Long = 0L,
     isPlaying: Boolean = false,
+    onRequestAudioAtTick: (String, Long) -> Unit = { _, _ -> },
     showDevices: Boolean = false,
     onToggleDevices: () -> Unit = {},
     onSeekTick: (Long) -> Unit = {}
@@ -1457,11 +1462,40 @@ private fun ArrangementWorkspace(
                     showAddTrack = false
                     addTrackMenu = false
                 },
-                onTimelineLongPress = {
-                    showTimelineMenu = true
-                    showAddTrack = false
-                    addTrackMenu = false
-                    clipMenu = null
+                onTimelineLongPress = { trackId, tick ->
+                    val targetTrack = project.tracks.firstOrNull { it.id == trackId }
+                    if (targetTrack == null) {
+                        showTimelineMenu = true
+                        showAddTrack = false
+                        addTrackMenu = false
+                        clipMenu = null
+                    } else if (targetTrack.kind == "audio") {
+                        onRequestAudioAtTick(targetTrack.id, tick)
+                        onOpenEditor("BROWSER", targetTrack.id, null)
+                    } else {
+                        val clipTimebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+                        val rawStart = if (snapEnabled) clipTimebase.snap(tick, snapDivision) else tick.coerceAtLeast(0L)
+                        val arrangementEnd = maxArrangementTick(clipTimebase)
+                        val start = rawStart.coerceIn(0L, arrangementEnd - 1L)
+                        val requestedLength = (clipTimebase.ticksPerBar * 4L).coerceAtLeast(1L)
+                        val length = requestedLength.coerceAtMost(arrangementEnd - start)
+                        if (targetTrack.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK) {
+                            statusMessage = "Clip limit reached for this track"
+                        } else {
+                            val newClip = if (targetTrack.kind == "drum") {
+                                WaveClip(name = "Drum Pattern", startTick = start, lengthTicks = length,
+                                    drumSteps = List(16) { false })
+                            } else {
+                                WaveClip(name = "MIDI Pattern", startTick = start, lengthTicks = length)
+                            }
+                            onProjectChange(project.copy(tracks = project.tracks.map { track ->
+                                if (track.id == targetTrack.id) track.copy(clips = track.clips + newClip) else track
+                            }))
+                            selectedClip = newClip.id
+                            statusMessage = "${targetTrack.kind.uppercase()} clip created"
+                        }
+                        showTimelineMenu = false
+                    }
                 },
                 clipMenuClipId = clipMenu,
                 onClipAction = { action, clipId -> handleClipAction(action, clipId) },
@@ -2108,7 +2142,7 @@ private fun TimelineGrid(
     onSelectClip: (String) -> Unit,
     onOpenEditor: (String) -> Unit,
     onClipLongPress: (String) -> Unit,
-    onTimelineLongPress: () -> Unit,
+    onTimelineLongPress: (String?, Long) -> Unit,
     clipMenuClipId: String?,
     onClipAction: (String, String) -> Unit,
     onDismissClipMenu: () -> Unit,
@@ -2152,6 +2186,7 @@ private fun TimelineGrid(
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
     val currentOnSeekTick by rememberUpdatedState(onSeekTick)
+    val currentOnTimelineLongPress by rememberUpdatedState(onTimelineLongPress)
     val currentTrackRows by rememberUpdatedState(trackRowLayout)
     var draggingClip by remember { mutableStateOf<String?>(null) }
     var resizingClip by remember { mutableStateOf<String?>(null) }
@@ -2313,7 +2348,21 @@ private fun TimelineGrid(
         // Keep long-press handling on the background layer so it cannot steal a
         // drag that starts on a clip or its resize handle.
         Canvas(Modifier.fillMaxSize().pointerInput(Unit) {
-            detectTapGestures(onLongPress = { onTimelineLongPress() })
+            detectTapGestures(onLongPress = { offset ->
+                val yDp = ((offset.y - rulerHeightPx).coerceAtLeast(0f) / density.density /
+                    currentVerticalZoom.coerceAtLeast(0.1f)) + currentScrollTracks
+                val hitIndex = currentTrackRows.indices.firstOrNull { index ->
+                    val row = currentTrackRows[index]
+                    yDp >= row.topDp && yDp <= row.topDp + row.heightDp
+                }
+                val hitTrackId = hitIndex?.let { latestProject.tracks.getOrNull(it)?.id }
+                val hitTimebase = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
+                val hitViewport = TimelineViewport(
+                    hitTimebase, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat(), 0f
+                )
+                val tick = hitViewport.viewportXToTime(offset.x)
+                currentOnTimelineLongPress(hitTrackId, tick)
+            })
         }) {
             val canvasViewport = viewport.copy(viewportWidthPx = size.width)
              val firstVisibleBar = canvasViewport.firstVisibleBar().coerceAtMost(4096L).toInt()
