@@ -1,6 +1,7 @@
 package com.studiowave.app
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -76,7 +77,8 @@ internal fun StudioWaveSettingsScreen(
 ) {
     val p = LocalStudioWavePalette.current
     Row(Modifier.fillMaxSize().background(p.room).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Column(Modifier.width(164.dp).fillMaxHeight().background(p.panel, RoundedCornerShape(7.dp)).padding(7.dp),
+        Column(Modifier.width(164.dp).fillMaxHeight().background(p.panel, RoundedCornerShape(1.dp))
+            .border(1.dp, p.border.copy(alpha = 0.9f), RoundedCornerShape(1.dp)).padding(7.dp),
             verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("StudioWave", color = p.orange, fontSize = 15.sp, fontWeight = FontWeight.Black)
@@ -89,11 +91,12 @@ internal fun StudioWaveSettingsScreen(
             Spacer(Modifier.weight(1f))
             Text("STUDIOWAVE • MOBILE DAW", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Button(onClick = onClose, modifier = Modifier.fillMaxWidth().height(34.dp), contentPadding = PaddingValues(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text), shape = RoundedCornerShape(5.dp)) {
+                colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text), shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border)) {
                 Text("DONE", fontWeight = FontWeight.Bold, fontSize = 10.sp)
             }
         }
-        Column(Modifier.weight(1f).fillMaxHeight().background(p.canvas, RoundedCornerShape(7.dp)).padding(9.dp),
+        Column(Modifier.weight(1f).fillMaxHeight().background(p.canvas, RoundedCornerShape(1.dp))
+            .border(1.dp, p.border.copy(alpha = 0.9f), RoundedCornerShape(1.dp)).padding(9.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -124,7 +127,7 @@ internal fun StudioWaveSettingsScreen(
                 "LOG" -> Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     SettingsInfoCard("SESSION DIAGNOSTICS", "Read-only snapshot. Values are not uploaded.", p)
                     interfaceLog.forEachIndexed { index, line ->
-                        Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(4.dp)).padding(horizontal = 7.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp)).padding(horizontal = 7.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text((index + 1).toString().padStart(2, '0'), color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.width(8.dp)); Text(line, color = p.text, fontSize = 9.sp, maxLines = 2)
                         }
@@ -139,9 +142,9 @@ internal fun StudioWaveSettingsScreen(
                     SettingsSliderRow("UI scale", "Scales workspace dimensions and controls.", uiScale, "${(uiScale * 100).toInt()}%", onUiScaleChange, p, 0.6f..1.2f)
                     SettingsSection("CONTROL SURFACE", "Shared palette for knobs, faders and buttons.", p)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(6.dp)).padding(8.dp)) { Text("KNOB", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); StudioWaveKnobPreview(p) }
+                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border, RoundedCornerShape(1.dp)).padding(8.dp)) { Text("KNOB", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); StudioWaveKnobPreview(p) }
                         Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(6.dp)).padding(8.dp)) { Text("FADER", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); StudioWaveFaderPreview(p) }
-                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(6.dp)).padding(8.dp)) { Text("BUTTON", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); Surface(color = p.control, shape = RoundedCornerShape(4.dp), border = BorderStroke(1.dp, p.border)) { Text("ACTIVE", color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) } }
+                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(6.dp)).padding(8.dp)) { Text("BUTTON", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); Surface(color = p.control, shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border)) { Text("ACTIVE", color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) } }
                     }
                 }
             }
@@ -150,7 +153,7 @@ internal fun StudioWaveSettingsScreen(
 }
 
 @Composable internal fun SettingsNav(title: String, subtitle: String, selected: Boolean, p: StudioWavePalette, onClick: () -> Unit) {
-    Surface(color = if (selected) p.raised else p.panel, shape = RoundedCornerShape(5.dp),
+    Surface(color = if (selected) p.raised else p.panel, shape = RoundedCornerShape(1.dp),
         border = if (selected) BorderStroke(1.dp, p.accent.copy(alpha = 0.6f)) else BorderStroke(1.dp, p.border.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(horizontal = 8.dp, vertical = 7.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -161,7 +164,7 @@ internal fun StudioWaveSettingsScreen(
 }
 
 @Composable internal fun SettingsSection(title: String, subtitle: String, p: StudioWavePalette) {
-    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(title, color = p.orange, fontSize = 9.sp, fontWeight = FontWeight.Black); Text(subtitle, color = p.muted, fontSize = 8.sp)
     }
 }
@@ -178,8 +181,8 @@ internal fun StudioWaveSettingsScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             choices.forEach { (value, label) ->
                 val active = value == selected
-                Surface(color = if (active) p.accent.copy(alpha = 0.18f) else p.control, shape = RoundedCornerShape(4.dp),
-                    border = BorderStroke(1.dp, if (active) p.accent else p.border), modifier = Modifier.weight(1f).height(31.dp).clickable { onSelected(value) }) {
+                Surface(color = if (active) p.accent.copy(alpha = 0.18f) else p.control, shape = RoundedCornerShape(1.dp),
+                    border = BorderStroke(1.dp, if (active) p.orange else p.border), modifier = Modifier.weight(1f).height(31.dp).clickable { onSelected(value) }) {
                     Box(contentAlignment = Alignment.Center) { Text(label, color = if (active) p.accent else p.text, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                 }
             }
@@ -188,14 +191,14 @@ internal fun StudioWaveSettingsScreen(
 }
 
 @Composable internal fun SettingsToggleRow(title: String, subtitle: String, value: Boolean, onChange: (Boolean) -> Unit, p: StudioWavePalette) {
-    Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp)).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) { Text(title, color = p.text, fontSize = 10.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = p.muted, fontSize = 8.sp) }
         Switch(checked = value, onCheckedChange = onChange)
     }
 }
 
 @Composable internal fun SettingsSliderRow(title: String, subtitle: String, value: Float, valueText: String, onChange: (Float) -> Unit, p: StudioWavePalette, range: ClosedFloatingPointRange<Float> = 0f..1f) {
-    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp)) {
+    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp)).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { Text(title, color = p.text, fontSize = 10.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.weight(1f)); Text(valueText, color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
         Text(subtitle, color = p.muted, fontSize = 8.sp)
         Slider(value = value, onValueChange = onChange, valueRange = range, modifier = Modifier.fillMaxWidth().height(28.dp))
