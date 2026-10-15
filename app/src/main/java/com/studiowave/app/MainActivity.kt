@@ -3747,9 +3747,9 @@ private fun MixerWorkspace(
                                     val active = (segment + 1) / 24f <= channelPeak
                                     val color = when {
                                         !active -> mixerPalette.room
-                                        segment >= 21 -> mixerPalette.danger
-                                        segment >= 17 -> mixerPalette.warning
-                                        else -> mixerPalette.accent
+                                        segment >= 21 -> mixerPalette.meterHigh
+                                        segment >= 17 -> mixerPalette.meterMid
+                                        else -> mixerPalette.meterLow
                                     }
                                     drawRoundRect(color, Offset((size.width - lane) / 2f, y + 0.5f),
                                         Size(lane, (segmentHeight - 1f).coerceAtLeast(1f)),
@@ -3898,9 +3898,13 @@ private fun MixerWorkspace(
                 drawLine(mixerPalette.text, Offset(capLeft + 3f, thumbY),
                     Offset(capLeft + capWidth - 3f, thumbY), 2f)
             }
-            val masterDbLabel = if (master <= 0.001f) "-∞ dB" else
+            val masterDbLabel = if (master <= 0.001f) "−∞ dB" else
                 String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(master))
-            Text("${(master * 100).toInt()}%  $masterDbLabel", color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                Text("${(master * 100).toInt()}%", color = mixerPalette.text, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Spacer(Modifier.width(4.dp))
+                Text(masterDbLabel, color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
+            }
         }
         }
     }
