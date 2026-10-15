@@ -49,4 +49,23 @@ class ArrangementTimingTest {
         assertTrue(ArrangementTiming.trackIsAudible(false, true, true))
         assertFalse(ArrangementTiming.trackIsAudible(false, false, true))
     }
+
+    @Test fun absoluteSourceMicrosecondsDoNotDependOnTempo() {
+        val halfSecondAtLowTempo = ArrangementTiming.ticksToMicros(960L, 120, 960)
+        val sameSourceTimeAtHighTempo = ArrangementTiming.ticksToMicros(1920L, 240, 960)
+        assertEquals(500_000L, halfSecondAtLowTempo)
+        assertEquals(halfSecondAtLowTempo, sameSourceTimeAtHighTempo)
+        assertEquals(22_050L, ArrangementTiming.microsToFrames(500_000L, 44_100))
+        assertEquals(500_000L, ArrangementTiming.ticksToMicros(
+            ArrangementTiming.microsToTicks(500_000L, 120, 960), 120, 960
+        ))
+    }
+
+    @Test fun absoluteSourceConversionsClampInvalidAndOverflowInputs() {
+        assertEquals(0L, ArrangementTiming.microsToFrames(-1L, 44_100))
+        assertEquals(0L, ArrangementTiming.ticksToMicros(-1L, 120, 960))
+        assertEquals(Long.MAX_VALUE, ArrangementTiming.microsToFrames(Long.MAX_VALUE, 192_000))
+        assertEquals(Long.MAX_VALUE, ArrangementTiming.ticksToMicros(Long.MAX_VALUE, 40, 24))
+    }
+
 }
