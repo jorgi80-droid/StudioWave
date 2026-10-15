@@ -304,8 +304,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         tracks.filter { it.kind == "audio" }.forEach { track ->
             track.clips.forEach clipLoop@{ clip ->
                 val uri = clip.sourceUri?.takeIf { it.isNotBlank() } ?: return@clipLoop
-                val sourceEnd = (clip.sourceOffsetTicks.coerceAtLeast(0L) + clip.lengthTicks.coerceAtLeast(1L))
-                    .coerceAtMost(Long.MAX_VALUE / 2L)
+                // Saturate before any duration conversion; Long addition must not wrap negative.
+                val sourceEnd = ArrangementTiming.addTicksSaturated(
+                    clip.sourceOffsetTicks,
+                    clip.lengthTicks.coerceAtLeast(1L)
+                )
                 requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, sourceEnd)
             }
         }
