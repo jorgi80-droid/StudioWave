@@ -3222,7 +3222,9 @@ private fun PianoRollWorkspace(
         if (editToolsExpanded) {
             Row(
                 Modifier.fillMaxWidth().height(26.dp)
-                    .background(pianoPalette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 3.dp),
+                    .background(pianoPalette.panel, RoundedCornerShape(1.dp))
+                    .border(1.dp, pianoPalette.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
+                    .padding(horizontal = 3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -3742,13 +3744,13 @@ private fun PianoRollWorkspace(
                 "G" to 55, "A" to 57, "B" to 59, "C5" to 60
             )
             Row(
-                Modifier.fillMaxWidth().height(44.dp).background(pianoPalette.panel, RoundedCornerShape(2.dp)).padding(3.dp),
+                Modifier.fillMaxWidth().height(44.dp).background(pianoPalette.panel, RoundedCornerShape(1.dp)).padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 keyboardNotes.forEach { (label, pitch) ->
                     Surface(
                         color = pianoPalette.control,
-                        shape = RoundedCornerShape(2.dp),
+                        shape = RoundedCornerShape(1.dp),
                         border = BorderStroke(1.dp, pianoPalette.border),
                         modifier = Modifier.weight(1f).fillMaxHeight().clickable {
                             val activeTrack = track
