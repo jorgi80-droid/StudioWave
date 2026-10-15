@@ -1266,8 +1266,8 @@ private fun TimelineGrid(
     val requestedPixelsPerBar = baseBarWidthPx * zoom
     val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks.toDouble(), 0f)
         .effectivePixelsPerBar
-    val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
-        TimelineViewport(timebase, pixelsPerBar, scrollTicks.toDouble(), 0f, trackHeaderWidthPx)
+    val viewport = remember(timebase, pixelsPerBar, scrollTicks) {
+        arrangementPaneViewport(timebase, pixelsPerBar, scrollTicks.toDouble(), 0f)
     }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
@@ -1312,7 +1312,7 @@ private fun TimelineGrid(
                         val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
                         val barWidthPx = TimelineViewport(timebase, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
                         hitTrack?.clips?.any { clip ->
-                            val hitViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
+                            val hitViewport = arrangementPaneViewport(timebase, barWidthPx, currentScroll.toDouble(), size.width.toFloat())
                              val left = hitViewport.timeToViewportX(clip.startTick)
                             val width = hitViewport.tickDeltaToPixels(clip.lengthTicks)
                             val right = left + width
@@ -1374,7 +1374,7 @@ private fun TimelineGrid(
                                 if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
                                        val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
+                                    val newScroll = arrangementPaneViewport(timebaseNow, barWidthPx, currentScroll.toDouble(), size.width.toFloat()).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
@@ -1392,7 +1392,7 @@ private fun TimelineGrid(
             if (isPlaying && timelineWidthPx > 0f) {
                 val barWidthPx = viewport.effectivePixelsPerBar
                 val currentViewport = TimelineViewport(
-                    timebase, barWidthPx, scrollTicks.toDouble(), timelineWidthPx, trackHeaderWidthPx
+                    timebase, barWidthPx, scrollTicks.toDouble(), timelineWidthPx
                 )
                 val currentX = currentViewport.timeToViewportX(playheadTick)
                 val leftGuard = timelineWidthPx * 0.08f
@@ -1590,7 +1590,7 @@ private fun TimelineGrid(
                                             val barWidthPx = viewport.effectivePixelsPerBar
                                             val dragViewport = TimelineViewport(
                                                 timebase, barWidthPx, currentScroll.toDouble(),
-                                                timelineWidthPx, trackHeaderWidthPx
+                                                timelineWidthPx
                                             )
                                             // Convert the total gesture delta to ticks from its original anchor.
                                             // This avoids drift if playback autoscroll changes the viewport mid-drag.
@@ -1725,7 +1725,7 @@ private fun TimelineGrid(
         // Overlay the cursor after clips so it stays visible over audio, MIDI and drum patterns.
         Canvas(Modifier.fillMaxSize().padding(top = 24.dp).clipToBounds()) {
             val playheadViewport = TimelineViewport(
-                timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
+                timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width
             )
             val x = playheadViewport.timeToViewportX(playheadTick)
             if (x >= 0f && x <= size.width) {
