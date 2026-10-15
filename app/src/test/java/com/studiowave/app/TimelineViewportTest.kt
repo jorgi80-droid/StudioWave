@@ -438,8 +438,9 @@ class TimelineViewportTest {
         assertEquals(0.0, high.effectiveScrollTimeTicks, 0.0)
         assertEquals(0.0, negative.effectiveScrollTimeTicks, 0.0)
         val hugeFinite = TimelineViewport(timebase, 74f, Double.MAX_VALUE, 600f)
-        assertEquals(maxTick.toDouble(), hugeFinite.effectiveScrollTimeTicks, 0.0)
-        assertTrue(hugeFinite.panByScreenPixels(-100f).effectiveScrollTimeTicks <= maxTick.toDouble())
+        val maxVisibleScroll = (maxTick.toDouble() - 600.0 / hugeFinite.pixelsPerTick).coerceAtLeast(0.0)
+        assertEquals(maxVisibleScroll, hugeFinite.effectiveScrollTimeTicks, 0.0)
+        assertTrue(hugeFinite.panByScreenPixels(-100f).effectiveScrollTimeTicks <= maxVisibleScroll + 1e-6)
     }
 
 

@@ -2194,6 +2194,13 @@ private fun TimelineGrid(
     val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx, timelineViewportWidthPx) {
         TimelineViewport(timebase, pixelsPerBar, scrollTicks, timelineViewportWidthPx, trackHeaderWidthPx)
     }
+    LaunchedEffect(viewport.effectiveScrollTimeTicks, scrollTicks, timelineViewportWidthPx) {
+        // Keep the persisted viewport state synchronized with the same max-scroll rule used
+        // by clip geometry and pointer handlers whenever width/zoom changes.
+        if (kotlin.math.abs(viewport.effectiveScrollTimeTicks - scrollTicks) > 0.5) {
+            onScroll(viewport.effectiveScrollTimeTicks)
+        }
+    }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
     val moveCommit by rememberUpdatedState(onMoveClip)
@@ -2317,9 +2324,10 @@ private fun TimelineGrid(
                                     timebase, baseBarWidthPx * gestureBaseZoom, gestureBaseScrollTicks,
                                     size.width.toFloat(), trackHeaderWidthPx
                                 )
-                                // Keep the musical tick under the pinch centroid stable in pane-local coordinates.
+                                // Pointer x is local to TimelineGrid; the track-header column is outside this viewport.
+                                // Keep the fractional musical tick under the pinch centroid stable.
                                 gestureAnchorTick = baseViewport.effectiveScrollTimeTicks +
-                                    (centroid.x - baseViewport.safeTrackHeaderWidthPx).toDouble() / baseViewport.pixelsPerTick
+                                    centroid.x.toDouble() / baseViewport.pixelsPerTick
                                 gestureAnchorTrackDp = currentScrollTracks +
                                     (centroid.y - rulerHeightPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
                             }
