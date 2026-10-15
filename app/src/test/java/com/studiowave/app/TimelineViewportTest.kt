@@ -187,4 +187,37 @@ class TimelineViewportTest {
         assertEquals(maxArrangementTick(common), viewport.screenXToTime(Float.POSITIVE_INFINITY))
     }
 
+
+    @Test fun audioTrimRestoresPersistedRangeAndClampsToSource() {
+        val restored = audioTrimFractionsFromTicks(
+            sourceOffsetTicks = 250L,
+            clipLengthTicks = 400L,
+            sourceDurationTicks = 1000L
+        )
+        assertEquals(0.25f, restored.first, 0.0001f)
+        assertEquals(0.65f, restored.second, 0.0001f)
+
+        val clipped = audioTrimFractionsFromTicks(
+            sourceOffsetTicks = Long.MAX_VALUE,
+            clipLengthTicks = Long.MAX_VALUE,
+            sourceDurationTicks = 1000L
+        )
+        assertTrue(clipped.first < clipped.second)
+        assertEquals(1f, clipped.second, 0.0001f)
+    }
+
+    @Test fun audioTrimConversionAlwaysProducesNonEmptyBoundedRange() {
+        val full = audioTrimRangeFromFractions(0f, 1f, 1000L)!!
+        assertEquals(0L, full.startTicks)
+        assertEquals(1000L, full.endTicksExclusive)
+
+        val nearEnd = audioTrimRangeFromFractions(0.9999f, Float.NaN, 1000L)!!
+        assertTrue(nearEnd.startTicks >= 0L)
+        assertTrue(nearEnd.endTicksExclusive <= 1000L)
+        assertTrue(nearEnd.endTicksExclusive > nearEnd.startTicks)
+
+        assertEquals(null, audioTrimRangeFromFractions(0f, 1f, 1L))
+        assertEquals(null, audioTrimRangeFromFractions(Float.NaN, Float.POSITIVE_INFINITY, 0L))
+    }
+
 }
