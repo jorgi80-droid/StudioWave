@@ -4467,7 +4467,13 @@ private fun DeviceDock(
                         else -> DeviceModuleCard("AUDIO SOURCE", "CLIP / SAMPLE", palette,
                             "Audio source editing remains in Clip View. Enabled effects below process this track during playback.")
                     }
-                    track.devices.filter { it.type in EFFECT_DEVICE_TYPES }.forEach { device ->
+                    track.devices.filter { it.type in EFFECT_DEVICE_TYPES }.forEachIndexed { effectIndex, device ->
+                        // Make the serial device chain legible at a glance: each insert gets a
+                        // numbered Live-style slot marker without changing device order or routing.
+                        DeviceChainSlotMarker(
+                            number = effectIndex + 2,
+                            palette = palette
+                        )
                         TrackEffectDeviceCard(
                             device = device,
                             palette = palette,
@@ -4520,6 +4526,22 @@ private fun DeviceDock(
             },
             confirmButton = { TextButton(onClick = { showAddFx = false }) { Text("DONE", color = palette.accent) } }
         )
+    }
+}
+
+@Composable
+private fun DeviceChainSlotMarker(number: Int, palette: StudioWavePalette) {
+    Column(
+        Modifier.width(22.dp).height(42.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(number.toString().padStart(2, '0'), color = palette.orange,
+            fontSize = 8.sp, fontWeight = FontWeight.Black)
+        Box(Modifier.width(1.dp).height(9.dp).background(palette.border))
+        Text("FX", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold)
+        Box(Modifier.width(1.dp).height(9.dp).background(palette.border))
+        Text("›", color = palette.orange, fontSize = 14.sp, fontWeight = FontWeight.Black)
     }
 }
 
