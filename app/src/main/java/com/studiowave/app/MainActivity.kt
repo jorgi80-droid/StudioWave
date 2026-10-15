@@ -3109,9 +3109,21 @@ private fun PianoRollWorkspace(
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
+                Column(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
+                    Row(Modifier.fillMaxWidth().height(20.dp).background(pianoPalette.panel), verticalAlignment = Alignment.CenterVertically) {
+                        Text("BAR", color = pianoPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(42.dp).padding(start = 3.dp))
+                        Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                            val pxPerStep = size.width / pianoRollVisibleSteps(stepsPerBar, zoomX).toFloat()
+                            for (barIndex in 0..(pianoRollVisibleSteps(stepsPerBar, zoomX) / stepsPerBar + 2)) {
+                                val step = pageStartStep + barIndex * stepsPerBar
+                                val x = barIndex * stepsPerBar * pxPerStep
+                                drawLine(pianoPalette.border, Offset(x, 0f), Offset(x, size.height), 1f)
+                                drawContext.canvas.nativeCanvas.drawText((step / stepsPerBar + 1).toString(), x + 3f, size.height * 0.68f, android.graphics.Paint().apply { color = android.graphics.Color.LTGRAY; textSize = 10f; isAntiAlias = true })
+                            }
+                        }
+                    }
                     val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
-                    val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
+                    val viewportHeightPx = with(pianoDensity) { (maxHeight - 20.dp).toPx() }
                     LaunchedEffect(viewportWidthPx, clipLengthSteps, stepsPerBar, zoomX) {
                         if (lastViewportWidthPx > 0f && viewportWidthPx > 0f &&
                             kotlin.math.abs(viewportWidthPx - lastViewportWidthPx) > 1f) {
@@ -3366,7 +3378,7 @@ private fun PianoRollWorkspace(
                                     }                                }
                             }
                         }
-                    Box(contentModifier) {
+                    Box(contentModifier.weight(1f)) {
                         Canvas(Modifier.fillMaxSize()) {
                             val localRowHeight = rowHeightPx
                             val localColWidth = size.width / currentStepsOnScreen.toFloat()
@@ -3416,6 +3428,7 @@ private fun PianoRollWorkspace(
                     }
                 }
             }
+        }
         }
         if (virtualKeyboardVisible) {
             val keyboardNotes = listOf(
