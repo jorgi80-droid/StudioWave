@@ -383,6 +383,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         preferAdaptiveHighRefreshRate()
+        StudioWaveDiagnostics.initialize(applicationContext)
         StudioWaveDiagnostics.installCrashHandler()
         StudioWaveDiagnostics.log("INFO", "LIFECYCLE", "MainActivity created")
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -856,12 +857,14 @@ private fun StudioWaveApp() {
             delay(500)
         }
     }
-    LaunchedEffect(Unit) {
-        var lastFrame = 0L
-        while (true) {
-            val frame = withFrameNanos { it }
-            if (lastFrame != 0L) StudioWaveDiagnostics.recordUiFrameInterval(frame - lastFrame)
-            lastFrame = frame
+    LaunchedEffect(showSettings, settingsSection) {
+        if (showSettings && settingsSection == "LOG") {
+            var lastFrame = 0L
+            while (true) {
+                val frame = withFrameNanos { it }
+                if (lastFrame != 0L) StudioWaveDiagnostics.recordUiFrameInterval(frame - lastFrame)
+                lastFrame = frame
+            }
         }
     }
     LaunchedEffect(arrangementPlayback) {
@@ -961,7 +964,7 @@ private fun StudioWaveApp() {
                     highContrast = highContrast, onHighContrastChange = { highContrast = it },
                     gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
                     uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.6f, 1.2f) },
-                    audioStatus = "Native Oboe/AAudio output path · stereo PCM16 at ${ArrangementPlaybackEngine.OUTPUT_SAMPLE_RATE} Hz · 256-frame mixer blocks. Actual device stream properties follow Android audio policy.",
+                    audioStatus = "Native Oboe/AAudio output path · stereo PCM16 at ${ArrangementPlaybackEngine.OUTPUT_SAMPLE_RATE} Hz · 256-frame render blocks. Actual device stream properties follow Android audio policy.",
                     audioProfile = audioProfile,
                     onAudioProfileChange = { value ->
                         audioProfile = value
@@ -972,12 +975,14 @@ private fun StudioWaveApp() {
                     onMetronomeEnabledChange = { value ->
                         metronomeEnabled = value
                         preferences.edit().putBoolean("metronome_enabled", value).apply()
+                        arrangementPlayback.setMetronome(value, metronomeLevel)
                         StudioWaveDiagnostics.log("INFO", "AUDIO_SETTINGS", "Metronome ${if (value) "enabled" else "disabled"}")
                     },
                     metronomeLevel = metronomeLevel,
                     onMetronomeLevelChange = { value ->
                         metronomeLevel = value.coerceIn(0f, 1f)
                         preferences.edit().putFloat("metronome_level", metronomeLevel).apply()
+                        arrangementPlayback.setMetronome(metronomeEnabled, metronomeLevel)
                     },
                     parallelPreparation = parallelPreparation,
                     onParallelPreparationChange = { value ->
@@ -995,12 +1000,16 @@ private fun StudioWaveApp() {
                             putExtra(Intent.EXTRA_TEXT, report)
                         }
                         runCatching { context.startActivity(Intent.createChooser(send, "Share StudioWave diagnostics")) }
-                            .onFailure { StudioWaveDiagnostics.log("ERROR", "DIAGNOSTICS", "Could not open share sheet: ${it.message}") }
+                            .onFailure {
+                                StudioWaveDiagnostics.log("ERROR", "DIAGNOSTICS", "Could not open share sheet: ${it.message}")
+                                Toast.makeText(context, "Could not share diagnostics: ${it.message}", Toast.LENGTH_LONG).show()
+                            }
                     },
                     onClearLogs = {
                         StudioWaveDiagnostics.clear()
                         diagnosticLogLines = StudioWaveDiagnostics.snapshot()
                     },
+                    currentProjectName = project.name,
                     onNewProject = { name ->
                         stopPlayback()
                         val fresh = StudioProject(name = name.take(64).ifBlank { "Untitled Set" },
@@ -1071,9 +1080,13 @@ private fun StudioWaveApp() {
                     onRedo = { redoProject() },
                     onSaveProject = {
                         pendingExportProject = project
+                        StudioWaveDiagnostics.log("INFO", "PROJECT", "Save As requested for '${project.name}'")
                         exportProjectLauncher.launch(suggestedSdawFileName(project.name))
                     },
-                    onOpenProject = { importProjectLauncher.launch(arrayOf("*/*")) }
+                    onOpenProject = {
+                        StudioWaveDiagnostics.log("INFO", "PROJECT", "Open project picker requested")
+                        importProjectLauncher.launch(arrayOf("*/*"))
+                    }
                 )
                 Spacer(Modifier.height(3.dp))
                 Row(Modifier.weight(1f).fillMaxWidth()) {
