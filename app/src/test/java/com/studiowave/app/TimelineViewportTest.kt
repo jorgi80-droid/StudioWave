@@ -320,6 +320,60 @@ class TimelineViewportTest {
     }
 
 
+    @Test fun arrangementPaneFactoryNeverIncludesSiblingTrackHeaderInCoordinates() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val pane = arrangementPaneViewport(timebase, 148f, 7680.0, 900f)
+        assertEquals(0f, pane.safeTrackHeaderWidthPx, 0f)
+        val tick = 7680L + 3840L * 4L + 960L
+        val localX = pane.timeToViewportX(tick)
+        assertEquals(tick, pane.viewportXToTime(localX))
+        assertEquals(localX, pane.timeToScreenX(tick), 0.001f)
+    }
+
+    @Test fun sharedPaneMappingKeepsRulerGridAndClipEdgesAtSameXAfterRepeatedZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val clipStart = 3840L * 23L + 1440L
+        val clipEnd = clipStart + 3840L * 7L + 960L
+        var viewport = arrangementPaneViewport(timebase, 74f, 3840.0 * 16.25, 900f)
+        val anchorX = 431.5f
+        val anchorTick = viewport.scrollTimeTicks + anchorX.toDouble() / viewport.pixelsPerTick
+        val scales = listOf(20f, 41f, 74f, 148f, 560f, 1200f, 4800f, 74f, 180f, 74f)
+        scales.forEach { scale ->
+            viewport = viewport.zoomKeepingAnchor(scale, anchorX)
+            val barTick = (clipStart / timebase.ticksPerBar) * timebase.ticksPerBar
+            val barX = viewport.timeToViewportX(barTick)
+            val clipLeft = viewport.timeToViewportX(clipStart)
+            val clipRight = viewport.timeToViewportX(clipEnd)
+            assertEquals(scale, viewport.effectivePixelsPerBar, 0.001f)
+            assertEquals(viewport.tickDeltaToPixels(timebase.ticksPerBar),
+                viewport.timeToViewportX(barTick + timebase.ticksPerBar) - barX, 0.02f)
+            assertEquals(viewport.tickDeltaToPixels(clipEnd - clipStart), clipRight - clipLeft, 0.03f)
+            assertEquals(clipStart, viewport.viewportXToTime(clipLeft))
+            assertEquals(clipEnd, viewport.viewportXToTime(clipRight))
+            assertEquals(anchorTick, viewport.scrollTimeTicks + anchorX / viewport.pixelsPerTick, 0.02)
+        }
+    }
+
+    @Test fun scrollAndZoomPreserveClipWidthAndSnapTimeRegardlessOfHorizontalPosition() {
+        val timebase = TimelineTimebase(126, 4, 4, 960)
+        val clipStart = 3840L * 41L + 1230L
+        val length = 3840L * 13L + 480L
+        val end = clipStart + length
+        listOf(20f, 37f, 74f, 148f, 560f, 1200f, 2400f, 4800f).forEach { scale ->
+            val base = arrangementPaneViewport(timebase, scale, 0.0, 720f)
+            listOf(0.0, 3840.0 * 12.375, 3840.0 * 38.25).forEach { scrollTicks ->
+                val viewport = base.copy(scrollTimeTicks = scrollTicks)
+                val left = viewport.timeToViewportX(clipStart)
+                val right = viewport.timeToViewportX(end)
+                assertEquals(viewport.tickDeltaToPixels(length), right - left, 0.04f)
+                assertEquals(clipStart, viewport.viewportXToTime(left))
+                assertEquals(end, viewport.viewportXToTime(right))
+                assertEquals(timebase.snap(clipStart, SnapDivision.SIXTEENTH_BEAT),
+                    viewport.snapTick(clipStart, SnapDivision.SIXTEENTH_BEAT))
+            }
+        }
+    }
+
     @Test fun viewportXAndScreenXConversionsAreExactInTheirOwnCoordinateSpaces() {
         val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 148f, 7680.0, 900f, 104f)
         listOf(0L, 7680L, 9120L, 50000L).forEach { tick ->

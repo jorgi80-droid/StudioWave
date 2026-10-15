@@ -2246,7 +2246,7 @@ private fun TimelineGrid(
                         if (hitTrack == null) {
                             false
                         } else {
-                            val hitViewport = TimelineViewport(
+                            val hitViewport = arrangementPaneViewport(
                                 timebase, baseBarWidthPx * currentZoom,
                                 currentScroll, size.width.toFloat()
                             )
@@ -2305,7 +2305,7 @@ private fun TimelineGrid(
                                 gesturePointerCount = pointers.size
                                 gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 gestureBaseScrollTicks = currentScroll
-                                val baseViewport = TimelineViewport(
+                                val baseViewport = arrangementPaneViewport(
                                     timebase, baseBarWidthPx * gestureBaseZoom, gestureBaseScrollTicks, size.width.toFloat()
                                 )
                                 // Preserve a fractional tick anchor in the timeline's local coordinate space.
@@ -2327,7 +2327,7 @@ private fun TimelineGrid(
                                 if (!multiTouchGestureOccurred && !startsOnClip &&
                                     (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                                       val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
+                                       val barWidthPx = arrangementPaneViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
                                     val newScroll = arrangementPaneViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat()).panByScreenPixels(delta.x).scrollTimeTicks
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
@@ -2351,7 +2351,7 @@ private fun TimelineGrid(
                     val dt = if (previousFrameNanos == 0L) 0.016f
                         else ((frameNanos - previousFrameNanos).coerceAtLeast(0L) / 1_000_000_000f).coerceIn(0f, 0.05f)
                     previousFrameNanos = frameNanos
-                    val currentViewport = TimelineViewport(
+                    val currentViewport = arrangementPaneViewport(
                         timebase, baseBarWidthPx * currentZoom, currentScroll,
                         timelineWidthPx
                     )
@@ -2384,8 +2384,8 @@ private fun TimelineGrid(
                 }
                 val hitTrackId = hitIndex?.let { latestProject.tracks.getOrNull(it)?.id }
                 val hitTimebase = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                val hitViewport = TimelineViewport(
-                    hitTimebase, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat(), 0f
+                val hitViewport = arrangementPaneViewport(
+                    hitTimebase, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()
                 )
                 val tick = hitViewport.viewportXToTime(offset.x)
                 currentOnTimelineLongPress(hitTrackId, tick)

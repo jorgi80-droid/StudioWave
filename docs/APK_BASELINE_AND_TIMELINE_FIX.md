@@ -21,4 +21,6 @@
 
 ## Validation status
 
-CI and device-level gesture testing must pass before claiming the repair is fully validated. This commit does not claim the APK has been reproduced from original source.
+- Added regression cases for repeated zoom and clip/ruler/grid edge mapping at multiple scales and scroll positions.
+- The latest implementation is tracked on `ui/ableton-inspired-mobile-workspace`; do not build from `main` until that branch is merged. Branch and APK version provenance must be checked for every released APK.
+- CI and device-level gesture testing must pass before claiming the repair is fully validated. This commit does not claim the APK has been reproduced from original source.
