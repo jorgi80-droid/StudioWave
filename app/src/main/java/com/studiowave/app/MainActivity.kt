@@ -111,20 +111,38 @@ private val Green: Color @Composable get() = LocalStudioWavePalette.current.succ
 private val Red: Color @Composable get() = LocalStudioWavePalette.current.danger
 
 internal fun arrangementClipSummary(kind: String, clip: WaveClip, project: StudioProject): String {
-    val beatTicks = (project.ppq.coerceIn(24, 3840).toLong() * 4L /
-        project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
-    val ticksPerBar = (beatTicks * project.numerator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
-    val bars = kotlin.math.ceil(clip.lengthTicks.coerceAtLeast(1L).toDouble() / ticksPerBar.toDouble())
+    val safePpq = project.ppq.coerceIn(24, 3840).toLong()
+    val beatTicks = (safePpq * 4L / project.denominator.coerceIn(1, 32).toLong()).coerceAtLeast(1L)
+    val ticksPerBar = (beatTicks * project.numerator.coerceIn(1, 32).toLong()).coerceAtLeast(1L)
+    val safeStart = clip.startTick.coerceAtLeast(0L)
+    val safeLength = clip.lengthTicks.coerceAtLeast(1L)
+    val startBar = safeStart / ticksPerBar + 1L
+    val bars = kotlin.math.ceil(safeLength.toDouble() / ticksPerBar.toDouble())
         .toInt().coerceAtLeast(1)
     val barLabel = "$bars BAR" + if (bars == 1) "" else "S"
+    val positionLabel = "BAR $startBar"
     return when (kind.lowercase()) {
-        "midi" -> "MIDI · ${clip.midiNotes.size} NOTES · $barLabel"
-        "drum" -> "DRUM · ${clip.drumSteps.count { it }}/${clip.drumSteps.size} STEPS · $barLabel"
-        "audio" -> {
-            val source = clip.sourceUri?.substringAfterLast('/')?.take(16)?.ifBlank { "AUDIO" } ?: "NO SOURCE"
-            "AUDIO · $source · $barLabel"
+        "midi" -> {
+            val pitches = clip.midiNotes.map { it.pitch.coerceIn(0, 127) }
+            val pitchLabel = if (pitches.isEmpty()) "EMPTY" else {
+                val names = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
+                fun noteName(pitch: Int) = "${names[pitch % 12]}${pitch / 12 - 1}"
+                if (pitches.minOrNull() == pitches.maxOrNull()) noteName(pitches.first())
+                else "${noteName(pitches.minOrNull()!!)}–${noteName(pitches.maxOrNull()!!)}"
+            }
+            "MIDI · ${clip.midiNotes.size} NOTES · $pitchLabel · $positionLabel · $barLabel"
         }
-        else -> "${kind.uppercase()} · $barLabel"
+        "drum" -> {
+            val active = clip.drumSteps.count { it }
+            "DRUM · $active/${clip.drumSteps.size} ON · $positionLabel · $barLabel"
+        }
+        "audio" -> {
+            val source = clip.sourceUri?.substringAfterLast('/')?.substringBefore('?')
+                ?.take(14)?.ifBlank { "AUDIO" } ?: "NO SOURCE"
+            val sourceState = if (clip.sourceUri.isNullOrBlank()) "MISSING" else "WAVE"
+            "AUDIO · $source · $sourceState · $positionLabel · $barLabel"
+        }
+        else -> "${kind.uppercase()} · $positionLabel · $barLabel"
     }
 }
 
