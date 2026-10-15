@@ -35,6 +35,27 @@ import kotlin.math.pow
  * on Dispatchers.IO; the audio worker only mixes prepared PCM and synthesized notes.
  * This keeps content-provider/codec calls away from the realtime output thread.
  */
+/** Deterministic click sample aligned to absolute output-frame beat/bar positions. */
+internal fun metronomeClickSample(
+    absoluteFrame: Long,
+    beatFrames: Long,
+    beatsPerBar: Int,
+    sampleRate: Int,
+    level: Float
+): Float {
+    if (absoluteFrame < 0L || beatFrames <= 0L || sampleRate <= 0 || !level.isFinite() || level <= 0f) return 0f
+    val safeLevel = level.coerceIn(0f, 1f)
+    val phase = absoluteFrame % beatFrames
+    val clickDuration = min((sampleRate * 0.018f).toLong().coerceAtLeast(1L), (beatFrames / 2L).coerceAtLeast(1L))
+    if (phase >= clickDuration) return 0f
+    val downbeat = (absoluteFrame / beatFrames) % beatsPerBar.coerceIn(1, 32) == 0L
+    val frequency = if (downbeat) 2200.0 else 1650.0
+    val envelope = 1.0 - phase.toDouble() / clickDuration.toDouble()
+    val amplitude = if (downbeat) 0.30 else 0.18
+    return (sin(2.0 * PI * frequency * phase.toDouble() / sampleRate.toDouble()) *
+        envelope * safeLevel * amplitude).toFloat()
+}
+
 /** Linear stereo peak/RMS for an interleaved L,R sample buffer. */
 internal data class StereoMeterLevels(
     val peakLeft: Float,
@@ -86,6 +107,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
     private val scratchOffsetsMs = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
     @Volatile private var liveMasterGain = 0.72f
+    @Volatile private var liveMetronomeEnabled = false
+    @Volatile private var liveMetronomeLevel = 0.25f
     // Peak/RMS snapshot from the final master PCM block, before 16-bit quantization.
     private val masterPeakBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
     private val masterRmsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
@@ -246,6 +269,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         scratchOffsetsMs.clear()
         stopOutputOnly()
         liveMasterGain = masterGain.coerceIn(0f, 1f)
+        liveMetronomeEnabled = metronomeEnabled
+        liveMetronomeLevel = metronomeLevel.coerceIn(0f, 1f)
         loudnessMeter.reset()
         publishMasterMeter(0f, 0f, MasterLoudnessMeter.SILENCE_LUFS)
         project.tracks.forEach { track ->
@@ -274,8 +299,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 worker = Thread({
                     Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
                     renderPlan(
-                        nativeOutput, plan, token, startFrame, onProgress, onCompleted, onError,
-                        metronomeEnabled, metronomeLevel.coerceIn(0f, 1f)
+                        nativeOutput, plan, token, startFrame, onProgress, onCompleted, onError
                     )
                 }, "StudioWave-Arrangement").also { it.start() }
             } catch (failure: Throwable) {
@@ -643,9 +667,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         startFrame: Long,
         onProgress: (Long) -> Unit,
         onCompleted: () -> Unit,
-        onError: (String) -> Unit,
-        metronomeEnabled: Boolean,
-        metronomeLevel: Float
+        onError: (String) -> Unit
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
@@ -843,21 +865,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
                 // The metronome is a deterministic master-bus click. It is generated in the
                 // render worker, not by a UI timer, so it stays aligned to the musical timebase.
-                if (metronomeEnabled && metronomeLevel > 0f) {
+                val clickEnabled = liveMetronomeEnabled
+                val clickLevel = liveMetronomeLevel.coerceIn(0f, 1f)
+                if (clickEnabled && clickLevel > 0f) {
                     val beatTicks = (plan.ppq.toLong() * 4L / plan.denominator.coerceIn(1, 32).toLong()).coerceAtLeast(1L)
                     val beatFrames = ArrangementTiming.ticksToFrames(beatTicks, plan.bpm, plan.ppq, sampleRate).coerceAtLeast(1L)
-                    val barFrames = (beatFrames * plan.numerator.coerceIn(1, 32).toLong()).coerceAtLeast(1L)
-                    val clickDuration = (sampleRate * 0.018f).toInt().coerceAtLeast(1)
                     for (frameOffset in 0 until frames) {
                         val absoluteFrame = position + frameOffset
-                        val inBeat = absoluteFrame % beatFrames
-                        if (inBeat >= clickDuration) continue
-                        val beatIndex = absoluteFrame / beatFrames
-                        val downbeat = (absoluteFrame % barFrames) < beatFrames
-                        val frequency = if (downbeat) 2200.0 else 1650.0
-                        val envelope = 1.0 - inBeat.toDouble() / clickDuration.toDouble()
-                        val click = (sin(2.0 * PI * frequency * inBeat / sampleRate) *
-                            envelope * metronomeLevel * if (downbeat) 0.30 else 0.18).toFloat()
+                        val click = metronomeClickSample(
+                            absoluteFrame, beatFrames, plan.numerator, sampleRate, clickLevel
+                        )
+                        if (click == 0f) continue
                         val outIndex = frameOffset * 2
                         mix[outIndex] += click
                         mix[outIndex + 1] += click
@@ -952,6 +970,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             tracks = trackValues.mapIndexed { index, mix -> project.tracks[index].id to mix }.toMap(),
             soloActive = trackValues.any { it.solo && !it.muted }
         )
+    }
+
+    fun setMetronome(enabled: Boolean, level: Float) {
+        require(level.isFinite()) { "Metronome level must be finite" }
+        liveMetronomeEnabled = enabled
+        liveMetronomeLevel = level.coerceIn(0f, 1f)
     }
 
     fun setMasterGain(gain: Float) {
