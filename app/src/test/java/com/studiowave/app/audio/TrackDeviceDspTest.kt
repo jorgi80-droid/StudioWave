@@ -44,4 +44,30 @@ class TrackDeviceDspTest {
         engine.process(input,master,input.size,1f,listOf(TrackDevice(type="SATURATOR",name="Off",enabled=false,parameters=defaultDeviceParameters("SATURATOR"))))
         assertTrue(original.contentEquals(input));assertTrue(master.all{it==0f})
     }
+
+    @Test fun parametricEqEightUsesBandFrequencyAndQSettings() {
+        val input = FloatArray(8192) { index ->
+            val frame = index / 2
+            sin(frame * 2.0 * Math.PI * 1000.0 / 44100.0).toFloat() * 0.35f
+        }
+        fun render(frequencyNorm: Float, q: Float): FloatArray {
+            val buffer = input.copyOf()
+            val master = FloatArray(input.size)
+            val parameters = defaultDeviceParameters("PARAM_EQ_8") + mapOf(
+                "band5" to 10f,
+                "band5FreqNorm" to frequencyNorm,
+                "band5Q" to q
+            )
+            TrackDeviceDsp(44100).process(
+                buffer, master, buffer.size, 1f,
+                listOf(TrackDevice(type = "PARAM_EQ_8", name = "Parametric EQ Eight", parameters = parameters))
+            )
+            assertTrue(master.all { it.isFinite() })
+            return master
+        }
+        val lowBand = render(0.35f, 1.1f)
+        val nearTone = render(0.566f, 2.4f)
+        assertTrue(nearTone.any { abs(it) > 0.0001f })
+        assertTrue(lowBand.indices.any { abs(lowBand[it] - nearTone[it]) > 0.00001f })
+    }
 }
