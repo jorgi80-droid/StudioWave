@@ -3279,12 +3279,14 @@ private fun PianoRollWorkspace(
                                     val clickedPitch = (currentTopPitch -
                                         (down.position.y / gestureRowHeight).toInt()).coerceIn(0, 127)
                                     val notesAtDown = gestureNotes.value
+                                    val noteHitSlop = with(pianoDensity) { 8.dp.toPx() }
                                     val touchedNote = if (keyboardVisible && !velocityMode && !panMode) notesAtDown.firstOrNull { note ->
-                                        val noteStartStep = (note.startTick / stepTicks).toInt()
-                                        val noteEndStep = noteStartStep +
-                                            kotlin.math.ceil(note.durationTicks.coerceAtLeast(1L).toDouble() / stepTicks.toDouble())
-                                                .toInt().coerceAtLeast(1)
-                                        note.pitch == clickedPitch && clickedStep >= noteStartStep && clickedStep < noteEndStep
+                                        val noteLeftPx = ((note.startTick.toDouble() / stepTicks.toDouble()) - visibleStartStep) * gestureColWidth
+                                        val noteRightPx = (((note.startTick + note.durationTicks.coerceAtLeast(1L)).toDouble() / stepTicks.toDouble()) - visibleStartStep) * gestureColWidth
+                                        val noteCenterY = (currentTopPitch - note.pitch + 0.5f) * gestureRowHeight
+                                        down.position.x >= noteLeftPx - noteHitSlop &&
+                                            down.position.x <= noteRightPx + noteHitSlop &&
+                                            kotlin.math.abs(down.position.y - noteCenterY) <= gestureRowHeight * 0.65f
                                     } else null
                                     val noteRightEdgePx = touchedNote?.let { note ->
                                         ((note.startTick.toDouble() + note.durationTicks.coerceAtLeast(1L).toDouble()) /
