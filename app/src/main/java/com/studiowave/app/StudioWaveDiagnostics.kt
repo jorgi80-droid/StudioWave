@@ -20,7 +20,6 @@ internal object StudioWaveDiagnostics {
     private val entries = ConcurrentLinkedDeque<String>()
     private val lastCpuMs = AtomicLong(-1L)
     private val lastWallMs = AtomicLong(-1L)
-    private val previousHandler = AtomicLong(0L)
     @Volatile private var frameIntervalNanos = 0L
     @Volatile private var frameSamples = 0L
     @Volatile private var underrunLast = 0L
@@ -97,7 +96,7 @@ internal object StudioWaveDiagnostics {
         val heapMax = runtime.maxMemory().coerceAtLeast(1L)
         val heapUsed = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
         val frames = frameSamples
-        val meanInterval = if (frames > 0) frameIntervalNanos.toDouble() / frames / 1_000_000.0 else Double.NaN
+        val meanInterval = if (frames > 0) frameIntervalNanos.toDouble() / 1_000_000.0 else Double.NaN
         return RuntimeSnapshot(
             cpuPercent = cpu,
             javaHeapUsedBytes = heapUsed,
@@ -130,6 +129,12 @@ internal object StudioWaveDiagnostics {
             underrunEvents += delta
             log("WARN", "AUDIO", "Output underrun counter increased by $delta (total=$safeTotal)")
         }
+    }
+
+    @Synchronized
+    fun clear() {
+        entries.clear()
+        log("INFO", "DIAGNOSTICS", "Application event log cleared by user")
     }
 
     fun currentUnderruns(): Long = underrunTotal
