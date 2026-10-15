@@ -2066,27 +2066,49 @@ private fun TrackHeader(
     onDoubleTap: () -> Unit, onColorTap: () -> Unit, onMuteToggle: () -> Unit, onSoloToggle: () -> Unit,
     onResizeTrack: (Float) -> Unit = {}, onScratch: (Float) -> Unit = {}, onReorderTrack: (Float) -> Unit = {}
 ) {
+    val p = LocalStudioWavePalette.current
     val accent = Color(track.colorArgb.toInt())
+    val labelInk = if (accent.luminance() > 0.52f) Color(0xFF171717) else Color.White
     var resizeDelta by remember(track.id) { mutableFloatStateOf(0f) }
     var reorderDelta by remember(track.id) { mutableFloatStateOf(0f) }
     var scratchDelta by remember(track.id) { mutableFloatStateOf(0f) }
+
     Row(
-        Modifier.fillMaxWidth().offset(y = ((rowTopDp - scrollTracks) * verticalZoom).dp)
-            .height((rowHeightDp * verticalZoom).dp).padding(bottom = 2.dp)
-            .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Modifier.fillMaxWidth()
+            .offset(y = ((rowTopDp - scrollTracks) * verticalZoom).dp)
+            .height((rowHeightDp * verticalZoom).dp)
+            .padding(bottom = 1.dp)
+            .background(p.panel)
+            .border(1.dp, p.border.copy(alpha = 0.92f))
+            .padding(end = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
-        Column(Modifier.weight(1f).combinedClickable(onClick = onDoubleTap, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
-            Text(track.name, fontSize = 9.sp, color = LocalStudioWavePalette.current.text, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("M", fontSize = 8.sp, color = if (track.muted) Red else MutedText, modifier = Modifier.clickable { onMuteToggle() })
-                Text("S", fontSize = 8.sp, color = if (track.solo) Mint else MutedText, modifier = Modifier.clickable { onSoloToggle() })
+        // Compact Live-inspired track-color rail and name strip; no oversized rounded cards.
+        Box(
+            Modifier.fillMaxHeight().width(3.dp)
+                .background(accent)
+                .clickable(onClickLabel = "Change track color", onClick = onColorTap)
+        )
+        Column(
+            Modifier.weight(1f).fillMaxHeight()
+                .combinedClickable(
+                    onClick = onDoubleTap,
+                    onDoubleClick = onDoubleTap,
+                    onLongClick = onDoubleTap
+                )
+                .padding(vertical = 3.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(Modifier.fillMaxWidth().background(accent.copy(alpha = 0.96f)).padding(horizontal = 4.dp, vertical = 2.dp)) {
+                Text(track.name.uppercase(), fontSize = 8.sp, color = labelInk, fontWeight = FontWeight.Black, maxLines = 1)
+            }
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(track.kind.uppercase(), fontSize = 6.sp, color = p.muted, fontWeight = FontWeight.Bold, maxLines = 1)
                 if (track.kind == "audio") {
                     Box(
-                        Modifier.size(width = 24.dp, height = 19.dp)
-                            .background(LocalStudioWavePalette.current.accent.copy(alpha = 0.2f), RoundedCornerShape(5.dp))
+                        Modifier.size(width = 22.dp, height = 16.dp).background(p.control).border(1.dp, p.border)
                             .pointerInput(track.id) {
                                 detectHorizontalDragGestures(
                                     onDragStart = { scratchDelta = 0f },
@@ -2098,14 +2120,36 @@ private fun TrackHeader(
                                 )
                             },
                         contentAlignment = Alignment.Center
-                    ) { Text("DJ", color = LocalStudioWavePalette.current.accent, fontSize = 8.sp, fontWeight = FontWeight.Black) }
+                    ) { Text("SCR", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Black) }
+                }
+            }
+            Spacer(Modifier.height(2.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    color = if (track.muted) p.warning else p.control,
+                    shape = RoundedCornerShape(1.dp),
+                    border = BorderStroke(1.dp, if (track.muted) p.warning else p.border),
+                    modifier = Modifier.size(width = 18.dp, height = 15.dp).clickable(onClickLabel = "Mute track", onClick = onMuteToggle)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("M", color = if (track.muted) Color.Black else p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                    }
+                }
+                Surface(
+                    color = if (track.solo) p.accent else p.control,
+                    shape = RoundedCornerShape(1.dp),
+                    border = BorderStroke(1.dp, if (track.solo) p.accent else p.border),
+                    modifier = Modifier.size(width = 18.dp, height = 15.dp).clickable(onClickLabel = "Solo track", onClick = onSoloToggle)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text("S", color = if (track.solo) labelInk else p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                    }
                 }
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(
-                Modifier.size(width = 23.dp, height = 18.dp)
-                    .background(Color.White.copy(alpha = 0.10f), RoundedCornerShape(4.dp))
+                Modifier.size(width = 20.dp, height = 16.dp).background(p.control).border(1.dp, p.border)
                     .pointerInput(track.id, rowTopDp, rowHeightDp) {
                         detectDragGestures(
                             onDragStart = { reorderDelta = 0f },
@@ -2115,10 +2159,9 @@ private fun TrackHeader(
                         )
                     },
                 contentAlignment = Alignment.Center
-            ) { Text("⠿", color = LocalStudioWavePalette.current.text, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("⠿", color = p.text, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             Box(
-                Modifier.size(width = 23.dp, height = 18.dp)
-                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+                Modifier.size(width = 20.dp, height = 16.dp).background(p.control).border(1.dp, p.border)
                     .pointerInput(track.id, verticalZoom, rowHeightDp) {
                         detectDragGestures(
                             onDragStart = { resizeDelta = 0f },
@@ -2128,7 +2171,7 @@ private fun TrackHeader(
                         )
                     },
                 contentAlignment = Alignment.Center
-            ) { Text("↕", color = LocalStudioWavePalette.current.text, fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+            ) { Text("↕", color = p.muted, fontSize = 9.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }

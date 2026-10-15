@@ -76,3 +76,10 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - The latest UI card commit was pushed after that run was queued; its own workflow must be checked separately.
 - Design implementation is now more consistently graphite/orange but is not claimed pixel-identical to Ableton Live. The user-provided HTML remains a visual reference; no proprietary Ableton source/assets were copied.
 - Next: verify CI for the latest head; continue the same coherent pass across Arrangement/ruler/track headers and Piano Roll, preserving the shared musical viewport, clip data, hit-testing, and 1,800-bar cap. Then compare the running APK on a landscape Android device.
+
+
+## Ableton-inspired track header pass — 2026-10-16
+- Updated `TrackHeader` in `app/src/main/java/com/studiowave/app/MainActivity.kt` on branch `ui/ableton-batch-viewport`.
+- Track headers now use a narrow full-height track-color rail, a track-color name strip with contrast-aware text, compact square M/S states, a small audio scratch affordance, and square reorder/resize handles. This follows the uploaded HTML reference's dark industrial surfaces, thin borders, colored track headers and compact controls while retaining existing callback wiring and track model state.
+- Preserved track double-tap/long-press entry to Device View, mute/solo model updates, audio scratch gesture, track reorder and track-height resizing. No timeline tick/viewport math or clip storage was changed.
+- Validation required for this commit: Android CI debug build + unit tests, then visual and gesture checks on a landscape Android device. Do not claim pixel-identical Ableton parity or physical-device validation before those checks.
