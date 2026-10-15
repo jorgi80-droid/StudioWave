@@ -2886,44 +2886,24 @@ private fun PianoRollWorkspace(
     Column(Modifier.fillMaxSize().background(pianoPalette.room).padding(2.dp)) {
         // Clip identity and editing actions share one shallow strip so the note grid wins height.
         Row(
-            Modifier.fillMaxWidth().height(28.dp)
+            Modifier.fillMaxWidth().height(31.dp)
                 .background(pianoPalette.panel, RoundedCornerShape(4.dp))
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                .padding(horizontal = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("MIDI", color = pianoPalette.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            Text("CLIP", color = pianoPalette.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
-                modifier = Modifier.widthIn(max = 90.dp))
+                modifier = Modifier.widthIn(max = 100.dp))
             Spacer(Modifier.weight(1f))
-            SmallAction(if (keyboardVisible) "NOTES" else "VEL LANE") {
+            SmallAction(if (keyboardVisible) "NOTES" else "VEL") {
                 keyboardVisible = !keyboardVisible
                 velocityMode = !keyboardVisible
                 panMode = false
             }
-            SmallAction(if (virtualKeyboardVisible) "INPUT ON" else "INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
-            SmallAction("1/${snapDenominator}") {
+            SmallAction("SNAP 1/${snapDenominator}") {
                 snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
             }
-            TransportAction("−") {
-                val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
-                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
-                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
-                val anchor = pageStartStep + oldVisible / 2
-                zoomX = nextZoom
-                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
-            }
-            Text("BAR ${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            TransportAction("+") {
-                val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
-                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
-                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
-                val anchor = pageStartStep + oldVisible / 2
-                zoomX = nextZoom
-                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
-            }
-            TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
-            TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
             Box {
                 SmallAction("⋮") { noteContextMenuExpanded = true }
                 DropdownMenu(
@@ -2931,13 +2911,16 @@ private fun PianoRollWorkspace(
                     onDismissRequest = { noteContextMenuExpanded = false },
                     modifier = Modifier.background(pianoPalette.panel)
                 ) {
+                    DropdownMenuItem(text = { Text(if (virtualKeyboardVisible) "Hide input keys" else "Show input keys", color = pianoPalette.text) }, onClick = {
+                        virtualKeyboardVisible = !virtualKeyboardVisible; noteContextMenuExpanded = false
+                    })
                     DropdownMenuItem(text = { Text("Edit tools", color = pianoPalette.text) }, onClick = {
                         editToolsExpanded = !editToolsExpanded; noteContextMenuExpanded = false
                     })
                     DropdownMenuItem(text = { Text(if (selectionMode) "Exit selection" else "Select notes", color = pianoPalette.text) }, onClick = {
                         selectionMode = !selectionMode; noteContextMenuExpanded = false
                     })
-                    DropdownMenuItem(text = { Text(if (panMode) "Exit pan lane" else "Pan lane", color = pianoPalette.text) }, onClick = {
+                    DropdownMenuItem(text = { Text(if (panMode) "Hide pan lane" else "Pan lane", color = pianoPalette.text) }, onClick = {
                         panMode = !panMode; if (panMode) velocityMode = false; noteContextMenuExpanded = false
                     })
                     DropdownMenuItem(text = { Text("Octave down", color = pianoPalette.text) }, onClick = {
@@ -2967,10 +2950,8 @@ private fun PianoRollWorkspace(
                             val endTick = selectedNotes.maxOf { it.startTick + it.durationTicks }
                             val span = (endTick - anchorTick).coerceAtLeast(stepTicks)
                             val duplicates = if (endTick <= activeClip.lengthTicks - span) selectedNotes.map { it.copy(id = java.util.UUID.randomUUID().toString(), startTick = it.startTick + span) } else emptyList()
-                            if (duplicates.isNotEmpty()) {
-                                updateNotes(notes + duplicates); selectedNoteIds = duplicates.map { it.id }.toSet()
-                                selectedNoteId = duplicates.first().id; editMessage = "${duplicates.size} note(s) duplicated"
-                            } else editMessage = "Not enough clip space to duplicate selection"
+                            if (duplicates.isNotEmpty()) { updateNotes(notes + duplicates); selectedNoteIds = duplicates.map { it.id }.toSet(); selectedNoteId = duplicates.first().id }
+                            else editMessage = "Not enough clip space to duplicate selection"
                         }
                         noteContextMenuExpanded = false
                     })
@@ -2987,8 +2968,23 @@ private fun PianoRollWorkspace(
                     })
                 }
             }
-            SmallAction("BACK", onBack)
-
+            SmallAction("−") {
+                val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
+                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
+                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
+                val anchor = pageStartStep + oldVisible / 2
+                zoomX = nextZoom
+                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
+            }
+            Text("${(zoomX * 100).toInt()}%", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            SmallAction("+") {
+                val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
+                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
+                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
+                val anchor = pageStartStep + oldVisible / 2
+                zoomX = nextZoom
+                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
+            }
         }
         if (editToolsExpanded) {
             Row(
