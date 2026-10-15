@@ -408,10 +408,10 @@ private fun StudioWaveApp() {
     var themeName by remember {
         mutableStateOf(
             if (preferences.getBoolean("ui_theme_selected_manually", false)) {
-                preferences.getString("ui_theme", "Live Light") ?: "Live Light"
+                preferences.getString("ui_theme", "Live Dark") ?: "Live Dark"
             } else {
-                // Migrate sessions that previously saved the old default dark palette to the requested light workspace.
-                "Live Light"
+                // Use a neutral Live-inspired dark palette by default; other themes remain available in Settings.
+                "Live Dark"
             }
         )
     }
@@ -420,7 +420,6 @@ private fun StudioWaveApp() {
     var gridOpacity by remember { mutableFloatStateOf(preferences.getFloat("ui_grid_opacity", 0.72f)) }
     var uiScale by remember { mutableFloatStateOf(preferences.getFloat("ui_scale", 1f).coerceIn(0.6f, 1.2f)) }
     // Start with the device drawer collapsed so Arrangement gets the full vertical workspace.
-    var showDock by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
     var scrollTicks by remember { mutableDoubleStateOf(0.0) }
     val configuration = LocalConfiguration.current
@@ -849,12 +848,7 @@ private fun StudioWaveApp() {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     WorkspaceRail(
                         selected = selectedWorkspace,
-                        devicesOpen = showDock,
-                        onSelect = {
-                            selectedWorkspace = it
-                            showDock = false
-                        },
-                        onToggleDevices = { showDock = !showDock }
+                        onSelect = { selectedWorkspace = it }
                     )
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -887,7 +881,7 @@ private fun StudioWaveApp() {
                             selectedTrackId = editorTrackId,
                             onSelectTrack = { editorTrackId = it },
                             onProjectChange = { changeProject(it) },
-                            onToggle = { selectedWorkspace = "ARRANGEMENT"; showDock = false },
+                            onToggle = { selectedWorkspace = "ARRANGEMENT" },
                             fullScreen = true
                         )
                         "MIXER" -> MixerWorkspace(
@@ -898,11 +892,7 @@ private fun StudioWaveApp() {
                                 master = value.coerceIn(0f, 1f)
                                 arrangementPlayback.setMasterGain(master)
                             },
-                            onProjectChange = { changeProject(it) },
-                            onOpenDevices = { trackId ->
-                                editorTrackId = trackId
-                                selectedWorkspace = "DEVICE VIEW"
-                            }
+                            onProjectChange = { changeProject(it) }
                         )
                         "PIANO ROLL" -> PianoRollWorkspace(
                             project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "midi" }
@@ -939,13 +929,12 @@ private fun StudioWaveApp() {
                                 editorTrackId = trackId
                                 editorClipId = clipId
                                 selectedWorkspace = workspace
-                                showDock = false
                             },
                             onPlaybackRestart = { updatedProject ->
                                 if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
                             },
-                            showDevices = showDock,
-                            onToggleDevices = { showDock = !showDock },
+                            showDevices = false,
+                            onToggleDevices = {},
                             onRequestAudioAtTick = { trackId, tick ->
                                 pendingAudioTrackId = trackId
                                 pendingAudioStartTick = tick
@@ -958,19 +947,6 @@ private fun StudioWaveApp() {
                     }
                         }
                     }
-                }
-                AnimatedVisibility(
-                    visible = showDock && selectedWorkspace == "ARRANGEMENT",
-                    enter = fadeIn(tween(120)) + slideInVertically(tween(150), initialOffsetY = { it / 4 }),
-                    exit = fadeOut(tween(80)) + slideOutVertically(tween(100), targetOffsetY = { it / 4 })
-                ) {
-                    DeviceDock(
-                        project = project,
-                        selectedTrackId = editorTrackId,
-                        onSelectTrack = { editorTrackId = it },
-                        onProjectChange = { changeProject(it) },
-                        onToggle = { showDock = false }
-                    )
                 }
             }
             }
@@ -1063,9 +1039,7 @@ private fun TransportBar(
 @Composable
 private fun WorkspaceRail(
     selected: String,
-    devicesOpen: Boolean = false,
-    onSelect: (String) -> Unit,
-    onToggleDevices: () -> Unit = {}
+    onSelect: (String) -> Unit
 ) {
     val p = LocalStudioWavePalette.current
     Column(
@@ -1595,7 +1569,7 @@ private fun ArrangementWorkspace(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-                FloatingTimelineControl("FILES", "Open sample and project browser") {
+                FloatingTimelineControl("BROWSER", "Open sample and project browser") {
                     onOpenEditor("BROWSER", null, null)
                 }
                 FloatingTimelineControl("FIT", "Fit clips to view") {
@@ -2063,7 +2037,7 @@ private fun TrackHeader(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
-        Column(Modifier.weight(1f).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
+        Column(Modifier.weight(1f).combinedClickable(onClick = onDoubleTap, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
             Text(track.name, fontSize = 9.sp, color = LocalStudioWavePalette.current.text, fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -3380,7 +3354,7 @@ private fun PianoRollWorkspace(
                                     }
                                     // Prefer the note's trailing edge; use a generous but bounded touch zone
                                     // so resizing works on phone screens while ordinary note drags remain moves.
-                                    val resizeSlopPx = maxOf(with(pianoDensity) { 10.dp.toPx() }, (gestureColWidth * 0.22f).coerceAtMost(with(pianoDensity) { 24.dp.toPx() }))
+                                    val resizeSlopPx = maxOf(with(pianoDensity) { 12.dp.toPx() }, (gestureColWidth * 0.34f).coerceAtMost(with(pianoDensity) { 30.dp.toPx() }))
                                     val resizeNote = touchedNote != null && noteRightEdgePx != null &&
                                         noteRightEdgePx >= 0f &&
                                         down.position.x >= noteRightEdgePx - resizeSlopPx &&
@@ -3650,19 +3624,15 @@ private fun MixerWorkspace(
     master: Float,
     onMasterChange: (Float) -> Unit,
     onProjectChange: (StudioProject) -> Unit,
-    trackMeterReadings: Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot>,
-    onOpenDevices: (String) -> Unit = {}
+    trackMeterReadings: Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot>
 ) {
     val mixerPalette = LocalStudioWavePalette.current
     BoxWithConstraints(
         Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(7.dp)).padding(4.dp)
     ) {
         val trackCount = project.tracks.size.coerceAtLeast(1)
-        val availableWidth = (maxWidth - 100.dp).coerceAtLeast(1.dp)
-        val gapWidthDp = ((trackCount - 1).coerceAtLeast(0) * 5).toFloat()
-        val preferredChannelWidth = ((availableWidth - gapWidthDp.dp) / trackCount.toFloat())
-            .coerceIn(96.dp, 160.dp)
-        val channelWidth = preferredChannelWidth
+        // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
+        val channelWidth = 164.dp
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -3670,14 +3640,14 @@ private fun MixerWorkspace(
         project.tracks.forEach { track ->
             Column(
                 Modifier.width(channelWidth).fillMaxHeight()
-                    .background(mixerPalette.canvas, RoundedCornerShape(3.dp))
-                    .border(1.dp, mixerPalette.border.copy(alpha = 0.75f), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 5.dp, vertical = 4.dp),
+                    .background(mixerPalette.panel, RoundedCornerShape(4.dp))
+                    .border(1.dp, mixerPalette.border.copy(alpha = 0.78f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 7.dp, vertical = 5.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    Modifier.fillMaxWidth().height(23.dp)
-                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.82f), RoundedCornerShape(2.dp))
+                    Modifier.fillMaxWidth().height(26.dp)
+                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.92f), RoundedCornerShape(3.dp))
                         .padding(horizontal = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -3690,25 +3660,6 @@ private fun MixerWorkspace(
                         maxLines = 1)
                 }
                 Spacer(Modifier.height(4.dp))
-                Column(Modifier.fillMaxWidth().height(49.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    repeat(2) { slot ->
-                        Surface(
-                            color = mixerPalette.panel,
-                            shape = RoundedCornerShape(2.dp),
-                            border = BorderStroke(1.dp, mixerPalette.border.copy(alpha = 0.65f)),
-                            modifier = Modifier.fillMaxWidth().weight(1f).then(
-                                if (slot == 0) Modifier.clickable { onOpenDevices(track.id) } else Modifier
-                            )
-                        ) {
-                            Row(Modifier.padding(horizontal = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(5.dp).background(mixerPalette.muted.copy(alpha = 0.75f), RoundedCornerShape(50)))
-                                Spacer(Modifier.width(5.dp))
-                                Text(if (slot == 0) "OPEN DEVICE VIEW" else "NO EFFECTS INSERTED",
-                                    color = mixerPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                            }
-                        }
-                    }
-                }
                 val volumeDbLabel = if (track.volume <= 0.001f) "−∞ dB" else
                     String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(track.volume))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
@@ -3843,7 +3794,7 @@ private fun MixerWorkspace(
                             if (it.id == track.id) it.copy(pan = value) else it
                         }))
                     },
-                    modifier = Modifier.size(54.dp)
+                    modifier = Modifier.size(62.dp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -3855,8 +3806,9 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(90.dp).fillMaxHeight()
-                .background(mixerPalette.panel, RoundedCornerShape(5.dp)).padding(5.dp),
+            Modifier.width(112.dp).fillMaxHeight()
+                .background(mixerPalette.raised, RoundedCornerShape(5.dp))
+                .border(1.dp, mixerPalette.border, RoundedCornerShape(5.dp)).padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = mixerPalette.text)
@@ -4117,9 +4069,15 @@ private fun DeviceDock(
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICE VIEW", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
+            Text("DEVICES", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.width(8.dp))
-            Text(selectedTrack?.name ?: "NO TRACK", color = palette.text, fontSize = 9.sp, maxLines = 1)
+            Text(selectedTrack?.let {
+                when (it.kind) {
+                    "midi" -> "INSTRUMENTS & EFFECTS"
+                    "drum" -> "DRUM DEVICES"
+                    else -> "AUDIO EFFECTS"
+                }
+            } ?: "NO DEVICE CHAIN", color = palette.text, fontSize = 9.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
             SmallAction("×") { onToggle() }
@@ -4141,11 +4099,11 @@ private fun DeviceDock(
                         )
                         "drum" -> DeviceModuleCard(
                             title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = palette,
-                            body = "Open a drum clip to edit its steps. Only supported device controls are shown here."
+                            body = "No drum device is loaded. Step editing remains in the Drum Sequencer."
                         )
                         else -> DeviceModuleCard(
                             title = "AUDIO SOURCE", subtitle = "CLIP / SAMPLE", palette = palette,
-                            body = "Select an audio clip in Arrangement to inspect the source waveform and supported clip controls."
+                            body = "No audio effect is loaded. Source waveform and trim controls live in Audio Clip View."
                         )
                     }
                 }
@@ -4294,7 +4252,10 @@ private fun DirectWaveDevicePanel(
 
         if (showSamples) {
             Column(
-                Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(4.dp)).padding(5.dp),
+                Modifier.fillMaxWidth()
+                    .heightIn(max = if (fullHeight) 150.dp else 64.dp)
+                    .verticalScroll(rememberScrollState())
+                    .background(palette.panel, RoundedCornerShape(4.dp)).padding(5.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text("STUDIOWAVE SAMPLE LIBRARY", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
