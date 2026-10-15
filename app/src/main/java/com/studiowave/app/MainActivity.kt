@@ -897,7 +897,11 @@ private fun StudioWaveApp() {
                                 master = value.coerceIn(0f, 1f)
                                 arrangementPlayback.setMasterGain(master)
                             },
-                            onProjectChange = { changeProject(it) }
+                            onProjectChange = { changeProject(it) },
+                            onOpenDevices = { trackId ->
+                                editorTrackId = trackId
+                                selectedWorkspace = "DEVICE VIEW"
+                            }
                         )
                         "PIANO ROLL" -> PianoRollWorkspace(
                             project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "midi" }
@@ -3651,7 +3655,8 @@ private fun MixerWorkspace(
     master: Float,
     onMasterChange: (Float) -> Unit,
     onProjectChange: (StudioProject) -> Unit,
-    trackMeterReadings: Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot>
+    trackMeterReadings: Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot>,
+    onOpenDevices: (String) -> Unit = {}
 ) {
     val mixerPalette = LocalStudioWavePalette.current
     BoxWithConstraints(
@@ -3670,11 +3675,43 @@ private fun MixerWorkspace(
         project.tracks.forEach { track ->
             Column(
                 Modifier.width(channelWidth).fillMaxHeight()
-                    .background(mixerPalette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 6.dp),
+                    .background(mixerPalette.canvas, RoundedCornerShape(3.dp))
+                    .border(1.dp, mixerPalette.border.copy(alpha = 0.75f), RoundedCornerShape(3.dp))
+                    .padding(horizontal = 5.dp, vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1, color = mixerPalette.text)
-                Spacer(Modifier.height(3.dp))
+                Row(
+                    Modifier.fillMaxWidth().height(23.dp)
+                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.82f), RoundedCornerShape(2.dp))
+                        .padding(horizontal = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1,
+                        color = if (Color(track.colorArgb.toInt()).luminance() > 0.52f) Color(0xFF17191C) else Color.White,
+                        modifier = Modifier.weight(1f))
+                    Text(track.kind.uppercase(), fontSize = 6.sp, fontWeight = FontWeight.Bold,
+                        color = if (Color(track.colorArgb.toInt()).luminance() > 0.52f) Color(0xFF17191C).copy(alpha = 0.75f) else Color.White.copy(alpha = 0.8f),
+                        maxLines = 1)
+                }
+                Spacer(Modifier.height(4.dp))
+                Column(Modifier.fillMaxWidth().height(49.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    repeat(2) { slot ->
+                        Surface(
+                            color = mixerPalette.panel,
+                            shape = RoundedCornerShape(2.dp),
+                            border = BorderStroke(1.dp, mixerPalette.border.copy(alpha = 0.65f)),
+                            modifier = Modifier.fillMaxWidth().weight(1f).clickable { onOpenDevices(track.id) }
+                        ) {
+                            Row(Modifier.padding(horizontal = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.size(5.dp).background(mixerPalette.muted.copy(alpha = 0.75f), RoundedCornerShape(50)))
+                                Spacer(Modifier.width(5.dp))
+                                Text(if (slot == 0) "DEVICE CHAIN" else "OPEN DEVICE VIEW",
+                                    color = mixerPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
+                    }
+                }
                 val volumeDbLabel = if (track.volume <= 0.001f) "−∞ dB" else
                     String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(track.volume))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
