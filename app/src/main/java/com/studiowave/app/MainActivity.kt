@@ -4136,7 +4136,8 @@ private fun DeviceDock(
                     when (selectedTrack.kind) {
                         "midi" -> DirectWaveDevicePanel(
                             trackId = selectedTrack.id, trackName = selectedTrack.name,
-                            trackKind = selectedTrack.kind, palette = palette
+                            trackKind = selectedTrack.kind, palette = palette,
+                            fullHeight = fullScreen
                         )
                         "drum" -> DeviceModuleCard(
                             title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = palette,
@@ -4182,7 +4183,8 @@ private fun DirectWaveDevicePanel(
     trackId: String,
     trackName: String,
     trackKind: String,
-    palette: StudioWavePalette
+    palette: StudioWavePalette,
+    fullHeight: Boolean = false
 ) {
     val context = LocalContext.current
     val preferences = remember(context) {
@@ -4265,7 +4267,8 @@ private fun DirectWaveDevicePanel(
 
     val isBuiltIn = sampleUri?.startsWith("android.resource://${context.packageName}/") == true
     Column(
-        Modifier.width(430.dp).height(188.dp)
+        (if (fullHeight) Modifier.width(430.dp).fillMaxHeight()
+            else Modifier.width(430.dp).height(188.dp))
             .background(palette.room, RoundedCornerShape(4.dp))
             .border(1.dp, palette.border, RoundedCornerShape(4.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
