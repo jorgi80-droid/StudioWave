@@ -1835,6 +1835,8 @@ private fun PianoRollWorkspace(
     var verticalScroll by remember(clip?.id) { mutableIntStateOf(48) }
     var selectedNoteId by remember(clip?.id) { mutableStateOf<String?>(null) }
     var dragOrigin by remember { mutableStateOf<Triple<String, Long, Int>?>(null) }
+    var dragTotalX by remember { mutableFloatStateOf(0f) }
+    var dragTotalY by remember { mutableFloatStateOf(0f) }
     var snapTicks by remember { mutableLongStateOf((timebase.ticksPerBeat / 4L).coerceAtLeast(1L)) }
     val pianoWhite = Color(0xFFD8D9DB)
     val pianoBlack = Color(0xFF383A3F)
@@ -1959,13 +1961,17 @@ private fun PianoRollWorkspace(
                             selectedNoteId = notes.firstOrNull { it.pitch == pitch && tick >= it.startTick && tick <= it.startTick + it.durationTicks }?.id
                             val selected = notes.firstOrNull { it.id == selectedNoteId }
                             dragOrigin = selected?.let { Triple(it.id, it.startTick, it.pitch) }
+                            dragTotalX = 0f
+                            dragTotalY = 0f
                         },
                         onDrag = { change, drag ->
                             change.consume()
                             val origin = dragOrigin ?: return@detectDragGestures
                             val original = notes.firstOrNull { it.id == origin.first } ?: return@detectDragGestures
-                            val deltaTicks = (drag.x / size.width * viewTicks).toLong()
-                            val deltaPitch = (-drag.y / (size.height / 48f).coerceAtLeast(1f)).toInt()
+                            dragTotalX += drag.x
+                            dragTotalY += drag.y
+                            val deltaTicks = (dragTotalX / size.width * viewTicks).toLong()
+                            val deltaPitch = (-dragTotalY / (size.height / 48f).coerceAtLeast(1f)).toInt()
                             val step = snapTicks.coerceAtLeast(1L)
                             val moved = original.copy(
                                 startTick = (origin.second + deltaTicks).coerceAtLeast(0L) / step * step,
