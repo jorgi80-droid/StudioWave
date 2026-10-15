@@ -64,7 +64,11 @@ class ArrangementTimingTest {
     @Test fun absoluteSourceConversionsClampInvalidAndOverflowInputs() {
         assertEquals(0L, ArrangementTiming.microsToFrames(-1L, 44_100))
         assertEquals(0L, ArrangementTiming.ticksToMicros(-1L, 120, 960))
-        assertEquals(Long.MAX_VALUE, ArrangementTiming.microsToFrames(Long.MAX_VALUE, 192_000))
+        val maxMicros = Long.MAX_VALUE
+        val maxWholeSeconds = maxMicros / 1_000_000L
+        val maxRemainingMicros = maxMicros % 1_000_000L
+        val expectedFrames = maxWholeSeconds * 192_000L + maxRemainingMicros * 192_000L / 1_000_000L
+        assertEquals(expectedFrames, ArrangementTiming.microsToFrames(maxMicros, 192_000))
         assertEquals(Long.MAX_VALUE, ArrangementTiming.ticksToMicros(Long.MAX_VALUE, 40, 24))
     }
 
