@@ -1,6 +1,7 @@
 package com.studiowave.app
 
 import android.os.Bundle
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -2380,7 +2381,10 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
 }
 @Composable
 private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
+    val context = LocalContext.current
     var selectedSample by remember { mutableIntStateOf(0) }
+    var sourceWaveform by remember { mutableStateOf<List<Float>>(emptyList()) }
+    var waveformLoading by remember { mutableStateOf(false) }
     var cutoff by remember { mutableFloatStateOf(0.72f) }
     var resonance by remember { mutableFloatStateOf(0.22f) }
     var attack by remember { mutableFloatStateOf(0.05f) }
@@ -2396,6 +2400,14 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
         Triple("BOUNCE KICK 01", "bounce-kick-01.wav", "KICK / BOUNCE"),
         Triple("VINTAGE KICK 01", "vintage-kick-01.wav", "KICK / VINTAGE")
     )
+    LaunchedEffect(selectedSample) {
+        waveformLoading = true
+        sourceWaveform = withContext(Dispatchers.IO) {
+            runCatching { decodeAssetWaveformPeaks(context, samples[selectedSample].second, 172) }
+                .getOrDefault(emptyList())
+        }
+        waveformLoading = false
+    }
     Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF45494F), RoundedCornerShape(2.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2A2D31), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF44484E), RoundedCornerShape(2.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(8.dp).background(Color(0xFFFFA52E), RoundedCornerShape(50.dp)))
@@ -2437,19 +2449,25 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
                 }
                 Canvas(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF1B1D20), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF41464D), RoundedCornerShape(2.dp)).padding(8.dp)) {
                     val center = size.height / 2f
-                    val count = 172
-                    val profile = when (selectedSample) { 0 -> 0.96f; 1 -> 0.74f; 2 -> 0.32f; 3 -> 0.82f; 4 -> 0.54f; else -> 0.42f }
-                    for (i in 0 until count) {
-                        val t = i.toFloat() / count
-                        val releaseShape = if (selectedSample == 2) 0.28f + 0.72f * kotlin.math.abs(kotlin.math.sin((t * 82f).toDouble())).toFloat() else (1f - t).coerceAtLeast(0f)
-                        val pulse = kotlin.math.abs(kotlin.math.sin((t * (42f + selectedSample * 8f) * 3.14159f).toDouble())).toFloat()
-                        val amplitude = size.height * 0.43f * profile * releaseShape * pulse
-                        val x = (i + 0.5f) * size.width / count
-                        drawLine(if (selectedSample == 3) Color(0xFFFFB347) else Color(0xFF75DCCC), Offset(x, center - amplitude), Offset(x, center + amplitude), (size.width / count * 0.7f).coerceAtLeast(1f))
+                    val count = sourceWaveform.size
+                    if (count > 0) {
+                        val columnWidth = size.width / count
+                        sourceWaveform.forEachIndexed { index, peak ->
+                            val amplitude = size.height * 0.46f * peak.coerceIn(0f, 1f)
+                            val x = (index + 0.5f) * columnWidth
+                            drawLine(if (selectedSample == 3) LiveOrange else Color(0xFF75DCCC),
+                                Offset(x, center - amplitude), Offset(x, center + amplitude),
+                                (columnWidth * 0.72f).coerceAtLeast(1f))
+                        }
+                    } else {
+                        drawLine(Color(0xFF48505A), Offset(0f, center), Offset(size.width, center), 0.8f)
                     }
-                    drawLine(Color(0xFF48505A), Offset(0f, center), Offset(size.width, center), 0.6f)
                 }
-                Text(samples[selectedSample].second + "  •  WAVEFORM PREVIEW SHAPE", color = Color(0xFFB2B8C0), fontSize = 7.sp, maxLines = 1)
+                Text(samples[selectedSample].second + "  •  " + when {
+                    sourceWaveform.isNotEmpty() -> "SOURCE PCM WAVEFORM"
+                    waveformLoading -> "READING SOURCE WAV…"
+                    else -> "SOURCE WAVEFORM UNAVAILABLE"
+                }, color = Color(0xFFB2B8C0), fontSize = 7.sp, maxLines = 1)
                 Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("PCM DECODING / SAMPLE AUDITION NOT CONNECTED", color = Color(0xFF9299A3), fontSize = 6.sp)
                     Spacer(Modifier.weight(1f))
@@ -2652,6 +2670,61 @@ private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
  * Decode actual PCM samples for display. Extractor and decoder run on Dispatchers.IO,
  * output is reduced to a bounded peak array, and native resources are always released.
  */
+/** Real source waveform preview from a bundled 16-bit PCM WAV. This is not sampler playback. */
+private fun decodeAssetWaveformPeaks(context: Context, fileName: String, peakCount: Int): List<Float> {
+    val bytes = context.assets.open("samples/$fileName").use { it.readBytes() }
+    if (bytes.size < 44 || String(bytes, 0, 4, Charsets.US_ASCII) != "RIFF" ||
+        String(bytes, 8, 4, Charsets.US_ASCII) != "WAVE") return emptyList()
+    fun u16(offset: Int): Int =
+        (bytes[offset].toInt() and 0xFF) or ((bytes[offset + 1].toInt() and 0xFF) shl 8)
+    fun u32(offset: Int): Long =
+        (bytes[offset].toLong() and 0xFFL) or ((bytes[offset + 1].toLong() and 0xFFL) shl 8) or
+            ((bytes[offset + 2].toLong() and 0xFFL) shl 16) or ((bytes[offset + 3].toLong() and 0xFFL) shl 24)
+    var offset = 12
+    var formatCode = 0
+    var channels = 0
+    var bitsPerSample = 0
+    var dataOffset = -1
+    var dataLength = 0
+    while (offset + 8 <= bytes.size) {
+        val id = String(bytes, offset, 4, Charsets.US_ASCII)
+        val chunkData = offset + 8
+        val chunkSize = u32(offset + 4).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        if (chunkSize < 0 || chunkData > bytes.size) break
+        if (id == "fmt " && chunkSize >= 16 && chunkData + 16 <= bytes.size) {
+            formatCode = u16(chunkData)
+            channels = u16(chunkData + 2)
+            bitsPerSample = u16(chunkData + 14)
+        }
+        if (id == "data") {
+            dataOffset = chunkData
+            dataLength = chunkSize.coerceAtMost(bytes.size - chunkData)
+            break
+        }
+        val next = chunkData.toLong() + chunkSize.toLong() + (chunkSize and 1)
+        if (next > bytes.size.toLong() || next <= offset.toLong()) break
+        offset = next.toInt()
+    }
+    if (formatCode != 1 || channels !in 1..8 || bitsPerSample != 16 ||
+        dataOffset < 0 || dataLength < channels * 2) return emptyList()
+    val frameSize = channels * 2
+    val frames = dataLength / frameSize
+    if (frames <= 0) return emptyList()
+    val count = peakCount.coerceIn(16, 2048).coerceAtMost(frames)
+    return List(count) { bucket ->
+        val first = bucket * frames / count
+        val last = (((bucket + 1) * frames / count).coerceAtLeast(first + 1)).coerceAtMost(frames)
+        var peak = 0
+        for (frame in first until last) for (channel in 0 until channels) {
+            val pos = dataOffset + frame * frameSize + channel * 2
+            val raw = u16(pos)
+            val sample = if (raw >= 32768) raw - 65536 else raw
+            peak = maxOf(peak, kotlin.math.abs(sample))
+        }
+        (peak / 32768f).coerceIn(0f, 1f)
+    }
+}
+
 private fun decodeWaveformPeaks(
     context: android.content.Context,
     uri: Uri,
