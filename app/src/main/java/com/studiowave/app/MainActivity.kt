@@ -474,10 +474,17 @@ private fun StudioWaveApp() {
                     WorkspaceRail(selectedWorkspace) { selectedWorkspace = it }
                     Spacer(Modifier.width(4.dp))
                     when (selectedWorkspace) {
-                        "DEVICE" -> DirectWaveWorkspace(
-                            onOpenBrowser = { selectedWorkspace = "BROWSER" },
-                            onBack = { selectedWorkspace = "ARRANGEMENT" }
-                        )
+                        "DEVICE" -> {
+                            val selectedTrack = project.tracks.firstOrNull { it.id == editorTrackId } ?: project.tracks.firstOrNull()
+                            DeviceDock(
+                                project = project,
+                                selectedTrackId = selectedTrack?.id,
+                                onSelectTrack = { editorTrackId = it },
+                                onProjectChange = { changeProject(it) },
+                                onToggle = { selectedWorkspace = "ARRANGEMENT" },
+                                fullScreen = true
+                            )
+                        }
                         "MIXER" -> MixerWorkspace(
                             project,
                             master,
@@ -3103,3 +3110,131 @@ private fun DeviceCatalogRow(title: String, detail: String, palette: StudioWaveP
         }
     }
 }
+
+
+@Composable
+private fun DirectWaveKnob(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    valueLabel: String,
+    palette: StudioWavePalette,
+    modifier: Modifier = Modifier,
+    knobSize: androidx.compose.ui.unit.Dp = 56.dp,
+    onValueChange: (Float) -> Unit
+) {
+    val latestValue = rememberUpdatedState(value)
+    val latestOnChange = rememberUpdatedState(onValueChange)
+    val fraction = ((value - range.start) / (range.endInclusive - range.start).coerceAtLeast(0.0001f)).coerceIn(0f, 1f)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Canvas(
+            Modifier.size(knobSize)
+                .pointerInput(range.start, range.endInclusive) {
+                    var accumulated = 0f
+                    var startValue = latestValue.value
+                    detectDragGestures(
+                        onDragStart = { accumulated = 0f; startValue = latestValue.value },
+                        onDrag = { change, drag ->
+                            change.consume()
+                            accumulated += drag.y
+                            val span = range.endInclusive - range.start
+                            // A vertical drag is reliable on compact mobile device controls and keeps the knob touch-sized.
+                            val next = (startValue - accumulated / 105f * span).coerceIn(range.start, range.endInclusive)
+                            latestOnChange.value(next)
+                        }
+                    )
+                }
+        ) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = size.minDimension * 0.34f
+            val ringRadius = radius + size.minDimension * 0.105f
+            val rectTop = Offset(center.x - ringRadius, center.y - ringRadius)
+            val rectSize = Size(ringRadius * 2f, ringRadius * 2f)
+            drawCircle(palette.room.copy(alpha = 0.72f), radius * 1.15f, center)
+            drawCircle(palette.control, radius, center)
+            drawCircle(palette.border, radius, center, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            drawArc(
+                palette.border.copy(alpha = 0.92f), 135f, 270f, false, rectTop, rectSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+            drawArc(
+                palette.accent, 135f, 270f * fraction, false, rectTop, rectSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+            for (tick in 0..10) {
+                val angle = Math.toRadians((135.0 + tick / 10.0 * 270.0))
+                val inner = ringRadius + size.minDimension * 0.015f
+                val outer = inner + if (tick % 5 == 0) size.minDimension * 0.045f else size.minDimension * 0.025f
+                drawLine(
+                    palette.muted.copy(alpha = if (tick % 5 == 0) 0.85f else 0.48f),
+                    Offset(center.x + kotlin.math.cos(angle).toFloat() * inner, center.y + kotlin.math.sin(angle).toFloat() * inner),
+                    Offset(center.x + kotlin.math.cos(angle).toFloat() * outer, center.y + kotlin.math.sin(angle).toFloat() * outer),
+                    if (tick % 5 == 0) 1.dp.toPx() else 0.65.dp.toPx()
+                )
+            }
+            val angle = Math.toRadians((135.0 + fraction * 270.0))
+            drawLine(
+                palette.text, center,
+                Offset(center.x + kotlin.math.cos(angle).toFloat() * radius * 0.7f, center.y + kotlin.math.sin(angle).toFloat() * radius * 0.7f),
+                2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+            drawCircle(palette.muted.copy(alpha = 0.55f), radius * 0.09f, center)
+        }
+        Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(valueLabel, color = palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+
+
+@Composable
+private fun DirectWaveDeviceWaveform(
+    sampleUri: String?,
+    sampleReady: Boolean,
+    palette: StudioWavePalette,
+    compact: Boolean = false,
+    onImport: () -> Unit
+) {
+    val context = LocalContext.current
+    var peaks by remember(sampleUri) { mutableStateOf<List<Float>>(emptyList()) }
+    LaunchedEffect(sampleUri) {
+        peaks = emptyList()
+        if (sampleUri.isNullOrBlank()) return@LaunchedEffect
+        try {
+            peaks = withContext(Dispatchers.IO) {
+                decodeWaveformPeaks(context, Uri.parse(sampleUri), if (compact) 80 else 180)
+            }
+        } catch (_: Exception) { peaks = emptyList() }
+    }
+    Column(
+        Modifier.fillMaxWidth().height(if (compact) 26.dp else 55.dp)
+            .background(palette.canvas, RoundedCornerShape(2.dp)).padding(2.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("WAVEFORM", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.weight(1f))
+            Text(if (sampleReady) "PCM READY" else "LOADING", color = if (sampleReady) palette.accent else palette.muted, fontSize = 5.sp)
+            SmallAction("IMPORT") { onImport() }
+        }
+        Canvas(Modifier.fillMaxSize()) {
+            val mid = size.height / 2f
+            drawLine(palette.grid, Offset.Zero.copy(y = mid), Offset(size.width, mid), 0.7f)
+            if (peaks.isNotEmpty()) {
+                val dx = size.width / peaks.size
+                peaks.forEachIndexed { index, peak ->
+                    val amp = peak.coerceIn(0.015f, 1f) * size.height * 0.46f
+                    val x = (index + 0.5f) * dx
+                    drawLine(palette.accent, Offset(x, mid - amp), Offset(x, mid + amp), (dx * 0.7f).coerceAtLeast(0.7f))
+                }
+            } else {
+                for (index in 0 until 48) {
+                    val x = size.width * index / 48f
+                    val h = size.height * (0.07f + (index % 7) / 20f)
+                    drawLine(palette.grid, Offset(x, mid - h), Offset(x, mid + h), 1f)
+                }
+            }
+        }
+    }
+}
+
