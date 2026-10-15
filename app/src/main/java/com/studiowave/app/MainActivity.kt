@@ -522,6 +522,7 @@ private fun TransportBar(
     val livePanel = Color(0xFF303236)
     val buttonPanel = Color(0xFF414449)
     val textPrimary = Color(0xFFE6E7E8)
+    var showProjectMenu by remember { mutableStateOf(false) }
     Row(
         Modifier.fillMaxWidth().height(45.dp).background(Color(0xFF292B2F), RoundedCornerShape(2.dp))
             .padding(horizontal = 5.dp, vertical = 3.dp),
@@ -540,11 +541,37 @@ private fun TransportBar(
             Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) { Text(timeSignatureLabel, color = textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
         }
         Spacer(Modifier.width(5.dp))
-        Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(30.dp).clickable(onClick = onOpenProject)) {
-            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.FolderOpen, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
-        }
-        Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(30.dp).clickable(onClick = onSaveProject)) {
-            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Save, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
+        Box {
+            Surface(
+                color = buttonPanel,
+                shape = RoundedCornerShape(2.dp),
+                modifier = Modifier.height(30.dp).clickable { showProjectMenu = true }
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null, tint = textPrimary, modifier = Modifier.size(14.dp))
+                    Text("FILE ▾", color = textPrimary, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            DropdownMenu(
+                expanded = showProjectMenu,
+                onDismissRequest = { showProjectMenu = false },
+                modifier = Modifier.background(Color(0xFF303236))
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Open project", color = textPrimary, fontSize = 12.sp) },
+                    leadingIcon = { Icon(Icons.Default.FolderOpen, contentDescription = null, tint = textPrimary) },
+                    onClick = { showProjectMenu = false; onOpenProject() }
+                )
+                DropdownMenuItem(
+                    text = { Text("Save / export project", color = textPrimary, fontSize = 12.sp) },
+                    leadingIcon = { Icon(Icons.Default.Save, contentDescription = null, tint = textPrimary) },
+                    onClick = { showProjectMenu = false; onSaveProject() }
+                )
+            }
         }
         Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(30.dp).clickable(onClick = onUndo)) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Undo, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
