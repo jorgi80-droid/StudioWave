@@ -1119,7 +1119,7 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
 private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Unit) {
     val p = LocalStudioWavePalette.current
     Row(
-        Modifier.fillMaxWidth().height(29.dp).background(p.panel, RoundedCornerShape(5.dp))
+        Modifier.fillMaxWidth().height(29.dp).background(p.panel, RoundedCornerShape(2.dp))
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1127,7 +1127,7 @@ private fun WorkspaceTitleBar(title: String, subtitle: String, onBack: () -> Uni
         Spacer(Modifier.width(8.dp))
         Text(subtitle, fontSize = 8.sp, color = p.muted, maxLines = 1)
         Spacer(Modifier.weight(1f))
-        Surface(color = p.control, shape = RoundedCornerShape(5.dp),
+        Surface(color = p.control, shape = RoundedCornerShape(2.dp),
             modifier = Modifier.size(width = 38.dp, height = 23.dp)
                 .clickable(onClickLabel = "Return to Arrangement", onClick = onBack)) {
             Box(contentAlignment = Alignment.Center) { Text("BACK", fontSize = 7.sp, fontWeight = FontWeight.Bold) }
@@ -4284,14 +4284,14 @@ private fun DeviceDock(
     Column(
         (if (fullScreen) Modifier.fillMaxWidth().fillMaxHeight()
         else Modifier.fillMaxWidth().height(if (expanded) 328.dp else 42.dp))
-            .background(palette.room, RoundedCornerShape(3.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(3.dp))
+            .background(palette.room, RoundedCornerShape(2.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(2.dp))
             .padding(horizontal = 5.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
             Modifier.fillMaxWidth().height(30.dp)
-                .background(palette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 6.dp),
+                .background(palette.panel, RoundedCornerShape(1.dp)).padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
