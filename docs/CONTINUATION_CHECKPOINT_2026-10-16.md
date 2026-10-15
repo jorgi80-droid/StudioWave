@@ -135,3 +135,7 @@
 - These changes only harden Sample Editor range calculations and tests. No timeline viewport, arrangement cap, DSP, source URI, project schema, or device routing changes were intended.
 - Validation still required: Android CI debug build, unit tests and APK artifact upload for latest branch head; then physical-device save/reopen and playback tests. Do not claim runtime audio behavior passed based on pure helper tests alone.
 - Next feature work should wait until CI verifies this logic; then audit that playback plan consumes sourceOffsetTicks and lengthTicks consistently, especially after BPM changes and project reload.
+
+- Follow-up precision fix [5a7b9f9b](https://github.com/jorgi80-droid/StudioWave/commit/5a7b9f9ba2a5b6c388b24027f5a4207dc9d2822d) removes the old 0.99 start cap and instead bounds the start to one tick before source end, so a trim near 100% can round-trip without jumping to 99%.
+- Additional regression assertions [5bf0579c](https://github.com/jorgi80-droid/StudioWave/commit/5bf0579c686a744a14e5bea9dc003d8e273fc3e0) cover near-end trim restoration and exact final-tick behavior.
+- Workflow lookup for the latest implementation/test commits returned no associated PR-triggered runs; latest-head build/test/APK upload remain unverified.
