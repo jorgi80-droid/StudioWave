@@ -42,9 +42,9 @@ internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolea
             Color(0xFFC5C6C8), Color(0xFF202124), Color(0xFF55575A), Color(0xFF168F85), Color(0xFFB7654A),
             Color(0xFFB3B4B6), Color(0xFF8C8D90), Color(0xFF207C55), Color(0xFF8C6A27), Color(0xFFB11E37))
         "Live Mid" -> StudioWavePalette(
-            Color(0xFF37383A), Color(0xFF46474A), Color(0xFF525357), Color(0xFF5B5D61),
-            Color(0xFF3E4043), Color(0xFFF0F0F0), Color(0xFFB8BABD), Color(0xFF68D9D0),
-            Color(0xFFFF986F), Color(0xFF66686C), Color(0xFF77797D), Color(0xFF65D99B),
+            Color(0xFF343537), Color(0xFF28292B), Color(0xFF3B3C3F), Color(0xFF44464A),
+            Color(0xFF303235), Color(0xFFF0F0F0), Color(0xFFB8BABD), Color(0xFF6EDBD2),
+            Color(0xFFFF936F), Color(0xFF57595D), Color(0xFF65676B), Color(0xFF65D99B),
             Color(0xFFFFCA66), Color(0xFFFF5F75)
         )
         else -> StudioWavePalette(Color(0xFF202124), Color(0xFF2B2D30), Color(0xFF383A3D), Color(0xFF414347),
