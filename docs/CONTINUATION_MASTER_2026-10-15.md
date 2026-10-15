@@ -1,11 +1,11 @@
-# StudioWave Continuation Master — 2026-10-15
+# StudioWave Continuation Master — updated 2026-10-16
 
 ## Current working state
 - Repository: https://github.com/jorgi80-droid/StudioWave
 - Branch: `ui/ableton-batch-viewport`
 - Draft integration PR: https://github.com/jorgi80-droid/StudioWave/pull/15 — keep it draft until further functional/UI validation. Do not merge solely because CI is green.
-- Latest code commit with green CI: `8a2cf36ab8ca200e0fa209a72854845f04fae282`
-- Green CI run: https://github.com/jorgi80-droid/StudioWave/actions/runs/38748221560
+- Latest code baseline with verified green CI: `c61feedbaf83411a7afde5bdac362a5b2a104670` (documentation-only checkpoint commit; the prior implementation baseline `8a2cf36ab8ca200e0fa209a72854845f04fae282` also passed).
+- Latest verified green CI run before the HTML audit documentation commit: https://github.com/jorgi80-droid/StudioWave/actions/runs/38748749046 (commit `c61feedbaf83411a7afde5bdac362a5b2a104670`; Build debug APK, Run unit tests, Upload debug APK all passed). The new documentation commit still needs its own workflow result.
   - `Build debug APK`: passed
   - `Run unit tests`: passed
   - `Upload debug APK`: passed
@@ -20,7 +20,13 @@
   - `TimelineViewport.kt`: `339ecd9899d5e33341a4514e705c4e7da614d132`
   - `TimelineViewportTest.kt`: `3e1f284d9c0fedffcff7c62269b2b9a5dcce3b1e`
 
-## Root cause resolved in this turn
+## 2026-10-16 continuation update
+- Audited the five uploaded HTML references and committed `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` on this branch (commit `1d433eb1271e0f66999599669665f0ea0d01bb88`). It inventories external dependencies, UI elements, interactions, native Compose mapping, and limitations.
+- The latest verified code branch head before this documentation commit is `c61feedbaf83411a7afde5bdac362a5b2a104670`; PR #15 remains open/draft and targets `main`.
+- Re-inspection of the current `MainActivity.kt` confirms `DeviceDock`, `DirectWaveDevicePanel`, `BuiltInStudioSample`, and `TrackEffectDeviceCard` are separate declarations; the helper-inside-sample-list scope regression is not present in the current branch snapshot. The latest green CI validates compilation/tests for the prior head, not the newly added audit docs commit.
+- HTML-to-source finding: Parametric EQ Eight currently exposes eight frequency-labelled gain sliders, but not per-band frequency/Q/type. It must not be described as a full parametric eight-band EQ until model + DSP support those parameters. DirectWave parameters currently persist in SharedPreferences; project-level persistence and arrangement MIDI voice integration remain unverified/incomplete.
+
+## Root cause resolved in the earlier implementation
 - Earlier device panel commits inserted composables inside the DirectWave factory-sample loop. That moved declarations into a local scope, causing unresolved `TrackDevice`/device symbols and `private is not applicable to local function` compile errors.
 - Another commit accidentally reintroduced the broken `MainActivity.kt` because its Git tree was created from an older base tree. The branch was repaired by creating a new commit with the correct current HEAD parent/tree.
 - Latest commit is based on the known-green MainActivity baseline; new effects composables now sit after the full DirectWave sampler and the `BuiltInStudioSample` data class, before the next independent top-level DirectWave helper.
@@ -43,8 +49,8 @@
 - Current device view styling is a step toward the supplied Ableton reference; it is not pixel-identical or yet a complete Ableton Live Mobile-level UI.
 - On-device tests are still needed for: install/startup, landscape immersive mode, playback/audio output, audible FX parameter response, project save/reopen, and touch-target usability.
 
-## Next actions for the next chat
-1. Start from branch `ui/ableton-batch-viewport`, commit `8a2cf36ab8ca200e0fa209a72854845f04fae282`. Do not reset to main and do not start over.
+## Next actions
+1. Continue on `ui/ableton-batch-viewport` and PR #15. Current audit-document commit: `1d433eb1271e0f66999599669665f0ea0d01bb88`; do not reset to main or start over.
 2. Install/test the APK from green run `38748221560` on Android. Verify arrangement playback continues while editing and FX parameter changes audibly affect the chosen track.
 3. Add DSP-focused tests for EQ response, compressor gain reduction, limiter ceiling, FX order, no dry-signal double count, parameter persistence and render-path routing.
 4. Improve FX cards toward the screenshot: compact knobs, response curves for EQ, a visible level/gain-reduction meter where data exists, stronger Live-style panel hierarchy, narrow separators and keyboard/touch-friendly controls.
@@ -54,4 +60,4 @@
 8. After a stable next batch, update this file and PR #15 body with tested scope, commit SHA, CI run, and known limitations.
 
 ## Honest status
-Latest code/test commit `8a2cf36ab8ca200e0fa209a72854845f04fae282` builds and passes the repository unit tests in CI run `38748221560`. The DirectWave-scope regression was corrected and standalone FX insert controls were added. Full Analyzer, Multi FX, SuperSaw, MiniSynth, GMS, true DirectWave-to-MIDI render integration, visual parity and physical-device behavior are still incomplete.
+Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug build, unit tests and artifact upload in CI run `38748749046`. The HTML audit documentation commit `1d433eb1271e0f66999599669665f0ea0d01bb88` was created afterward; its CI status must be checked separately. The DirectWave-scope regression was corrected and standalone FX insert controls were added. Full Analyzer, Multi FX, SuperSaw, MiniSynth, GMS, true DirectWave-to-MIDI render integration, visual parity and physical-device behavior are still incomplete.
