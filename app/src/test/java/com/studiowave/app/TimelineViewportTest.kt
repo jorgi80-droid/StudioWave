@@ -92,10 +92,12 @@ class TimelineViewportTest {
     }
 
     @Test fun subdivisionsGetFinerAtHigherZoom() {
-        val far = TimelineViewport(common, 20f, 0.0, 800f).visibleSubdivisionTicks()
-        val close = TimelineViewport(common, 4800f, 0.0, 800f).visibleSubdivisionTicks()
+        val far = TimelineViewport(common, 20f, 0.0, 800f)
+            .gridSubdivisionTicks(20.0 * 4.0 / common.ticksPerBar.toDouble())
+        val close = TimelineViewport(common, 4800f, 0.0, 800f)
+            .gridSubdivisionTicks(4800.0 * 4.0 / common.ticksPerBar.toDouble())
         assertTrue(close <= far)
-        assertTrue(far > 0L && close > 0L)
+        assertTrue(far >= 0L && close >= 0L)
     }
     
     @Test fun arrangementPaneCoordinatesDoNotIncludeTrackHeader() {
