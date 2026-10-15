@@ -175,3 +175,11 @@
 - Follow-up [5195cc55](https://github.com/jorgi80-droid/StudioWave/commit/5195cc55de4d2b55852e88b9b72b490147bd77a6) preserves the exact absolute source offset during a right-edge resize instead of round-tripping it through ticks. This prevents small trim-position drift from repeated edits.
 
 - Follow-ups [4b3546d4](https://github.com/jorgi80-droid/StudioWave/commit/4b3546d4cdb42066aaaaeb6240416315ecaccdfa) and [0d699c87](https://github.com/jorgi80-droid/StudioWave/commit/0d699c87201c006a59962656ae40c209b9e922b6) calculate trim slider positions directly in source microseconds rather than quantizing the saved source range through musical ticks. A regression test covers exact fractional conversion and invalid slider values.
+
+
+## High-refresh UI animation pass — 2026-10-16
+- Source commit [23ed641a](https://github.com/jorgi80-droid/StudioWave/commit/23ed641a832f7ba24ad67d33bc164f94ace71579) adds a frame-synchronized entrance reveal for the decoded Sample Editor waveform and short eased transitions for the rendered Start/End trim handles.
+- Waveform bars still use decoded source peaks; the animation reveals those actual peaks and does not fabricate a moving audio signal or imply playback.
+- Existing Compose `withFrameNanos` playback-follow loop, Mixer peak/RMS smoothing, and the Activity's preferred 90–120 Hz display mode request are retained. Android's display/power/thermal policy remains authoritative; 60 Hz devices continue to run normally.
+- No musical tick mapping, source trim persistence, DSP routing, or audio engine logic was intentionally changed in this visual batch.
+- Validation gate: run Android CI for the latest branch head (debug APK build, unit tests, APK artifact upload) and test Sample Editor trim response, waveform reveal, Arrangement pinch/scroll/resize and Mixer meter responsiveness on a physical landscape Android device. PR #15 remains Draft until these checks pass.
