@@ -1,8 +1,13 @@
 name: Android CI
 
 on:
+  # Build every maintained development line so APKs cannot silently come from stale source.
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - 'fix/**'
+      - 'ui/**'
+      - 'perf/**'
   pull_request:
     branches: [ main ]
   workflow_dispatch:
