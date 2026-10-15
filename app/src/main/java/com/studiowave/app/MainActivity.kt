@@ -4451,6 +4451,7 @@ private fun DirectWaveDevicePanel(
     var sampleLabel by remember(trackId) { mutableStateOf("ONE SHOT.WAV") }
     var sampleUri by remember(trackId) { mutableStateOf<String?>(null) }
     var sampleReady by remember(trackId) { mutableStateOf(false) }
+    var isFactorySample by remember(trackId) { mutableStateOf(false) }
     var pitch by remember(trackId) { mutableFloatStateOf(0f) }
     var fineTune by remember(trackId) { mutableFloatStateOf(0f) }
     var attack by remember(trackId) { mutableFloatStateOf(5f) }
@@ -4492,8 +4493,10 @@ private fun DirectWaveDevicePanel(
         sampleUri = uri.toString()
         sampleLabel = "One Shoot.wav"
         sampleReady = false
+        isFactorySample = true
         preferences.edit().putString("sample.$trackId", uri.toString())
-            .putString("sampleName.$trackId", "One Shoot.wav").apply()
+            .putString("sampleName.$trackId", "One Shoot.wav")
+            .putBoolean("factory.$trackId", true).apply()
         sampler.load(uri) { ready -> sampleReady = ready }
     }
     fun loadFactoryPreset(sample: BuiltInStudioSample) {
@@ -4518,8 +4521,10 @@ private fun DirectWaveDevicePanel(
         sampleUri = uri.toString()
         sampleLabel = sample.title
         sampleReady = false
+        isFactorySample = true
         preferences.edit().putString("sample.$trackId", uri.toString())
-            .putString("sampleName.$trackId", sample.title).apply()
+            .putString("sampleName.$trackId", sample.title)
+            .putBoolean("factory.$trackId", true).apply()
         sampler.load(uri) { ready -> sampleReady = ready }
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -4532,8 +4537,10 @@ private fun DirectWaveDevicePanel(
             sampleUri = uri.toString()
             sampleLabel = uri.lastPathSegment?.substringAfterLast('/')?.takeLast(36) ?: "Imported sample"
             sampleReady = false
+            isFactorySample = false
             preferences.edit().putString("sample.$trackId", uri.toString())
-                .putString("sampleName.$trackId", sampleLabel).apply()
+                .putString("sampleName.$trackId", sampleLabel)
+                .putBoolean("factory.$trackId", false).apply()
             sampler.load(uri) { ready -> sampleReady = ready }
         }
     }
@@ -4558,6 +4565,7 @@ private fun DirectWaveDevicePanel(
         val saved = preferences.getString("sample.$trackId", null)
         if (!saved.isNullOrBlank()) {
             sampleUri = saved
+            isFactorySample = preferences.getBoolean("factory.$trackId", false)
             sampleLabel = preferences.getString("sampleName.$trackId", null)
                 ?: Uri.parse(saved).lastPathSegment?.substringAfterLast('/')?.takeLast(36)
                 ?: "Saved sample"
@@ -4571,9 +4579,8 @@ private fun DirectWaveDevicePanel(
     val knobSize = if (compact) 48.dp else 62.dp
     val waveformHeight = if (compact) 45.dp else 76.dp
     val panelHeight = if (compact) 287.dp else 410.dp
-    val isBuiltIn = sampleUri?.startsWith("android.resource://${context.packageName}/") == true
     val statusText = when {
-        sampleReady && isBuiltIn -> "FACTORY SAMPLE · READY"
+        sampleReady && isFactorySample -> "FACTORY SAMPLE · READY"
         sampleReady -> "USER SAMPLE · READY"
         sampleUri != null -> "LOADING SAMPLE"
         else -> "NO SAMPLE"
@@ -4582,15 +4589,15 @@ private fun DirectWaveDevicePanel(
     Column(
         Modifier.width(if (fullHeight) 860.dp else 610.dp)
             .height(if (fullHeight) panelHeight else 287.dp)
-            .background(palette.canvas, RoundedCornerShape(4.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(4.dp))
+            .background(palette.canvas, RoundedCornerShape(1.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         // Ableton-inspired device shell: narrow title strip, activated state, grouped macro controls.
         Row(
             Modifier.fillMaxWidth().height(30.dp)
-                .background(palette.panel, RoundedCornerShape(3.dp))
+                .background(palette.panel, RoundedCornerShape(1.dp))
                 .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -4795,19 +4802,54 @@ private fun TrackEffectDeviceCard(
                     }
                 }
             }
-            "PARAM_EQ_8" -> (1..8).forEach { band ->
-                val key = "band$band"
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(listOf("60", "120", "250", "500", "1k", "2k", "5k", "10k")[band - 1],
-                        color = palette.muted, fontSize = 6.sp, modifier = Modifier.width(22.dp))
-                    Slider(
-                        value = (p[key] ?: 0f).coerceIn(-18f, 18f),
-                        onValueChange = { next -> onUpdate(device.copy(parameters = p + (key to next))) },
-                        valueRange = -18f..18f,
-                        modifier = Modifier.weight(1f).height(21.dp),
-                        colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.orange,
-                            inactiveTrackColor = palette.control)
-                    )
+            "PARAM_EQ_8" -> {
+                val gains = (1..8).map { band -> (p["band$band"] ?: 0f).coerceIn(-18f, 18f) }
+                Canvas(
+                    Modifier.fillMaxWidth().height(58.dp)
+                        .background(palette.canvas, RoundedCornerShape(1.dp))
+                        .border(1.dp, palette.border, RoundedCornerShape(1.dp))
+                ) {
+                    val midY = size.height / 2f
+                    for (line in 0..4) {
+                        val y = size.height * line / 4f
+                        drawLine(
+                            palette.border.copy(alpha = if (line == 2) 0.95f else 0.48f),
+                            Offset(0f, y), Offset(size.width, y),
+                            if (line == 2) 1.dp.toPx() else 0.6.dp.toPx()
+                        )
+                    }
+                    for (band in 0..7) {
+                        val x = size.width * band / 7f
+                        drawLine(palette.border.copy(alpha = 0.42f), Offset(x, 0f), Offset(x, size.height), 0.6.dp.toPx())
+                    }
+                    val curve = androidx.compose.ui.graphics.Path()
+                    gains.forEachIndexed { index, gain ->
+                        val x = size.width * index / (gains.size - 1).toFloat()
+                        val y = midY - (gain / 18f) * (size.height * 0.44f)
+                        if (index == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
+                    }
+                    drawPath(curve, palette.orange, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+                    gains.forEachIndexed { index, gain ->
+                        val x = size.width * index / (gains.size - 1).toFloat()
+                        val y = midY - (gain / 18f) * (size.height * 0.44f)
+                        drawCircle(palette.text, radius = 2.dp.toPx(), center = Offset(x, y))
+                    }
+                }
+                Text("EQ RESPONSE · 8 BANDS", color = palette.orange, fontSize = 6.sp, fontWeight = FontWeight.Black)
+                (1..8).forEach { band ->
+                    val key = "band$band"
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(listOf("60", "120", "250", "500", "1k", "2k", "5k", "10k")[band - 1],
+                            color = palette.muted, fontSize = 6.sp, modifier = Modifier.width(22.dp))
+                        Slider(
+                            value = (p[key] ?: 0f).coerceIn(-18f, 18f),
+                            onValueChange = { next -> onUpdate(device.copy(parameters = p + (key to next))) },
+                            valueRange = -18f..18f,
+                            modifier = Modifier.weight(1f).height(21.dp),
+                            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.orange,
+                                inactiveTrackColor = palette.control)
+                        )
+                    }
                 }
             }
             "REVERB" -> {
