@@ -210,18 +210,24 @@ data class StudioProject(
                                     ))
                                 }
                             }
+                            val clipSourceUri = c.optString("sourceUri").takeUnless { it == "null" || it.isBlank() }
                             add(WaveClip(
                                 id = c.optString("id", UUID.randomUUID().toString()),
                                 name = c.optString("name", "Clip"),
                                 startTick = c.optLong("startTick", 0).coerceAtLeast(0),
                                 lengthTicks = c.optLong("lengthTicks", 3840).coerceAtLeast(1),
-                                sourceUri = c.optString("sourceUri").takeUnless { it == "null" || it.isBlank() },
+                                sourceUri = clipSourceUri,
                                 midiNotes = notes,
                                 drumSteps = drumSteps,
                                 colorArgb = if (c.has("colorArgb")) c.optLong("colorArgb") else null,
                                 sourceOffsetTicks = c.optLong("sourceOffsetTicks", 0L).coerceAtLeast(0L),
-                                sourceOffsetMicros = if (c.has("sourceOffsetMicros")) c.optLong("sourceOffsetMicros", 0L).coerceAtLeast(0L) else legacyTicksToMicros(c.optLong("sourceOffsetTicks", 0L)),
-                                sourceLengthMicros = if (c.has("sourceLengthMicros")) c.optLong("sourceLengthMicros", 1L).coerceAtLeast(1L) else legacyTicksToMicros(c.optLong("lengthTicks", 3840L).coerceAtLeast(1L)).coerceAtLeast(1L)
+                                // Only migrate legacy source-time values for actual source-linked audio.
+                                // Empty/default audio placeholders and MIDI/drum clips keep null metadata,
+                                // preserving data-class equality and stable save/reopen round trips.
+                                sourceOffsetMicros = if (c.has("sourceOffsetMicros")) c.optLong("sourceOffsetMicros", 0L).coerceAtLeast(0L)
+                                    else if (kind == "audio" && clipSourceUri != null) legacyTicksToMicros(c.optLong("sourceOffsetTicks", 0L)) else null,
+                                sourceLengthMicros = if (c.has("sourceLengthMicros")) c.optLong("sourceLengthMicros", 1L).coerceAtLeast(1L)
+                                    else if (kind == "audio" && clipSourceUri != null) legacyTicksToMicros(c.optLong("lengthTicks", 3840L).coerceAtLeast(1L)).coerceAtLeast(1L) else null
                             ))
                         }
                     }
