@@ -66,14 +66,6 @@ enum class SnapDivision(val label: String) {
 }
 
 /**
- * Horizontal mapping for the timeline viewport.
- *
- * screenX uses the arrangement's coordinate space, where track names occupy the
- * first [trackHeaderWidthPx] pixels. The timeline viewport width is separate and
- * must not include that header. When called from a Canvas inside the timeline pane,
- * subtract trackHeaderWidthPx to get its local x.
- */
-/**
  * Construct a viewport for the Arrangement pane itself.
  *
  * Track headers are rendered by a separate sibling column in ArrangementWorkspace,
@@ -94,6 +86,14 @@ fun arrangementPaneViewport(
     trackHeaderWidthPx = 0f
 )
 
+/**
+ * Horizontal mapping for the timeline viewport.
+ *
+ * screenX uses the arrangement's coordinate space, where track names occupy the
+ * first [trackHeaderWidthPx] pixels. The timeline viewport width is separate and
+ * must not include that header. When called from a Canvas inside the timeline pane,
+ * subtract trackHeaderWidthPx to get its local x.
+ */
 data class TimelineViewport(
     val timebase: TimelineTimebase,
     val pixelsPerBar: Float,

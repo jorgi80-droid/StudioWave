@@ -2180,6 +2180,7 @@ private fun TimelineGrid(
     // Compact Live-style Arrangement Overview above the beat ruler.
     val overviewHeightPx = with(density) { 18.dp.toPx() }
     val rulerHeightPx = with(density) { 18.dp.toPx() }
+    val timelineTopOffsetPx = overviewHeightPx + rulerHeightPx
     // Track headers live in a sibling column; all Arrangement coordinates below are pane-local.
     val timebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
         TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
@@ -2234,7 +2235,7 @@ private fun TimelineGrid(
                     // to viewport navigation. Empty arrangement space may still pan.
                     val startsOnClip = run {
                         val hitProject = latestProject
-                        val rowY = firstDown.position.y - rulerHeightPx
+                        val rowY = firstDown.position.y - timelineTopOffsetPx
                         val rowIndex = hitProject.tracks.indices.firstOrNull { index ->
                             val row = currentTrackRows.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
                             val topPx = (row.topDp - currentScrollTracks) * currentVerticalZoom * density.density
@@ -2291,7 +2292,7 @@ private fun TimelineGrid(
                                 val oldZoom = currentZoom.coerceIn(0.1f, 16f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
-                                val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
+                                val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - timelineTopOffsetPx) /
                                     (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
                                 if (kotlin.math.abs(newScroll - currentScroll) > 0.0005) currentOnScroll(newScroll)
@@ -2310,7 +2311,7 @@ private fun TimelineGrid(
                                 // Preserve a fractional tick anchor in the timeline's local coordinate space.
                                 gestureAnchorTick = baseViewport.scrollTimeTicks + centroid.x.toDouble() / baseViewport.pixelsPerTick
                                 gestureAnchorTrackDp = currentScrollTracks +
-                                    (centroid.y - rulerHeightPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
+                                    (centroid.y - timelineTopOffsetPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
                             }
                             previousCentroid = centroid
                             previousSpan = span
