@@ -960,68 +960,75 @@ private fun TransportBar(
 ) {
     val p = LocalStudioWavePalette.current
     Row(
-        Modifier.fillMaxWidth().height(34.dp)
-            .background(p.panel, RoundedCornerShape(5.dp))
+        Modifier.fillMaxWidth().height(36.dp)
+            .background(p.room, RoundedCornerShape(4.dp))
+            .border(1.dp, p.border.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-            Surface(
-                color = Color.Transparent, shape = RoundedCornerShape(4.dp),
-                modifier = Modifier.clickable(onClickLabel = "Open Settings", onClick = onSettings)
-            ) {
-                Text("StudioWave", fontSize = 13.sp, fontWeight = FontWeight.Black, color = p.orange,
-                    maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp, vertical = 3.dp))
-            }
-            if (!compact) Text("LIVE", color = p.muted.copy(alpha = 0.72f), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-            Text("BPM", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-            TransportAction("−") { onBpm(bpm - 1) }
-            Surface(color = p.room, shape = RoundedCornerShape(4.dp)) {
-                Text(bpm.toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = p.text,
-                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp))
-            }
-            TransportAction("+") { onBpm(bpm + 1) }
-            Surface(color = p.room, shape = RoundedCornerShape(4.dp)) {
-                Text(timeSignatureLabel, fontSize = 8.sp, color = p.muted,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
-            }
-            Spacer(Modifier.weight(1f))
-            SmallIconButton(Icons.Default.FolderOpen, p.muted, onOpenProject)
-            SmallIconButton(Icons.Default.Save, p.muted, onSaveProject)
-            SmallIconButton(Icons.Default.Undo, p.muted, onUndo)
-            SmallIconButton(Icons.Default.Redo, p.muted, onRedo)
-            SmallIconButton(Icons.Default.Stop, p.muted, onStop)
-            Surface(
-                color = if (playing) p.accent.copy(alpha = 0.24f) else p.raised,
-                shape = RoundedCornerShape(4.dp),
-                modifier = Modifier.size(width = 26.dp, height = 26.dp).clickable(onClick = onPlay)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playing) "Pause playback" else "Start playback",
-                        tint = if (playing) p.accent else p.orange, modifier = Modifier.size(16.dp))
-                }
-            }
-            Surface(color = p.room, shape = RoundedCornerShape(4.dp)) {
-                Text(positionLabel, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = p.text,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp), maxLines = 1)
-            }
-            Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-            Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(48.dp).height(24.dp),
-                valueRange = 0f..1f, colors = SliderDefaults.colors(thumbColor = p.text, activeTrackColor = p.accent, inactiveTrackColor = p.control))
-            Column(Modifier.width(64.dp), verticalArrangement = Arrangement.Center) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("P ${peakDbfs.toInt()}", color = p.text, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    Text("${momentaryLufs.toInt()} LUFS", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                }
-                Canvas(Modifier.fillMaxWidth().height(5.dp)) {
-                    drawRect(p.control, size = size)
-                    drawRect(p.accent, size = Size(size.width * (peakHistory.lastOrNull() ?: 0f).coerceIn(0f, 1f), size.height))
-                }
+        Surface(color = Color.Transparent,
+            modifier = Modifier.clickable(onClickLabel = "Open Settings", onClick = onSettings)) {
+            Text("StudioWave", fontSize = 12.sp, fontWeight = FontWeight.Black, color = p.orange,
+                maxLines = 1, modifier = Modifier.padding(horizontal = 3.dp, vertical = 3.dp))
+        }
+        if (!compact) Text("LIVE", color = p.muted.copy(alpha = 0.85f), fontSize = 7.sp,
+            fontWeight = FontWeight.Bold, maxLines = 1)
+        Text("TAP", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        TransportAction("−") { onBpm(bpm - 1) }
+        Surface(color = p.control, shape = RoundedCornerShape(3.dp), border = BorderStroke(1.dp, p.border)) {
+            Text("%d".format(bpm), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = p.text,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+        }
+        TransportAction("+") { onBpm(bpm + 1) }
+        Surface(color = p.control, shape = RoundedCornerShape(3.dp), border = BorderStroke(1.dp, p.border)) {
+            Text(timeSignatureLabel, fontSize = 8.sp, color = p.text,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp))
+        }
+        Spacer(Modifier.weight(1f))
+        SmallIconButton(Icons.Default.FolderOpen, p.muted, onOpenProject)
+        SmallIconButton(Icons.Default.Save, p.muted, onSaveProject)
+        SmallIconButton(Icons.Default.Undo, p.muted, onUndo)
+        SmallIconButton(Icons.Default.Redo, p.muted, onRedo)
+        Surface(color = if (!playing) p.control else p.danger.copy(alpha = 0.22f),
+            shape = RoundedCornerShape(3.dp), border = BorderStroke(1.dp, if (!playing) p.border else p.danger),
+            modifier = Modifier.size(width = 26.dp, height = 26.dp).clickable(onClick = onStop)) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.Stop, contentDescription = "Stop",
+                    tint = if (playing) p.danger else p.muted, modifier = Modifier.size(15.dp))
             }
         }
+        Surface(color = if (playing) p.accent.copy(alpha = 0.24f) else p.control,
+            shape = RoundedCornerShape(3.dp), border = BorderStroke(1.dp, if (playing) p.accent else p.border),
+            modifier = Modifier.size(width = 28.dp, height = 26.dp).clickable(onClick = onPlay)) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (playing) "Pause playback" else "Start playback",
+                    tint = if (playing) p.accent else p.text, modifier = Modifier.size(17.dp))
+            }
+        }
+        Surface(color = p.control, shape = RoundedCornerShape(3.dp), border = BorderStroke(1.dp, p.border)) {
+            Text(positionLabel, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = p.text,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 4.dp), maxLines = 1)
+        }
+        Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(54.dp).height(24.dp),
+            valueRange = 0f..1f, colors = SliderDefaults.colors(
+                thumbColor = p.text, activeTrackColor = p.accent,
+                inactiveTrackColor = p.control, activeTickColor = p.accent
+            ))
+        Column(Modifier.width(72.dp), verticalArrangement = Arrangement.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("P ${peakDbfs.toInt()}", color = p.text, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("${momentaryLufs.toInt()} LUFS", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            Canvas(Modifier.fillMaxWidth().height(5.dp)) {
+                drawRect(p.control, size = size)
+                drawRect(p.accent, size = Size(size.width * (peakHistory.lastOrNull() ?: 0f).coerceIn(0f, 1f), size.height))
+            }
+        }
+    }
 }
-
 @Composable
 private fun WorkspaceRail(
     selected: String,
