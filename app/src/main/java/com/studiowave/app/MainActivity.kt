@@ -312,6 +312,19 @@ internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Lo
     val rightLength = end - splitTick
     val sourceOffset = clip.sourceOffsetTicks.coerceAtLeast(0L)
     val rightSourceOffset = if (sourceOffset > Long.MAX_VALUE - leftLength) Long.MAX_VALUE else sourceOffset + leftLength
+    val sourceOffsetMicros = clip.sourceOffsetMicros?.coerceAtLeast(0L)
+    val sourceLengthMicros = clip.sourceLengthMicros?.coerceAtLeast(1L)
+    val leftSourceLengthMicros = sourceLengthMicros?.let { sourceLength ->
+        if (sourceLength < 2L) sourceLength else
+            (sourceLength.toDouble() * leftLength.toDouble() / length.toDouble()).toLong()
+                .coerceIn(1L, sourceLength - 1L)
+    }
+    val rightSourceOffsetMicros = if (sourceOffsetMicros != null && leftSourceLengthMicros != null) {
+        if (sourceOffsetMicros > Long.MAX_VALUE - leftSourceLengthMicros) Long.MAX_VALUE
+        else sourceOffsetMicros + leftSourceLengthMicros
+    } else null
+    val rightSourceLengthMicros = if (sourceLengthMicros != null && leftSourceLengthMicros != null)
+        (sourceLengthMicros - leftSourceLengthMicros).coerceAtLeast(1L) else null
     fun clippedNotes(offset: Long, windowLength: Long, newIds: Boolean) = clip.midiNotes.mapNotNull { note ->
         val noteStart = note.startTick.coerceAtLeast(0L)
         val noteEnd = if (noteStart > Long.MAX_VALUE - note.durationTicks.coerceAtLeast(1L)) Long.MAX_VALUE
@@ -329,10 +342,17 @@ internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Lo
     val splitIndex = if (clip.drumSteps.isEmpty()) 0 else
         kotlin.math.floor(clip.drumSteps.size.toDouble() * leftLength.toDouble() / length.toDouble())
             .toInt().coerceIn(0, clip.drumSteps.size)
-    val left = clip.copy(lengthTicks = leftLength, midiNotes = clippedNotes(0L, leftLength, false), drumSteps = clip.drumSteps.take(splitIndex))
+    val left = clip.copy(
+        lengthTicks = leftLength,
+        sourceLengthMicros = leftSourceLengthMicros,
+        midiNotes = clippedNotes(0L, leftLength, false),
+        drumSteps = clip.drumSteps.take(splitIndex)
+    )
     val right = clip.copy(
         id = java.util.UUID.randomUUID().toString(), name = clip.name + " (2)", startTick = splitTick,
         lengthTicks = rightLength, sourceOffsetTicks = rightSourceOffset,
+        sourceOffsetMicros = rightSourceOffsetMicros,
+        sourceLengthMicros = rightSourceLengthMicros,
         midiNotes = clippedNotes(leftLength, rightLength, true), drumSteps = clip.drumSteps.drop(splitIndex)
     )
     return left to right
