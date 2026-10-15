@@ -1380,11 +1380,12 @@ private fun TimelineGrid(
                                 val anchoredViewport = pinchViewport.zoomKeepingAnchor(
                                     newBarWidth, previousCentroid.x
                                 )
-                                val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x).toDouble()
-                                val newScroll = (anchoredViewport.scrollTimeTicks +
-                                    (previousCentroid.x - centroid.x).toDouble() *
-                                    timebase.ticksPerBar.toDouble() / newBarWidth.toDouble()
-                                ).coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
+                                // Continue the same gesture by panning the anchored
+                                // viewport; both zoom and pan now obey the 1800-bar bounds.
+                                val newScroll = anchoredViewport
+                                    .copy(viewportWidthPx = size.width.toFloat(), trackHeaderWidthPx = trackHeaderWidthPx)
+                                    .panByScreenPixels(centroid.x - previousCentroid.x)
+                                    .effectiveScrollTimeTicks.toFloat()
                                  val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                  val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
                                  val anchorTrackDp = currentScrollTracks + (previousCentroid.y - rulerHeightPx) / (density.density * oldVerticalZoom).coerceAtLeast(0.1f)
@@ -1439,9 +1440,9 @@ private fun TimelineGrid(
                     currentX > rightGuard -> rightGuard
                     else -> return@LaunchedEffect
                 }
-                val ticksPerPixel = timebase.ticksPerBar.toDouble() / barWidthPx
-                val nextScroll = (playheadTick.toDouble() - targetX.toDouble() * ticksPerPixel)
-                    .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
+                val nextScroll = currentViewport
+                    .placeTickAtViewportX(playheadTick, targetX)
+                    .effectiveScrollTimeTicks.toFloat()
                 if (kotlin.math.abs(nextScroll - scrollTicks) > 0.5f) currentOnScroll(nextScroll)
             }
         }
