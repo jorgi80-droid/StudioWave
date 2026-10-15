@@ -3760,8 +3760,9 @@ private fun PianoRollWorkspace(
                             // competing with note bodies or beat/subdivision lines.
                             for (barIndex in 0..(currentStepsOnScreen / stepsPerBar + 1)) {
                                 val barStartStep = barIndex * stepsPerBar
-                                if (barIndex % 2 == 1) {
-                                    val visibleStart = (barStartStep + (pageStartStep / stepsPerBar) * stepsPerBar - pageStartStep).toFloat() * localColWidth
+                                val absoluteBar = pageStartStep / stepsPerBar + barIndex
+                                if (absoluteBar % 2 == 1) {
+                                    val visibleStart = (barStartStep - (pageStartStep % stepsPerBar)).toFloat() * localColWidth
                                     val width = stepsPerBar * localColWidth
                                     if (visibleStart < size.width && visibleStart + width > 0f) {
                                         drawRect(
