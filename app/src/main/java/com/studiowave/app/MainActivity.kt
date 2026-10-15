@@ -3964,23 +3964,23 @@ private fun MixerWorkspace(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         repeat(2) { channel ->
+                            val meter = trackMeterReadings[track.id]
+                            val targetPeak = (if (channel == 0) meter?.peakLeft else meter?.peakRight)
+                                ?.coerceIn(0f, 1f) ?: 0f
+                            val targetRms = (if (channel == 0) meter?.rmsLeft else meter?.rmsRight)
+                                ?.coerceIn(0f, 1f) ?: 0f
+                            // Smooth the meter's visual response without touching the audio signal.
+                            val animatedPeak by animateFloatAsState(
+                                targetValue = targetPeak,
+                                animationSpec = tween(durationMillis = 85),
+                                label = "mixer_peak_${track.id}_$channel"
+                            )
+                            val animatedRms by animateFloatAsState(
+                                targetValue = targetRms,
+                                animationSpec = tween(durationMillis = 100),
+                                label = "mixer_rms_${track.id}_$channel"
+                            )
                             Canvas(Modifier.weight(1f).fillMaxHeight()) {
-                                val meter = trackMeterReadings[track.id]
-                                val targetPeak = (if (channel == 0) meter?.peakLeft else meter?.peakRight)
-                                    ?.coerceIn(0f, 1f) ?: 0f
-                                val targetRms = (if (channel == 0) meter?.rmsLeft else meter?.rmsRight)
-                                    ?.coerceIn(0f, 1f) ?: 0f
-                                // Smooth the meter's visual response without touching the audio signal.
-                                val animatedPeak by animateFloatAsState(
-                                    targetValue = targetPeak,
-                                    animationSpec = tween(durationMillis = 85),
-                                    label = "mixer_peak_${track.id}_$channel"
-                                )
-                                val animatedRms by animateFloatAsState(
-                                    targetValue = targetRms,
-                                    animationSpec = tween(durationMillis = 100),
-                                    label = "mixer_rms_${track.id}_$channel"
-                                )
                                 val lane = (size.width * 0.76f).coerceAtLeast(2f)
                                 for (segment in 0 until 24) {
                                     val segmentHeight = size.height / 24f
