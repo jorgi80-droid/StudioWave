@@ -3479,6 +3479,7 @@ private fun PianoRollWorkspace(
             Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = pianoPalette.accent, fontSize = 7.sp)
         }
     }
+    }
 }
 
 @Composable
