@@ -2,6 +2,7 @@ package com.studiowave.app
 
 import com.studiowave.app.data.MidiNote
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MidiNoteGestureTest {
