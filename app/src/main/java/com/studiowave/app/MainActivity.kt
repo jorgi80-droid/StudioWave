@@ -483,6 +483,7 @@ private fun StudioWaveApp() {
     var editorClipId by remember { mutableStateOf<String?>(null) }
     var pendingAudioTrackId by remember { mutableStateOf<String?>(null) }
     var pendingAudioStartTick by remember { mutableStateOf<Long?>(null) }
+    var returnToAudioEditorAfterImport by remember { mutableStateOf(false) }
     var scratchOffset by remember { mutableFloatStateOf(0f) }
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
@@ -609,6 +610,7 @@ private fun StudioWaveApp() {
         if (uri == null) {
             pendingAudioTrackId = null
             pendingAudioStartTick = null
+            returnToAudioEditorAfterImport = false
         }
         if (uri != null) {
             runCatching {
@@ -679,7 +681,8 @@ private fun StudioWaveApp() {
                             editorClipId = clip.id
                             pendingAudioTrackId = null
                             pendingAudioStartTick = null
-                            selectedWorkspace = "ARRANGEMENT"
+                            selectedWorkspace = if (returnToAudioEditorAfterImport) "AUDIO EDITOR" else "ARRANGEMENT"
+                            returnToAudioEditorAfterImport = false
                             audioError = null
                         }
                     }
@@ -970,7 +973,13 @@ private fun StudioWaveApp() {
                             project = project,
                             onProjectChange = { changeProject(it) },
                             onBack = { selectedWorkspace = "ARRANGEMENT" },
-                            selectedClipId = editorClipId
+                            selectedClipId = editorClipId,
+                            onImportAudio = {
+                                pendingAudioTrackId = editorTrackId
+                                pendingAudioStartTick = playheadTick
+                                returnToAudioEditorAfterImport = true
+                                audioPicker.launch(arrayOf("audio/*"))
+                            }
                         )
                         else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId, clipId ->
                                 editorTrackId = trackId
@@ -2030,7 +2039,8 @@ private fun AudioEditorWorkspace(
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
     onBack: () -> Unit,
-    selectedClipId: String? = null
+    selectedClipId: String? = null,
+    onImportAudio: () -> Unit
 ) {
     val audioPalette = LocalStudioWavePalette.current
     val context = LocalContext.current
@@ -2096,6 +2106,7 @@ private fun AudioEditorWorkspace(
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(if (clip?.sourceUri != null) "AUDIO SOURCE" else "NO AUDIO CLIP", color = LocalStudioWavePalette.current.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.weight(1f))
+            SmallAction("IMPORT AUDIO") { onImportAudio() }
             SmallAction("RESET RANGE") {
                 startFraction = 0f
                 endFraction = 1f
@@ -2104,12 +2115,12 @@ private fun AudioEditorWorkspace(
         }
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("START", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp)
-            Slider(value = startFraction, onValueChange = { value ->
+            Slider(value = startFraction, enabled = clip?.sourceUri != null, onValueChange = { value ->
                 startFraction = value.coerceIn(0f, (endFraction - 0.01f).coerceAtLeast(0f))
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
             Text("END", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp)
-            Slider(value = endFraction, onValueChange = { value ->
+            Slider(value = endFraction, enabled = clip?.sourceUri != null, onValueChange = { value ->
                 endFraction = value.coerceIn((startFraction + 0.01f).coerceAtMost(1f), 1f)
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
