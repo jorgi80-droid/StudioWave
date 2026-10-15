@@ -3724,7 +3724,7 @@ private fun PianoRollWorkspace(
                             for (row in 0..rowsVisible) {
                                 val pitch = currentTopPitch - row
                                 val pitchClass = Math.floorMod(pitch, 12)
-                                val isBlackKey = pitchClass in setOf(1, 3, 6, 8, 10)
+                                val isBlackKey = pitchClass == 1 || pitchClass == 3 || pitchClass == 6 || pitchClass == 8 || pitchClass == 10
                                 val isC = pitch >= 0 && pitchClass == 0
                                 val top = row * localRowHeight
                                 if (row < rowsVisible) {
