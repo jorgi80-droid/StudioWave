@@ -134,7 +134,8 @@ internal fun choosePreferredRefreshRate(supportedRates: Iterable<Float>): Float?
  * control's supported maximum. The dB domain below the maximum is -60 dB.
  */
 internal fun mixerFaderGainAtFraction(fraction: Float, maximumGain: Float): Float {
-    val maxGain = maximumGain.takeIf { it.isFinite() && it > 0f } ?: 1f
+    if (!maximumGain.isFinite() || maximumGain <= 0f) return 0f
+    val maxGain = maximumGain
     val normalized = fraction.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
     if (normalized <= 0f) return 0f
     val maxDb = 20.0 * kotlin.math.log10(maxGain.toDouble())
@@ -145,7 +146,8 @@ internal fun mixerFaderGainAtFraction(fraction: Float, maximumGain: Float): Floa
 
 /** Inverse of [mixerFaderGainAtFraction], used to render the fader cap at its real gain. */
 internal fun mixerFaderFractionForGain(gain: Float, maximumGain: Float): Float {
-    val maxGain = maximumGain.takeIf { it.isFinite() && it > 0f } ?: 1f
+    if (!maximumGain.isFinite() || maximumGain <= 0f) return 0f
+    val maxGain = maximumGain
     val value = gain.takeIf { it.isFinite() }?.coerceIn(0f, maxGain) ?: 0f
     if (value <= 0f) return 0f
     val maxDb = 20.0 * kotlin.math.log10(maxGain.toDouble())
