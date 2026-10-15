@@ -2180,15 +2180,15 @@ private fun TimelineGrid(
     // Compact Live-style Arrangement Overview above the beat ruler.
     val overviewHeightPx = with(density) { 18.dp.toPx() }
     val rulerHeightPx = with(density) { 18.dp.toPx() }
-    val trackHeaderWidthPx = with(density) { 94.dp.toPx() }
+    // Track headers live in a sibling column; all Arrangement coordinates below are pane-local.
     val timebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
         TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
     }
     val requestedPixelsPerBar = baseBarWidthPx * zoom
     val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks, 0f)
         .effectivePixelsPerBar
-    val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
-        TimelineViewport(timebase, pixelsPerBar, scrollTicks, 0f, trackHeaderWidthPx)
+    val viewport = remember(timebase, pixelsPerBar, scrollTicks) {
+        arrangementPaneViewport(timebase, pixelsPerBar, scrollTicks, 0f)
     }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
@@ -2219,6 +2219,7 @@ private fun TimelineGrid(
     var liveResizeLength by remember { mutableLongStateOf(1L) }
     var dragFromTrack by remember { mutableIntStateOf(-1) }
     var dragOriginalTick by remember { mutableLongStateOf(0L) }
+    var dragStartLeftPx by remember { mutableFloatStateOf(0f) }
     var dragDx by remember { mutableFloatStateOf(0f) }
     var dragDy by remember { mutableFloatStateOf(0f) }
 
@@ -2246,7 +2247,7 @@ private fun TimelineGrid(
                         } else {
                             val hitViewport = TimelineViewport(
                                 timebase, baseBarWidthPx * currentZoom,
-                                currentScroll, size.width.toFloat(), trackHeaderWidthPx
+                                currentScroll, size.width.toFloat()
                             )
                             val pointerX = firstDown.position.x
                             hitTrack.clips.any { clip ->
@@ -2326,7 +2327,7 @@ private fun TimelineGrid(
                                     (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
                                        val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
-                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks
+                                    val newScroll = arrangementPaneViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat()).panByScreenPixels(delta.x).scrollTimeTicks
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
@@ -2351,7 +2352,7 @@ private fun TimelineGrid(
                     previousFrameNanos = frameNanos
                     val currentViewport = TimelineViewport(
                         timebase, baseBarWidthPx * currentZoom, currentScroll,
-                        timelineWidthPx, trackHeaderWidthPx
+                        timelineWidthPx
                     )
                     val currentX = currentViewport.timeToViewportX(currentPlayhead)
                     val leftGuard = timelineWidthPx * 0.08f
@@ -2443,8 +2444,8 @@ private fun TimelineGrid(
                         val maxTick = maxArrangementTick(timebase).coerceAtLeast(1L)
                         val targetTick = (point.x / size.width.coerceAtLeast(1).toDouble() *
                             maxTick.toDouble()).toLong().coerceIn(0L, maxTick)
-                        val visible = TimelineViewport(timebase, viewport.effectivePixelsPerBar,
-                            scrollTicks, size.width.toFloat(), trackHeaderWidthPx)
+                        val visible = arrangementPaneViewport(timebase, viewport.effectivePixelsPerBar,
+                            scrollTicks, size.width.toFloat())
                         currentOnScroll(visible.placeTickAtViewportX(targetTick, size.width * 0.5f).scrollTimeTicks)
                     })
                 }
@@ -2559,7 +2560,10 @@ private fun TimelineGrid(
                             Modifier
                                 .offset(x = with(density) { displayLeftPx.toDp() }, y = 0.dp)
                                 .graphicsLayer {
-                                    translationX = if (draggingClip == clip.id) dragDx else 0f
+                                    // Keep the clip's grabbed position under the finger if zoom/scroll changes.
+                                    translationX = if (draggingClip == clip.id) {
+                                        dragStartLeftPx + dragDx - currentViewport.timeToViewportX(dragOriginalTick)
+                                    } else 0f
                                     translationY = if (draggingClip == clip.id) dragDy else 0f
                                 }
                                 .padding(top = 7.dp, bottom = 7.dp)
@@ -2582,6 +2586,7 @@ private fun TimelineGrid(
                                                 draggingClip = clip.id
                                                 dragFromTrack = trackIndex
                                                 dragOriginalTick = clip.startTick
+                                                dragStartLeftPx = displayLeftPx
                                                 dragDx = 0f
                                                 dragDy = 0f
                                                 onSelectClip(clip.id)
@@ -2616,17 +2621,10 @@ private fun TimelineGrid(
                                                 } ?: startIndex
                                             }
                                             val target = currentTracks.getOrNull(targetIndex)
-                                            val barWidthPx = currentViewport.effectivePixelsPerBar
-                                            val dragViewport = TimelineViewport(
-                                                timebase, barWidthPx, currentScroll,
-                                                timelineWidthPx, trackHeaderWidthPx
-                                            )
-                                            // Convert the total gesture delta to ticks from its original anchor.
-                                            // This avoids drift if playback autoscroll changes the viewport mid-drag.
-                                            val deltaTicks = dragViewport.pixelsToTickDelta(dragDx)
-                                            val rawStartTick = (dragOriginalTick.toDouble() + deltaTicks.toDouble())
-                                                .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong()
-                                            val newTick = dragViewport.snapTick(rawStartTick, snapDivision, snapToGrid)
+                                            // Convert the physical drop position through the current viewport.
+                                            // This accounts for scroll/zoom changes that happened while dragging.
+                                            val rawStartTick = currentViewport.viewportXToTime(dragStartLeftPx + dragDx)
+                                            val newTick = currentViewport.snapTick(rawStartTick, currentSnapDivision, currentSnapEnabled)
                                             if (startIndex >= 0 && source != null && target != null && source.kind == target.kind) {
                                                 moveCommit(clip.id, target.id, newTick)
                                             }
@@ -2888,8 +2886,8 @@ private fun TimelineGrid(
         // Overlay the cursor after clips so it stays visible over audio, MIDI and drum patterns.
         val playheadPalette = timelinePalette
         Canvas(Modifier.fillMaxSize().padding(top = 36.dp).clipToBounds()) {
-            val playheadViewport = TimelineViewport(
-                timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
+            val playheadViewport = arrangementPaneViewport(
+                timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width
             )
             val x = playheadViewport.timeToViewportX(playheadTick)
             if (x >= 0f && x <= size.width) {
@@ -2901,9 +2899,8 @@ private fun TimelineGrid(
         if (menuTrack != null && menuClip != null && clipMenuClipId != null) {
             val trackIndex = project.tracks.indexOfFirst { it.id == menuTrack.id }
             val barWidth = viewport.effectivePixelsPerBar
-            val menuViewport = TimelineViewport(
-                timebase, barWidth, scrollTicks.toDouble(), with(density) { maxWidth.toPx() },
-                with(density) { 104.dp.toPx() }
+            val menuViewport = arrangementPaneViewport(
+                timebase, barWidth, scrollTicks.toDouble(), with(density) { maxWidth.toPx() }
             )
             val clipLeft = with(density) { menuViewport.timeToViewportX(menuClip.startTick).toDp() }
             val menuWidth = 258.dp

@@ -73,6 +73,27 @@ enum class SnapDivision(val label: String) {
  * must not include that header. When called from a Canvas inside the timeline pane,
  * subtract trackHeaderWidthPx to get its local x.
  */
+/**
+ * Construct a viewport for the Arrangement pane itself.
+ *
+ * Track headers are rendered by a separate sibling column in ArrangementWorkspace,
+ * so their width must never be subtracted from local canvas coordinates. Mixing a
+ * header-inclusive viewport with a pane-local pinch centroid moves clips/ruler when
+ * zoom changes, even though each individual renderer appears internally consistent.
+ */
+fun arrangementPaneViewport(
+    timebase: TimelineTimebase,
+    pixelsPerBar: Float,
+    scrollTimeTicks: Double,
+    viewportWidthPx: Float
+): TimelineViewport = TimelineViewport(
+    timebase = timebase,
+    pixelsPerBar = pixelsPerBar,
+    scrollTimeTicks = scrollTimeTicks,
+    viewportWidthPx = viewportWidthPx,
+    trackHeaderWidthPx = 0f
+)
+
 data class TimelineViewport(
     val timebase: TimelineTimebase,
     val pixelsPerBar: Float,
