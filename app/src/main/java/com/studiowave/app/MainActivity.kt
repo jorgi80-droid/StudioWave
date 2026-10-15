@@ -443,6 +443,8 @@ private fun StudioWaveApp() {
     val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
     var editorTrackId by remember { mutableStateOf<String?>(null) }
     var editorClipId by remember { mutableStateOf<String?>(null) }
+    var pendingAudioTrackId by remember { mutableStateOf<String?>(null) }
+    var pendingAudioStartTick by remember { mutableStateOf<Long?>(null) }
     var scratchOffset by remember { mutableFloatStateOf(0f) }
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
@@ -566,6 +568,10 @@ private fun StudioWaveApp() {
     }
     val latestProject by rememberUpdatedState(project)
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) {
+            pendingAudioTrackId = null
+            pendingAudioStartTick = null
+        }
         if (uri != null) {
             runCatching {
                 context.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -583,7 +589,9 @@ private fun StudioWaveApp() {
                         }
                     }
                     val currentProject = latestProject
-                    val audioTrack = currentProject.tracks.firstOrNull { it.kind == "audio" }
+                    val requestedTrackId = pendingAudioTrackId ?: editorTrackId
+                    val audioTrack = currentProject.tracks.firstOrNull { it.id == requestedTrackId && it.kind == "audio" }
+                        ?: currentProject.tracks.firstOrNull { it.kind == "audio" }
                     val target = audioTrack ?: StudioTrack(name = "AUDIO 1", colorArgb = 0xFF3B82F6L, kind = "audio")
                     when {
                         audioTrack == null && currentProject.tracks.size >= StudioProject.MAX_TRACKS -> {
@@ -609,11 +617,14 @@ private fun StudioWaveApp() {
                                 (((exactTicks + snapStep - 1L) / snapStep) * snapStep).coerceAtLeast(snapStep)
                             } else 15360L
                             val arrangementEndTick = maxArrangementTick(timebase)
-                            val requestedStart = target.clips.maxOfOrNull { clip ->
+                            val appendStart = target.clips.maxOfOrNull { clip ->
                                 val end = clip.startTick.coerceAtLeast(0L)
                                 val length = clip.lengthTicks.coerceAtLeast(0L)
                                 if (end > Long.MAX_VALUE - length) Long.MAX_VALUE else end + length
                             } ?: 0L
+                            val requestedStart = if (pendingAudioTrackId == target.id) {
+                                pendingAudioStartTick ?: appendStart
+                            } else appendStart
                             val clipStart = requestedStart.coerceIn(0L, arrangementEndTick - 1L)
                             val lengthTicks = requestedLengthTicks.coerceIn(1L, arrangementEndTick - clipStart)
                             val clip = com.studiowave.app.data.WaveClip(
@@ -626,6 +637,10 @@ private fun StudioWaveApp() {
                             changeProject(currentProject.copy(tracks = if (audioTrack == null) {
                                 currentProject.tracks + updatedTrack
                             } else currentProject.tracks.map { if (it.id == target.id) updatedTrack else it }))
+                            editorTrackId = target.id
+                            editorClipId = clip.id
+                            pendingAudioTrackId = null
+                            pendingAudioStartTick = null
                             selectedWorkspace = "ARRANGEMENT"
                             audioError = null
                         }
