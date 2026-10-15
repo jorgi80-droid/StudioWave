@@ -37,3 +37,13 @@
 - Ableton Live is the visual reference; FL Studio Mobile informs touch workflow.
 - Reimplement using native Compose and original StudioWave code. Do not copy proprietary Ableton code or assets.
 - Do not use decorative graphs as proof of real audio analysis, and do not present incomplete instruments/processors as fully functional.
+
+## FX device faceplate visual pass — 2026-10-16
+- Commit: pending CI for the FX device faceplate pass.
+- The insert card now uses a compact squared faceplate with a 3 dp enable strip, bordered header, tighter padding, and explicit enabled/bypassed footer state.
+- Rotary controls now use the Live-orange value arc and a bordered numeric readout plate. Parameter ranges, parameter keys, and update callbacks are unchanged.
+- EQ Eight's band-gain overview connects bands in ascending frequency order so moving band frequencies cannot make the line double back. It remains an overview of stored band gain, not an FFT or a summed filter response.
+- TimelineViewport, arrangement timebase, clip coordinates, and the 1,800-bar limit were not changed.
+- CI status before this pass: run [38789057427](https://github.com/jorgi80-droid/StudioWave/actions/runs/38789057427) failed at Android SDK/NDK setup before Gradle build/tests; inspect/retry this infrastructure failure separately. The new visual commit requires its own complete build, unit-test, and APK-artifact run.
+- Physical-device visual/touch validation remains outstanding.
+
