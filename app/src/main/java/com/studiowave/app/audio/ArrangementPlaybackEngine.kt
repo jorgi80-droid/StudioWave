@@ -394,6 +394,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val sourceOffsetFrame = ArrangementTiming.microsToFrames(
                             sourceOffsetMicros, asset.sampleRate
                         ).coerceAtLeast(0L)
+                        // Invalid persisted trims must not silently clamp to and repeat the
+                        // final source sample. Ignore clips whose start is outside the source.
+                        if (sourceOffsetFrame >= asset.frames.toLong()) return@clipLoop
                         val sourceWindowFrames = ArrangementTiming.microsToFrames(
                             sourceLengthMicros, asset.sampleRate
                         ).coerceAtLeast(1L)
