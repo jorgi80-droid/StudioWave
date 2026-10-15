@@ -458,6 +458,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val pcm = ShortArray(BLOCK_FRAMES * 2)
         val perTrackMix = HashMap<String, FloatArray>()
         val deviceDsp = HashMap<String, TrackDeviceDsp>()
+        val perTrackMix = HashMap<String, FloatArray>()
+        val deviceDsp = HashMap<String, TrackDeviceDsp>()
         val sampleRate = plan.sampleRate
         val scheduledAudio = plan.audio
         val scheduledNotes = plan.notes
@@ -503,6 +505,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
                 val sampleCount = frames * 2
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
+                perTrackMix.values.forEach { java.util.Arrays.fill(it, 0, sampleCount, 0f) }
                 perTrackMix.values.forEach { java.util.Arrays.fill(it, 0, sampleCount, 0f) }
                 val blockEnd = position + frames
                 val mixState = liveMix
@@ -560,6 +563,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val to = min(blockEnd, note.endFrame)
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
                     val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
+                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val leftPan = if (pan > 0f) 1f - pan else 1f
@@ -575,6 +579,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val outIndex = ((absolute - position) * 2).toInt()
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
+                        channelBuffer[outIndex] += channelWave * leftPan
+                        channelBuffer[outIndex + 1] += channelWave * rightPan
                         val preMasterWave = if (liveMasterGain > 0f) wave / liveMasterGain else 0f
                         channelBuffer[outIndex] += preMasterWave * leftPan
                         channelBuffer[outIndex + 1] += preMasterWave * rightPan
@@ -600,6 +606,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val outIndex = ((absolute - position) * 2).toInt()
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
+                        channelBuffer[outIndex] += channelWave * leftPan
+                        channelBuffer[outIndex + 1] += channelWave * rightPan
                         val preMasterWave = if (liveMasterGain > 0f) wave / liveMasterGain else 0f
                         channelBuffer[outIndex] += preMasterWave * leftPan
                         channelBuffer[outIndex + 1] += preMasterWave * rightPan
@@ -623,6 +631,20 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 mixState.tracks.keys.forEach { id ->
                     if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f)
                 }
+
+                // Run enabled insert processors on each channel buffer; DSP adds the wet delta to master.
+                perTrackMix.forEach { (trackId, channel) ->
+                    val trackMix = mixState.tracks[trackId] ?: return@forEach
+                    if (trackMix.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
+                        deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
+                            .process(channel, mix, sampleCount, liveMasterGain, trackMix.devices)
+                    }
+                }
+                perTrackMix.forEach { (id, channel) ->
+                    val levels = measureStereoMeterLevels(channel, sampleCount)
+                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight)
+                }
+                mixState.tracks.keys.forEach { id -> if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f) }
 
                 var blockPeak = 0f
                 var blockSquares = 0.0
