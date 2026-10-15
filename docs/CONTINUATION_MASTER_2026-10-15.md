@@ -127,3 +127,10 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - Commit `2a516ec764bbc98b07a0d63e8528499c1bca18f8` applies the same square-edged device state controls and master channel panel, and sharpens the audio clip editor waveform frame. Existing click callbacks, fader/pan bindings, mute/solo state and effect routing are preserved.
 - This is a native UI consistency pass, not a claim of pixel-identical Ableton parity. The full UI still needs screenshot comparison and interaction validation on a landscape Android device.
 - Validation gate: check Android CI against the new head and verify build, unit tests and APK artifact upload. Physical-device testing is still pending.
+
+
+## Continuation update — 2026-10-16 (DirectWave + EQ Eight device pass)
+- Commit `18fd812b10fd12e70b366c87dc1c4e4c40a9ba7b` adds a compact, Live-inspired EQ Eight response display to the existing 8-band gain controls. The curve is a visualization of the current UI/model gain values; it is not a measured analyzer and does not claim frequency/Q/type modelling that the current device model does not contain.
+- The same commit corrects DirectWave sample-source status. Factory presets and the generated bundled One Shoot sample are now persisted as factory-origin samples, while imported user audio is labeled separately. This fixes the previous false classification caused by factory samples being generated as cache-file URIs rather than `android.resource://` URIs.
+- DirectWave shell and header geometry are tightened to the square-edged graphite device style. Existing sampler load, note audition, ADSR, pitch, loop, output-gain, and effect parameter callbacks are preserved.
+- Validation is pending for this exact commit: require Android CI Build debug APK, unit tests, and APK artifact upload. Do not infer success from older workflow runs. Device-level landscape and touch validation remains outstanding.
