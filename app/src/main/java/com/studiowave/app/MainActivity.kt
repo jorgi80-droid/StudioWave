@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material3.*
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -4203,91 +4205,177 @@ private fun DeviceDock(
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     val palette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
+    var showAddDevice by remember { mutableStateOf(false) }
+    var addCategory by remember { mutableStateOf("FX") }
+
+    fun replaceSelectedTrackDevices(devices: List<TrackDevice>) {
+        val active = selectedTrack ?: return
+        onProjectChange(project.copy(tracks = project.tracks.map { track ->
+            if (track.id == active.id) track.copy(devices = devices) else track
+        }))
+    }
+
+    fun addDevice(type: String, label: String) {
+        val active = selectedTrack ?: return
+        val isInstrument = type in INSTRUMENT_DEVICE_TYPES
+        val remaining = if (isInstrument) active.devices.filterNot { it.type in INSTRUMENT_DEVICE_TYPES } else active.devices
+        val device = TrackDevice(type = type, name = label, parameters = defaultDeviceParameters(type))
+        replaceSelectedTrackDevices((remaining + device).take(StudioProject.MAX_DEVICES_PER_TRACK))
+        showAddDevice = false
+    }
+
     Column(
         (if (fullScreen) Modifier.fillMaxWidth().fillMaxHeight()
-            else Modifier.fillMaxWidth().height(if (expanded) 328.dp else 42.dp))
-            .background(palette.room, RoundedCornerShape(5.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(5.dp))
-            .padding(horizontal = 6.dp, vertical = 4.dp),
+        else Modifier.fillMaxWidth().height(if (expanded) 328.dp else 42.dp))
+            .background(palette.room, RoundedCornerShape(3.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(3.dp))
+            .padding(horizontal = 5.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
-            Modifier.fillMaxWidth().height(31.dp)
-                .background(palette.panel, RoundedCornerShape(3.dp))
-                .padding(horizontal = 7.dp),
+            Modifier.fillMaxWidth().height(30.dp)
+                .background(palette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Box(Modifier.size(7.dp).background(palette.orange, RoundedCornerShape(1.dp)))
+            Box(Modifier.size(6.dp).background(palette.orange, RoundedCornerShape(1.dp)))
             Text("DEVICE VIEW", color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black)
-            Text(" / ", color = palette.muted, fontSize = 9.sp)
-            if (project.tracks.isNotEmpty()) {
-                Row(
-                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    project.tracks.forEach { track ->
-                        val active = selectedTrack?.id == track.id
-                        Surface(
-                            color = if (active) palette.accent.copy(alpha = 0.16f) else palette.control,
-                            border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
-                            shape = RoundedCornerShape(3.dp),
-                            modifier = Modifier.height(24.dp).clickable { onSelectTrack(track.id) }
-                        ) {
-                            Row(
-                                Modifier.padding(horizontal = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Box(Modifier.size(6.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
-                                Text(
-                                    track.name.uppercase(),
-                                    color = if (active) palette.accent else palette.text,
-                                    fontSize = 7.sp,
-                                    fontWeight = FontWeight.Black,
-                                    maxLines = 1
-                                )
-                            }
+            Row(
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically
+            ) {
+                project.tracks.forEach { track ->
+                    val active = selectedTrack?.id == track.id
+                    Surface(
+                        color = if (active) palette.accent.copy(alpha = 0.16f) else palette.control,
+                        border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
+                        shape = RoundedCornerShape(2.dp),
+                        modifier = Modifier.height(23.dp).clickable { onSelectTrack(track.id) }
+                    ) {
+                        Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box(Modifier.size(6.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
+                            Text(track.name.uppercase(), color = if (active) palette.accent else palette.text,
+                                fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                         }
                     }
                 }
-            } else Spacer(Modifier.weight(1f))
+            }
             DirectWaveStateButton(if (expanded) "FOLD" else "UNFOLD", expanded, palette) { expanded = !expanded }
             DirectWaveStateButton("×", false, palette, onToggle)
         }
+
         if (expanded) {
             if (selectedTrack == null) {
-                DeviceModuleCard(
-                    title = "NO DEVICE",
-                    subtitle = "TRACK DEVICE CHAIN",
-                    palette = palette,
-                    body = "Create a track in Arrangement to open its instrument or audio device."
-                )
+                DeviceModuleCard("NO TRACK", "DEVICE CHAIN", palette, "Create or select a track in Arrangement.")
             } else {
-                when (selectedTrack.kind) {
-                    "midi" -> DirectWaveDevicePanel(
-                        trackId = selectedTrack.id,
-                        trackName = selectedTrack.name,
-                        trackKind = selectedTrack.kind,
-                        palette = palette,
-                        fullHeight = fullScreen
-                    )
-                    "drum" -> DeviceModuleCard(
-                        title = "DRUM RACK",
-                        subtitle = "STEP SEQUENCER",
-                        palette = palette,
-                        body = "The current drum track uses the native step sequencer. Select a MIDI track to open DirectWave."
-                    )
-                    else -> DeviceModuleCard(
-                        title = "AUDIO TRACK",
-                        subtitle = "CLIP / SAMPLE SOURCE",
-                        palette = palette,
-                        body = "Audio source editing and trim remain in Clip View. An effect insert is shown only when a real processor is available."
-                    )
+                val active = selectedTrack
+                val hasInstrument = active.devices.any { it.type in INSTRUMENT_DEVICE_TYPES }
+                Row(Modifier.fillMaxWidth().height(29.dp), horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(active.name.uppercase(), color = palette.orange, fontSize = 8.sp,
+                        fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
+                    Text("${active.devices.size} DEVICES", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    DirectWaveStateButton("+ ADD DEVICE", false, palette) { showAddDevice = true }
+                }
+                Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Top) {
+                    if (active.kind == "midi" || active.kind == "drum") {
+                        if (!hasInstrument) {
+                            DeviceModuleCard("INSTRUMENT MISSING", "MIDI SOURCE", palette,
+                                "Add DirectWave or a built-in synthesizer to make this track produce a pitched sound.")
+                        }
+                        active.devices.filter { it.type in INSTRUMENT_DEVICE_TYPES }.forEach { device ->
+                            if (device.type == "DIRECTWAVE") {
+                                DirectWaveDevicePanel(
+                                    trackId = active.id, trackName = active.name, trackKind = active.kind,
+                                    palette = palette, fullHeight = fullScreen
+                                )
+                            } else {
+                                InstrumentDeviceCard(device, palette,
+                                    onUpdate = { changed -> replaceSelectedTrackDevices(active.devices.map { if (it.id == changed.id) changed else it }) },
+                                    onRemove = { replaceSelectedTrackDevices(active.devices.filterNot { it.id == device.id }) })
+                            }
+                        }
+                    } else {
+                        DeviceModuleCard("AUDIO SOURCE", "CLIP / SAMPLE", palette,
+                            "Audio clips use the selected source in Clip View. FX inserts are processed by the arrangement engine.")
+                    }
+                    active.devices.filter { it.type in EFFECT_DEVICE_TYPES }.forEach { device ->
+                        TrackEffectDeviceCard(
+                            device, palette,
+                            onUpdate = { changed -> replaceSelectedTrackDevices(active.devices.map { if (it.id == changed.id) changed else it }) },
+                            onRemove = { replaceSelectedTrackDevices(active.devices.filterNot { it.id == device.id }) }
+                        )
+                    }
+                    if (active.devices.isEmpty()) {
+                        DeviceModuleCard("EMPTY DEVICE CHAIN", "LIVE-STYLE DEVICE RACK", palette,
+                            "Tap + ADD DEVICE. Enabled FX inserted here are processed in this track's playback chain.")
+                    }
                 }
             }
         }
+    }
+
+    if (showAddDevice && selectedTrack != null) {
+        AlertDialog(
+            onDismissRequest = { showAddDevice = false },
+            containerColor = palette.panel,
+            titleContentColor = palette.text,
+            textContentColor = palette.muted,
+            title = { Text("ADD DEVICE", fontWeight = FontWeight.Black, color = palette.orange) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        DirectWaveStateButton("FX", addCategory == "FX", palette) { addCategory = "FX" }
+                        DirectWaveStateButton("INSTRUMENTS", addCategory == "INSTRUMENTS", palette) { addCategory = "INSTRUMENTS" }
+                    }
+                    Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        val options = if (addCategory == "FX") listOf(
+                            "EQ" to "Equalizer",
+                            "PARAM_EQ_8" to "Parametric EQ Eight",
+                            "REVERB" to "Reverb",
+                            "DELAY" to "Delay",
+                            "COMPRESSOR" to "Compressor",
+                            "SATURATOR" to "Saturator",
+                            "FILTER" to "Filter",
+                            "LIMITER" to "Limiter"
+                        ) else listOf(
+                            "DIRECTWAVE" to "DirectWave Sampler",
+                            "SYNTH_SAW" to "Basic Saw Synth",
+                            "SYNTH_SINE" to "Basic Sine Synth",
+                            "SYNTH_SQUARE" to "Basic Square Synth",
+                            "SYNTH_TRIANGLE" to "Basic Triangle Synth",
+                            "FM_SYNTH" to "FM Synth"
+                        )
+                        options.forEach { (type, label) ->
+                            val allowed = type in EFFECT_DEVICE_TYPES ||
+                                (selectedTrack.kind == "midi" && type in INSTRUMENT_DEVICE_TYPES)
+                            Surface(
+                                color = palette.canvas, shape = RoundedCornerShape(2.dp),
+                                border = BorderStroke(1.dp, palette.border),
+                                modifier = Modifier.fillMaxWidth().height(35.dp)
+                                    .clickable(enabled = allowed) { addDevice(type, label) }
+                            ) {
+                                Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Text(label, color = if (allowed) palette.text else palette.muted,
+                                        fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                    Text(if (allowed) "ADD +" else "MIDI ONLY", color = if (allowed) palette.accent else palette.muted,
+                                        fontSize = 7.sp, fontWeight = FontWeight.Black)
+                                }
+                            }
+                        }
+                        Text("Full Analyzer, Multi FX, SuperSaw, MiniSynth and GMS are not exposed yet because their engine implementations are not complete.",
+                            color = palette.muted, fontSize = 7.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAddDevice = false }) { Text("DONE", color = palette.accent) }
+            }
+        )
     }
 }
 
@@ -4533,7 +4621,66 @@ private fun DirectWaveDevicePanel(
                         }
                         Text(if (sampleUri?.contains(sample.assetName) == true) "LOADED" else "LOAD", color = palette.accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
                     }
-                }
+                @Composable
+private fun InstrumentDeviceCard(
+    device: TrackDevice,
+    palette: StudioWavePalette,
+    onUpdate: (TrackDevice) -> Unit,
+    onRemove: () -> Unit
+) {
+    val params = device.parameters
+    Column(Modifier.width(238.dp).height(230.dp)
+        .background(palette.canvas, RoundedCornerShape(2.dp))
+        .border(1.dp, palette.border, RoundedCornerShape(2.dp)).padding(7.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(device.name.uppercase(), color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Black,
+                maxLines = 1, modifier = Modifier.weight(1f))
+            DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) {
+                onUpdate(device.copy(enabled = !device.enabled))
+            }
+            DirectWaveStateButton("×", false, palette, onRemove)
+        }
+        Text("BUILT-IN SYNTH · ${device.type}", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        DeviceParameterSlider("LEVEL", params["level"] ?: 0.8f, 0f..1f, palette) {
+            onUpdate(device.copy(parameters = params + ("level" to it)))
+        }
+        DeviceParameterSlider("ATTACK", params["attackMs"] ?: 8f, 0f..1000f, palette, " ms") {
+            onUpdate(device.copy(parameters = params + ("attackMs" to it)))
+        }
+        DeviceParameterSlider("RELEASE", params["releaseMs"] ?: 90f, 0f..1500f, palette, " ms") {
+            onUpdate(device.copy(parameters = params + ("releaseMs" to it)))
+        }
+        Spacer(Modifier.weight(1f))
+        Text("Basic oscillator engine", color = palette.muted, fontSize = 7.sp)
+    }
+}
+
+
+
+@Composable
+private fun DeviceParameterSlider(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    palette: StudioWavePalette,
+    unit: String = "",
+    onChange: (Float) -> Unit
+) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(String.format(java.util.Locale.US, "%.1f%s", value, unit), color = palette.text, fontSize = 6.sp,
+                fontWeight = FontWeight.Bold)
+        }
+        Slider(value = value.coerceIn(range.start, range.endInclusive), onValueChange = onChange,
+            valueRange = range, modifier = Modifier.fillMaxWidth().height(22.dp),
+            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent,
+                inactiveTrackColor = palette.control))
+    }
+}
+
+}
             }
         }
 
