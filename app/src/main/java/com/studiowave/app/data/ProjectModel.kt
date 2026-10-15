@@ -23,8 +23,12 @@ data class WaveClip(
     val midiNotes: List<MidiNote> = emptyList(),
     val drumSteps: List<Boolean> = emptyList(),
     val colorArgb: Long? = null,
-    /** Source-relative trim offset for audio clips, measured in musical ticks. */
-    val sourceOffsetTicks: Long = 0L
+    /** Legacy source-relative trim offset in musical ticks, retained for old project compatibility. */
+    val sourceOffsetTicks: Long = 0L,
+    /** Source-relative trim offset in absolute microseconds; independent of project BPM. */
+    val sourceOffsetMicros: Long? = null,
+    /** Source-relative trim window length in absolute microseconds; independent of project BPM. */
+    val sourceLengthMicros: Long? = null
 )
 
 data class TrackDevice(
@@ -135,6 +139,8 @@ data class StudioProject(
                                 put("startTick", clip.startTick); put("lengthTicks", clip.lengthTicks)
                                 put("sourceUri", clip.sourceUri)
                                 put("sourceOffsetTicks", clip.sourceOffsetTicks.coerceAtLeast(0L))
+                                clip.sourceOffsetMicros?.coerceAtLeast(0L)?.let { put("sourceOffsetMicros", it) }
+                                clip.sourceLengthMicros?.coerceAtLeast(1L)?.let { put("sourceLengthMicros", it) }
                                 clip.colorArgb?.let { put("colorArgb", it) }
                                 put("drumSteps", JSONArray().apply { clip.drumSteps.forEach { put(it) } })
                                 put("midiNotes", JSONArray().apply {
@@ -169,6 +175,12 @@ data class StudioProject(
             require(version in 1..CURRENT_SCHEMA_VERSION) { "Unsupported project schema version: $version" }
             val time = json.optJSONObject("timeSignature") ?: JSONObject()
             val tracksJson = json.optJSONArray("tracks") ?: JSONArray()
+            val legacyBpm = json.optInt("bpm", 120).coerceIn(40, 240)
+            val legacyPpq = json.optInt("ppq", 960).coerceIn(24, 3840)
+            fun legacyTicksToMicros(ticks: Long): Long {
+                val micros = ticks.coerceAtLeast(0L).toDouble() * 60_000_000.0 / (legacyBpm.toDouble() * legacyPpq.toDouble())
+                return if (!micros.isFinite() || micros >= Long.MAX_VALUE.toDouble()) Long.MAX_VALUE else micros.toLong().coerceAtLeast(0L)
+            }
             require(tracksJson.length() <= MAX_TRACKS) { "Project contains too many tracks" }
             val loadedTracks = buildList {
                 for (i in 0 until tracksJson.length()) {
@@ -207,7 +219,9 @@ data class StudioProject(
                                 midiNotes = notes,
                                 drumSteps = drumSteps,
                                 colorArgb = if (c.has("colorArgb")) c.optLong("colorArgb") else null,
-                                sourceOffsetTicks = c.optLong("sourceOffsetTicks", 0L).coerceAtLeast(0L)
+                                sourceOffsetTicks = c.optLong("sourceOffsetTicks", 0L).coerceAtLeast(0L),
+                                sourceOffsetMicros = if (c.has("sourceOffsetMicros")) c.optLong("sourceOffsetMicros", 0L).coerceAtLeast(0L) else legacyTicksToMicros(c.optLong("sourceOffsetTicks", 0L)),
+                                sourceLengthMicros = if (c.has("sourceLengthMicros")) c.optLong("sourceLengthMicros", 1L).coerceAtLeast(1L) else legacyTicksToMicros(c.optLong("lengthTicks", 3840L).coerceAtLeast(1L)).coerceAtLeast(1L)
                             ))
                         }
                     }
