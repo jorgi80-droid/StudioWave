@@ -3,7 +3,10 @@ package com.studiowave.app
 import kotlin.math.floor
 import kotlin.math.roundToLong
 
-/** Project musical timebase shared by ruler, grid, clip geometry and editing gestures. */
+/**
+ * Musical timebase shared by the Arrangement grid, ruler, clip placement and resizing.
+ * PPQ denotes ticks per quarter note; meter denominator changes the size of a beat.
+ */
 data class TimelineTimebase(
     val bpm: Int,
     val numerator: Int,
@@ -23,11 +26,17 @@ data class TimelineTimebase(
         if (step <= 0L) return safeTick
         val quotient = safeTick / step
         val remainder = safeTick % step
-        val roundUp = remainder >= (step / 2L + step % 2L)
-        val rounded = if (roundUp && quotient < Long.MAX_VALUE / step) quotient + 1L else quotient
-        return if (rounded > Long.MAX_VALUE / step) Long.MAX_VALUE - Long.MAX_VALUE % step
-        else (rounded * step).coerceAtLeast(0L)
+        val roundedQuotient = if (remainder >= step / 2L + step % 2L) quotient + 1L else quotient
+        return if (roundedQuotient > Long.MAX_VALUE / step) Long.MAX_VALUE - (Long.MAX_VALUE % step)
+        else (roundedQuotient * step).coerceAtLeast(0L)
     }
+}
+
+/** Bar positions are zero-based internally; this endpoint is the end of bar 1800. */
+fun maxArrangementTick(timebase: TimelineTimebase): Long {
+    val bars = TimelineViewport.MAX_ARRANGEMENT_BARS
+    return if (timebase.ticksPerBar > Long.MAX_VALUE / bars) Long.MAX_VALUE
+    else timebase.ticksPerBar * bars
 }
 
 enum class SnapDivision(val label: String) {
@@ -56,16 +65,13 @@ enum class SnapDivision(val label: String) {
     fun next(): SnapDivision = entries[(ordinal + 1) % entries.size]
 }
 
-/** End tick of the 1800-bar arrangement, with overflow protection. */
-fun maxArrangementTick(timebase: TimelineTimebase): Long {
-    val bars = TimelineViewport.MAX_ARRANGEMENT_BARS
-    return if (timebase.ticksPerBar > Long.MAX_VALUE / bars) Long.MAX_VALUE
-    else timebase.ticksPerBar * bars
-}
-
 /**
- * Arrangement pane-local viewport factory. Track headers are a sibling column;
- * all x coordinates passed to this viewport are local to the timeline canvas.
+ * Construct a viewport for the Arrangement pane itself.
+ *
+ * Track headers are rendered by a separate sibling column in ArrangementWorkspace,
+ * so their width must never be subtracted from local canvas coordinates. Mixing a
+ * header-inclusive viewport with a pane-local pinch centroid moves clips/ruler when
+ * zoom changes, even though each individual renderer appears internally consistent.
  */
 fun arrangementPaneViewport(
     timebase: TimelineTimebase,
@@ -81,9 +87,12 @@ fun arrangementPaneViewport(
 )
 
 /**
- * Shared horizontal mapping for the arrangement. scrollTimeTicks represents the musical
- * tick at the left edge of the timeline pane, excluding the fixed track-header column.
- * All viewport navigation and conversions use one scale and bounded project extent.
+ * Horizontal mapping for the timeline viewport.
+ *
+ * screenX uses the arrangement's coordinate space, where track names occupy the
+ * first [trackHeaderWidthPx] pixels. The timeline viewport width is separate and
+ * must not include that header. When called from a Canvas inside the timeline pane,
+ * subtract trackHeaderWidthPx to get its local x.
  */
 data class TimelineViewport(
     val timebase: TimelineTimebase,
@@ -92,21 +101,31 @@ data class TimelineViewport(
     val viewportWidthPx: Float,
     val trackHeaderWidthPx: Float = 0f
 ) {
+    /** The effective scale used by every timeline element; never derive drawing widths independently. */
     val effectivePixelsPerBar: Float =
         (if (pixelsPerBar.isFinite()) pixelsPerBar else MIN_PIXELS_PER_BAR)
             .coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
-    val pixelsPerTick: Double =
-        (effectivePixelsPerBar.toDouble() / timebase.ticksPerBar.toDouble()).coerceAtLeast(0.000001)
+
+    /** Normalize caller-provided scroll once, so malformed state cannot poison every mapping. */
+    val effectiveScrollTimeTicks: Double =
+        (if (scrollTimeTicks.isFinite()) scrollTimeTicks else 0.0)
+            .coerceIn(0.0, maxArrangementTick(timebase).toDouble())
+
     val effectiveViewportWidthPx: Float =
         (if (viewportWidthPx.isFinite()) viewportWidthPx else 0f).coerceAtLeast(0f)
+
     val safeTrackHeaderWidthPx: Float =
         (if (trackHeaderWidthPx.isFinite()) trackHeaderWidthPx else 0f).coerceAtLeast(0f)
-    val effectiveScrollTimeTicks: Double =
-        (if (scrollTimeTicks.isFinite()) scrollTimeTicks else 0.0).coerceIn(0.0, maxScrollTicks())
 
+    val pixelsPerTick: Double =
+        (effectivePixelsPerBar.toDouble() / timebase.ticksPerBar.toDouble()).coerceAtLeast(0.000001)
+
+    /** Convert a musical duration to pixels using the same scale as the ruler and grid. */
     fun tickDeltaToPixels(ticks: Long): Float =
-        (ticks.toDouble() * pixelsPerTick).coerceIn(0.0, Float.MAX_VALUE.toDouble()).toFloat()
+        (ticks.toDouble() * pixelsPerTick)
+            .coerceIn(0.0, Float.MAX_VALUE.toDouble()).toFloat()
 
+    /** Convert a horizontal drag delta to musical ticks without applying snap. */
     fun pixelsToTickDelta(pixels: Float): Long {
         if (!pixels.isFinite()) return 0L
         val ticks = pixels.toDouble() / pixelsPerTick
@@ -117,107 +136,108 @@ data class TimelineViewport(
         }
     }
 
+    /** Convert a musical tick to the arrangement-wide x coordinate (including track header). */
     fun timeToScreenX(tick: Long): Float {
         val boundedTick = tick.coerceIn(0L, maxArrangementTick(timebase))
-        val x = safeTrackHeaderWidthPx.toDouble() +
-            (boundedTick.toDouble() - effectiveScrollTimeTicks) * pixelsPerTick
+        val x = safeTrackHeaderWidthPx.toDouble() + (boundedTick.toDouble() - effectiveScrollTimeTicks) * pixelsPerTick
         return x.coerceIn(-Float.MAX_VALUE.toDouble(), Float.MAX_VALUE.toDouble()).toFloat()
     }
 
-    fun screenXToTime(screenX: Float): Long {
-        if (!screenX.isFinite()) return if (screenX > 0f) maxArrangementTick(timebase) else 0L
-        return (effectiveScrollTimeTicks + (screenX.toDouble() - safeTrackHeaderWidthPx) / pixelsPerTick)
+    /** Inverse of [timeToScreenX]; callers drawing in the timeline pane should use [viewportXToTime]. */
+    fun screenXToTime(screenX: Float): Long =
+        (effectiveScrollTimeTicks + (screenX.toDouble() - safeTrackHeaderWidthPx) / pixelsPerTick)
             .coerceIn(0.0, maxArrangementTick(timebase).toDouble()).roundToLong()
-    }
 
+    /** Converts a musical tick into the local x coordinate of the timeline pane. */
     fun timeToViewportX(tick: Long): Float = timeToScreenX(tick) - safeTrackHeaderWidthPx
 
-    fun viewportXToTime(viewportX: Float): Long {
-        if (!viewportX.isFinite()) return if (viewportX > 0f) maxArrangementTick(timebase) else 0L
-        return screenXToTime(viewportX + safeTrackHeaderWidthPx)
-    }
+    /** Converts a timeline-pane local x coordinate into a musical tick. */
+    fun viewportXToTime(viewportX: Float): Long = screenXToTime(viewportX + safeTrackHeaderWidthPx)
+
 
     fun firstVisibleBar(marginBars: Int = 1): Long =
-        (floor(effectiveScrollTimeTicks / timebase.ticksPerBar.toDouble()).toLong() - marginBars)
+        floor(effectiveScrollTimeTicks / timebase.ticksPerBar.toDouble()).toLong().minus(marginBars)
             .coerceIn(0L, MAX_ARRANGEMENT_BARS - 1L)
 
     fun lastVisibleBar(marginBars: Int = 2): Long =
-        floor((effectiveScrollTimeTicks + effectiveViewportWidthPx.toDouble() / pixelsPerTick) /
+        floor((effectiveScrollTimeTicks + effectiveViewportWidthPx / pixelsPerTick) /
             timebase.ticksPerBar.toDouble()).toLong().plus(marginBars)
             .coerceIn(0L, MAX_ARRANGEMENT_BARS - 1L)
 
-    /** Change the scale without moving the musical tick under the screen anchor. */
+    /** Change scale without changing the musical tick under the screen anchor. */
     fun zoomKeepingAnchor(newPixelsPerBar: Float, anchorScreenX: Float): TimelineViewport {
-        if (!anchorScreenX.isFinite()) return this
-        val anchorTick = (effectiveScrollTimeTicks +
-            (anchorScreenX - safeTrackHeaderWidthPx).toDouble() / pixelsPerTick)
-            .coerceIn(0.0, maxArrangementTick(timebase).toDouble())
+        val anchorTick = effectiveScrollTimeTicks +
+            (anchorScreenX - safeTrackHeaderWidthPx).toDouble() / pixelsPerTick
         val requestedScale = if (newPixelsPerBar.isFinite()) newPixelsPerBar else MAX_PIXELS_PER_BAR
-        val nextScale = requestedScale.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
-        val nextPixelsPerTick = nextScale.toDouble() / timebase.ticksPerBar.toDouble()
-        val nextScroll = (anchorTick -
-            (anchorScreenX - safeTrackHeaderWidthPx).toDouble() / nextPixelsPerTick)
-            .coerceIn(0.0, maxScrollTicks(nextPixelsPerTick))
-        return copy(pixelsPerBar = nextScale, scrollTimeTicks = nextScroll)
+        val clampedScale = requestedScale.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
+        // Anchor positions are fractional ticks: integer rounding at each pinch frame causes
+        // cumulative visible movement, especially at high zoom or far into a long arrangement.
+        return copy(pixelsPerBar = clampedScale)
+            .placeTickAtViewportX(anchorTick, anchorScreenX - safeTrackHeaderWidthPx)
     }
 
-    /** Place a fractional tick at local timeline x without rounding to the snap grid. */
-    fun placeTickAtViewportX(tick: Double, viewportX: Float): TimelineViewport {
-        if (!tick.isFinite() || !viewportX.isFinite()) return this
-        val boundedTick = tick.coerceIn(0.0, maxArrangementTick(timebase).toDouble())
-        val nextScroll = (boundedTick - viewportX.toDouble() / pixelsPerTick)
-            .coerceIn(0.0, maxScrollTicks())
-        return copy(scrollTimeTicks = nextScroll)
-    }
-
+    /**
+     * Return a viewport in which [tick] sits at [viewportX] in the local timeline-pane
+     * coordinate space. Used by pinch anchoring and follow-playback to share one mapping.
+     */
     fun placeTickAtViewportX(tick: Long, viewportX: Float): TimelineViewport =
-        placeTickAtViewportX(tick.toDouble(), viewportX)
+        placeTickAtViewportX(tick.coerceAtLeast(0L).toDouble(), viewportX)
 
-    fun panByScreenPixels(deltaX: Float): TimelineViewport {
-        if (!deltaX.isFinite()) return this
-        return copy(scrollTimeTicks = (effectiveScrollTimeTicks - deltaX.toDouble() / pixelsPerTick)
+    /** Place a fractional musical tick at a screen point without integer-tick rounding. */
+    fun placeTickAtViewportX(tick: Double, viewportX: Float): TimelineViewport {
+        if (!viewportX.isFinite() || !tick.isFinite()) return this
+        val boundedTick = tick.coerceIn(0.0, maxArrangementTick(timebase).toDouble())
+        val newScroll = (boundedTick - viewportX.toDouble() / pixelsPerTick)
+            .coerceIn(0.0, maxScrollTicks())
+        return copy(scrollTimeTicks = newScroll)
+    }
+
+    fun panByScreenPixels(deltaX: Float): TimelineViewport =
+        copy(scrollTimeTicks = (effectiveScrollTimeTicks - (if (deltaX.isFinite()) deltaX.toDouble() else 0.0) / pixelsPerTick)
             .coerceIn(0.0, maxScrollTicks()))
+
+    /** Keep the transport playhead visible during playback without moving the view on every frame. */
+    fun followPlayhead(
+        tick: Long,
+        followFraction: Float = 0.78f,
+        targetFraction: Float = 0.68f
+    ): TimelineViewport {
+        if (!effectiveViewportWidthPx.isFinite() || effectiveViewportWidthPx <= 0f || tick < 0L) return this
+        val width = effectiveViewportWidthPx
+        val x = (tick.toDouble() - effectiveScrollTimeTicks) * pixelsPerTick
+        val threshold = width * followFraction.coerceIn(0.2f, 0.95f)
+        if (x >= 0.0 && x <= threshold.toDouble()) return this
+        val targetX = (width * targetFraction.coerceIn(0.1f, 0.9f)).coerceIn(0f, width)
+        return placeTickAtViewportX(tick, targetX)
     }
 
-    fun followPlayhead(tick: Long, followFraction: Float = 0.78f, targetFraction: Float = 0.68f): TimelineViewport {
-        if (effectiveViewportWidthPx <= 0f || tick < 0L) return this
-        val boundedTick = tick.coerceIn(0L, maxArrangementTick(timebase))
-        val x = (boundedTick.toDouble() - effectiveScrollTimeTicks) * pixelsPerTick
-        val guard = effectiveViewportWidthPx * followFraction.coerceIn(0.2f, 0.95f)
-        if (x >= 0.0 && x <= guard.toDouble()) return this
-        val targetX = (effectiveViewportWidthPx * targetFraction.coerceIn(0.1f, 0.9f))
-            .coerceIn(0f, effectiveViewportWidthPx)
-        return placeTickAtViewportX(boundedTick, targetX)
-    }
-
-    fun panByBars(bars: Double): TimelineViewport {
-        if (!bars.isFinite()) return this
-        return copy(scrollTimeTicks = (effectiveScrollTimeTicks + bars * timebase.ticksPerBar)
-            .coerceIn(0.0, maxScrollTicks()))
-    }
+    private fun maxScrollTicks(): Double =
+        (maxArrangementTick(timebase).toDouble() -
+            effectiveViewportWidthPx.toDouble() / pixelsPerTick).coerceAtLeast(0.0)
 
     fun snapTick(tick: Long, division: SnapDivision, enabled: Boolean = true): Long =
-        if (enabled) timebase.snap(tick.coerceIn(0L, maxArrangementTick(timebase)), division)
-        else tick.coerceIn(0L, maxArrangementTick(timebase))
-
-    fun visibleSubdivisionTicks(minimumPixels: Double = 0.35): Long {
-        val candidates = listOf(
-            timebase.ticksPerBeat / 16L,
-            timebase.ticksPerBeat / 8L,
-            timebase.ticksPerBeat / 4L,
-            timebase.ticksPerBeat / 2L,
-            timebase.ticksPerBeat
-        ).filter { it > 0L }
-        return candidates.firstOrNull { it * pixelsPerTick >= minimumPixels } ?: timebase.ticksPerBeat
-    }
-
-    private fun maxScrollTicks(scalePixelsPerTick: Double = pixelsPerTick): Double =
-        (maxArrangementTick(timebase).toDouble() -
-            effectiveViewportWidthPx.toDouble() / scalePixelsPerTick.coerceAtLeast(0.000001)).coerceAtLeast(0.0)
+        if (enabled) timebase.snap(tick, division) else tick.coerceAtLeast(0L)
 
     companion object {
         const val MIN_PIXELS_PER_BAR = 20f
         const val MAX_PIXELS_PER_BAR = 4800f
         const val MAX_ARRANGEMENT_BARS = 1800L
     }
+
+    /**
+     * Select a readable grid subdivision from the shared timebase and current zoom.
+     * Never return a zero-sized subdivision: the drawing loop advances by this value,
+     * so a zero result could freeze the UI for unusual PPQ/time-signature combinations.
+     */
+    fun gridSubdivisionTicks(beatPixels: Double): Long {
+        val beatTicks = timebase.ticksPerBeat
+        return when {
+            beatPixels >= 80.0 -> (beatTicks / 16L).coerceAtLeast(1L)
+            beatPixels >= 52.0 -> (beatTicks / 8L).coerceAtLeast(1L)
+            beatPixels >= 30.0 -> (beatTicks / 4L).coerceAtLeast(1L)
+            beatPixels >= 16.0 -> (beatTicks / 2L).coerceAtLeast(1L)
+            else -> 0L
+        }
+    }
+
 }
