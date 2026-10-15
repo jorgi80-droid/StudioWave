@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -23,6 +24,7 @@ internal object StudioWaveDiagnostics {
     private const val MAX_ENTRIES = 3000
     private const val MAX_FILE_BYTES = 2 * 1024 * 1024
     private val entries = ConcurrentLinkedDeque<String>()
+    private val lastThrottledLog = ConcurrentHashMap<String, Long>()
     private val diskWriter = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "StudioWave-LogWriter").apply { isDaemon = true }
     }
@@ -93,6 +95,24 @@ internal object StudioWaveDiagnostics {
                 }
             }
         }
+    }
+
+    fun logThrottled(
+        key: String,
+        intervalMs: Long = 300L,
+        level: String = "INFO",
+        tag: String = "APP",
+        message: String
+    ) {
+        val now = SystemClock.elapsedRealtime()
+        var shouldLog = false
+        lastThrottledLog.compute(key) { _, last ->
+            if (last == null || now - last >= intervalMs.coerceAtLeast(0L)) {
+                shouldLog = true
+                now
+            } else last
+        }
+        if (shouldLog) log(level, tag, message)
     }
 
     fun snapshot(limit: Int = 3000): List<String> =
