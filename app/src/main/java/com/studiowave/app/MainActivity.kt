@@ -2551,8 +2551,12 @@ private fun TimelineGrid(
                                 .padding(top = 7.dp, bottom = 7.dp)
                                 .timelineClipWidthPx(clipWidthPx)
                                 .fillMaxHeight()
-                                .background(clipFill, RoundedCornerShape(5.dp))
-                                .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
+                                .background(clipFill, RoundedCornerShape(2.dp))
+                                .border(
+                                    width = if (selectedClip == clip.id) 1.25.dp else 0.5.dp,
+                                    color = if (selectedClip == clip.id) timelinePalette.orange else timelinePalette.border.copy(alpha = 0.42f),
+                                    shape = RoundedCornerShape(2.dp)
+                                )
                                 .pointerInput(clip.id, trackIndex) {
                                     // The trailing grip owns resize gestures. Do not let the clip-body
                                     // drag handler consume those pointer changes first.
@@ -2642,20 +2646,28 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Column(Modifier.fillMaxWidth()) {
-                                Text(
-                                    clip.name,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = timelinePalette.text,
-                                    maxLines = 1
-                                )
+                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                // Flat title strip and hairline border echo Live's clip headers without obscuring the note/wave content.
+                                Row(
+                                    Modifier.fillMaxWidth().height(16.dp)
+                                        .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.9f), RoundedCornerShape(1.dp))
+                                        .padding(horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        clip.name.uppercase(),
+                                        fontSize = 7.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = clipInk,
+                                        maxLines = 1
+                                    )
+                                }
                                 val clipDetail = arrangementClipSummary(track.kind, clip, project)
                                 Text(
                                     clipDetail,
                                     fontSize = 6.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = timelinePalette.text.copy(alpha = 0.82f),
+                                    fontWeight = FontWeight.Bold,
+                                    color = clipInk.copy(alpha = 0.78f),
                                     maxLines = 1
                                 )
                             }
