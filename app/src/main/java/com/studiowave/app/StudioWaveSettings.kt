@@ -120,7 +120,7 @@ internal fun StudioWaveSettingsScreen(
             HorizontalDivider(color = p.border)
             when (section) {
                 "AUDIO" -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsSection("OUTPUT PROFILE", "Choose a queue-depth target for your device. Engine format remains stereo PCM16 at 44.1 kHz.", p)
+                    SettingsSection("OUTPUT PROFILE", "Choose a queue-depth target for your device. The profile is applied the next time playback starts; output is stereo PCM16 at 44.1 kHz.", p)
                     SettingsChoiceRow(
                         "Playback stability",
                         "Low latency uses a shorter producer queue; Stable buffers more audio against scheduler jitter.",
