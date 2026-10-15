@@ -2205,6 +2205,24 @@ private fun AudioEditorWorkspace(
         }
     }
 
+    // Reveal the decoded source waveform on Compose vsync instead of rebuilding it with a timer.
+    // This is presentation-only: the peak values remain the actual decoded source data.
+    val waveformReveal by animateFloatAsState(
+        targetValue = if (waveform.isNotEmpty()) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "source_waveform_reveal"
+    )
+    val renderedTrimStart by animateFloatAsState(
+        targetValue = startFraction.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 70),
+        label = "source_trim_start"
+    )
+    val renderedTrimEnd by animateFloatAsState(
+        targetValue = endFraction.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 70),
+        label = "source_trim_end"
+    )
+
     Column(Modifier.fillMaxSize().background(audioPalette.room).padding(7.dp)) {
         WorkspaceTitleBar("CLIP VIEW  /  SAMPLE EDITOR", track?.name ?: "No audio track", onBack)
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2237,8 +2255,9 @@ private fun AudioEditorWorkspace(
                 Canvas(Modifier.fillMaxSize().padding(12.dp)) {
                     val mid = size.height / 2f
                     val dx = size.width / waveform.size.coerceAtLeast(1)
-                    val trimStartX = size.width * startFraction.coerceIn(0f, 1f)
-                    val trimEndX = size.width * endFraction.coerceIn(startFraction, 1f)
+                    val trimStartX = size.width * renderedTrimStart.coerceIn(0f, 1f)
+                    val trimEndX = size.width * renderedTrimEnd.coerceIn(renderedTrimStart, 1f)
+                    val revealWidth = size.width * waveformReveal.coerceIn(0f, 1f)
                     // Shade excluded source regions so the saved trim range is visible on the waveform itself.
                     if (trimStartX > 0f) {
                         drawRect(audioPalette.border.copy(alpha = 0.34f), Offset.Zero,
@@ -2249,12 +2268,15 @@ private fun AudioEditorWorkspace(
                             Size((size.width - trimEndX).coerceAtLeast(0f), size.height))
                     }
                     waveform.forEachIndexed { i, peak ->
-                        val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.48f
                         val x = (i + 0.5f) * dx
-                        val insideRange = x >= trimStartX && x <= trimEndX
-                        val waveColor = if (insideRange) audioPalette.accent.copy(alpha = 0.96f)
-                            else audioPalette.muted.copy(alpha = 0.62f)
-                        drawLine(waveColor, Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
+                        // Reveal only decoded peaks; never synthesize or pulse fake audio activity.
+                        if (x <= revealWidth) {
+                            val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.48f
+                            val insideRange = x >= trimStartX && x <= trimEndX
+                            val waveColor = if (insideRange) audioPalette.accent.copy(alpha = 0.96f)
+                                else audioPalette.muted.copy(alpha = 0.62f)
+                            drawLine(waveColor, Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
+                        }
                     }
                     drawLine(audioPalette.orange, Offset(trimStartX, 0f), Offset(trimStartX, size.height), 1.8f)
                     drawLine(audioPalette.orange, Offset(trimEndX, 0f), Offset(trimEndX, size.height), 1.8f)
