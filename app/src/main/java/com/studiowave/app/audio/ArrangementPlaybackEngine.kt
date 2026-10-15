@@ -565,7 +565,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
                     val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
-                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     for (absolute in from until to) {
@@ -605,9 +604,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         mix[outIndex + 1] += wave * rightPan
                         channelBuffer[outIndex] += channelWave * leftPan
                         channelBuffer[outIndex + 1] += channelWave * rightPan
-                        val preMasterWave = if (liveMasterGain > 0f) wave / liveMasterGain else 0f
-                        channelBuffer[outIndex] += preMasterWave * leftPan
-                        channelBuffer[outIndex + 1] += preMasterWave * rightPan
                     }
                 }
 
