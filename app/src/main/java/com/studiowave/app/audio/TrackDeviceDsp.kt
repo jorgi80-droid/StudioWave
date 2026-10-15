@@ -51,14 +51,21 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
                 val p=device.parameters
                 var signatureValue=1L
                 for(band in 1..8) {
-                    val value=(p["band$band"]?:0f).coerceIn(-18f,18f)
-                    signatureValue=signatureValue*31L+value.toBits()
+                    val gain=(p["band$band"]?:0f).coerceIn(-18f,18f)
+                    val defaultNorm=EQ_DEFAULT_FREQ_NORMS[band - 1]
+                    val frequencyNorm=(p["band${band}FreqNorm"]?:defaultNorm).coerceIn(0f,1f)
+                    val q=(p["band${band}Q"]?:1.1f).coerceIn(0.25f,8f)
+                    signatureValue=signatureValue*31L+gain.toBits()
+                    signatureValue=signatureValue*31L+frequencyNorm.toBits()
+                    signatureValue=signatureValue*31L+q.toBits()
                 }
                 if(signatureValue!=st.eqSignature) {
-                    val freqs=doubleArrayOf(60.0,120.0,250.0,500.0,1000.0,2200.0,5000.0,10000.0)
-                    for(index in 0 until 8) {
-                        val gainDb=(p["band" + (index + 1)]?:0f).coerceIn(-18f,18f)
-                        st.eq[index].tune(freqs[index],1.1,gainDb.toDouble(),sampleRate)
+                    for(band in 1..8) {
+                        val gainDb=(p["band$band"]?:0f).coerceIn(-18f,18f)
+                        val frequencyNorm=(p["band${band}FreqNorm"]?:EQ_DEFAULT_FREQ_NORMS[band - 1]).coerceIn(0f,1f)
+                        val frequencyHz=20.0 * 1000.0.pow(frequencyNorm.toDouble())
+                        val q=(p["band${band}Q"]?:1.1f).coerceIn(0.25f,8f)
+                        st.eq[band - 1].tune(frequencyHz,q.toDouble(),gainDb.toDouble(),sampleRate)
                     }
                     st.eqSignature=signatureValue
                 }
@@ -147,6 +154,8 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         }
     }
     companion object {
+        // Log-normalized 20 Hz–20 kHz starting points for the eight EQ bands.
+        private val EQ_DEFAULT_FREQ_NORMS=floatArrayOf(0.159f,0.259f,0.366f,0.466f,0.566f,0.681f,0.799f,0.900f)
         private val EFFECTS=setOf("EQ","PARAM_EQ_8","REVERB","DELAY","COMPRESSOR","SATURATOR","FILTER","LIMITER")
         private fun db(v:Float)=10.0.pow(v.coerceIn(-48f,18f).toDouble()/20.0)
     }
