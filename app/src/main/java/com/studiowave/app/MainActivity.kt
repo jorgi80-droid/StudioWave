@@ -4059,12 +4059,58 @@ private fun DeviceDock(
                         }
                     }
                 } else {
-                    DirectWaveDevicePanel(
-                        trackId = selectedTrack.id,
-                        trackName = selectedTrack.name,
-                        trackKind = selectedTrack.kind,
-                        palette = devicePalette
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (selectedTrack.kind == "midi") {
+                            DirectWaveDevicePanel(
+                                trackId = selectedTrack.id,
+                                trackName = selectedTrack.name,
+                                trackKind = selectedTrack.kind,
+                                palette = devicePalette
+                            )
+                        } else if (selectedTrack.kind == "drum") {
+                            DeviceModuleCard(
+                                title = "DRUM RACK",
+                                subtitle = "STEP SEQUENCER",
+                                palette = devicePalette,
+                                body = "Use the track's Drum Sequencer to edit hits. Double-tap a drum clip to open it."
+                            )
+                        } else {
+                            DeviceModuleCard(
+                                title = "AUDIO INPUT",
+                                subtitle = "SOURCE / LEVEL",
+                                palette = devicePalette,
+                                body = "Select an audio clip to inspect its waveform, trim and source properties."
+                            )
+                        }
+                        DeviceModuleCard(
+                            title = "SATURATOR",
+                            subtitle = "AUDIO EFFECT",
+                            palette = devicePalette,
+                            body = "No saturator DSP is connected yet; this device is not shown with fake controls."
+                        )
+                        DeviceModuleCard(
+                            title = "EQUALIZER",
+                            subtitle = "AUDIO EFFECT",
+                            palette = devicePalette,
+                            body = "No equalizer DSP is connected yet; the module remains informational until the engine supports it."
+                        )
+                        DeviceModuleCard(
+                            title = "COMPRESSOR",
+                            subtitle = "AUDIO EFFECT",
+                            palette = devicePalette,
+                            body = "No compressor DSP is connected yet; avoiding decorative knobs that do not alter audio."
+                        )
+                        DeviceModuleCard(
+                            title = "END OF CHAIN",
+                            subtitle = "DEVICE INSERT",
+                            palette = devicePalette,
+                            body = "Additional devices can appear here when processing is implemented."
+                        )
+                    }
                 }
             }
         }
