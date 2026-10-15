@@ -183,3 +183,5 @@
 - Existing Compose `withFrameNanos` playback-follow loop, Mixer peak/RMS smoothing, and the Activity's preferred 90–120 Hz display mode request are retained. Android's display/power/thermal policy remains authoritative; 60 Hz devices continue to run normally.
 - No musical tick mapping, source trim persistence, DSP routing, or audio engine logic was intentionally changed in this visual batch.
 - Validation gate: run Android CI for the latest branch head (debug APK build, unit tests, APK artifact upload) and test Sample Editor trim response, waveform reveal, Arrangement pinch/scroll/resize and Mixer meter responsiveness on a physical landscape Android device. PR #15 remains Draft until these checks pass.
+
+- Follow-up [8fc7446e](https://github.com/jorgi80-droid/StudioWave/commit/8fc7446ef3a6483f5d12eee8d79a38d1bb871156) adds unit coverage for choosing the highest supported 90–120 Hz display mode and safely falling back when only 60 Hz or out-of-range modes are available.
