@@ -867,6 +867,13 @@ private fun StudioWaveApp() {
                         }
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                     when (selectedWorkspace) {
+                        "DEVICE VIEW" -> DeviceDock(
+                            project = project,
+                            selectedTrackId = editorTrackId,
+                            onSelectTrack = { editorTrackId = it },
+                            onProjectChange = { changeProject(it) },
+                            onToggle = { selectedWorkspace = "ARRANGEMENT"; showDock = false }
+                        )
                         "MIXER" -> MixerWorkspace(
                             project,
                             master,
@@ -1189,7 +1196,7 @@ private fun ArrangementWorkspace(
         statusMessage = "$name added"
         showAddTrack = false
         showTimelineMenu = false
-        if (openEditor) onOpenEditor(if (kind == "drum") "DRUM SEQUENCER" else "PIANO ROLL", newTrack.id, starterClip?.id)
+        if (openEditor || kind == "audio") onOpenEditor(if (kind == "audio") "BROWSER" else if (kind == "drum") "DRUM SEQUENCER" else "PIANO ROLL", newTrack.id, starterClip?.id)
     }
 
     fun handleClipAction(action: String, clipId: String) {
@@ -1316,8 +1323,7 @@ private fun ArrangementWorkspace(
                                 track, index, verticalZoom, scrollTracks,
                                 rowTopDp = row.topDp, rowHeightDp = row.heightDp,
                                 onDoubleTap = {
-                                    val editorClip = track.clips.minByOrNull { it.startTick }
-                                    onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id, editorClip?.id)
+                                    onOpenEditor("DEVICE VIEW", track.id, track.clips.minByOrNull { it.startTick }?.id)
                                 },
                                 onColorTap = {
                                     val palette = listOf(0xFFFF7644L, 0xFF00D2B4L, 0xFFA855F7L, 0xFF3B82F6L, 0xFFFF4F9AL, 0xFFFFC857L, 0xFF8BC34AL, 0xFFEEEEEE)
@@ -3987,7 +3993,6 @@ private fun DeviceDock(
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     val devicePalette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
-    var page by remember { mutableStateOf("DEVICES") }
     val gainDb = selectedTrack?.volume?.takeIf { it > 0.001f }?.let {
         String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(it))
     } ?: "−∞ dB"
@@ -3997,8 +4002,7 @@ private fun DeviceDock(
         verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (page == "MIX") "TRACK MIXER" else "DEVICE VIEW", fontSize = 9.sp,
-                fontWeight = FontWeight.Black, color = devicePalette.orange)
+            Text("DEVICE VIEW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = devicePalette.orange)
             Spacer(Modifier.width(8.dp))
             Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = devicePalette.text, maxLines = 1)
             Spacer(Modifier.weight(1f))
@@ -4009,124 +4013,26 @@ private fun DeviceDock(
             if (selectedTrack == null) {
                 Text("Add a track in Arrangement to see its controls.", color = devicePalette.muted, fontSize = 9.sp)
             } else {
-                if (page == "MIX") {
-                    Row(
-                        Modifier.fillMaxWidth().weight(1f),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(0.9f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("VOLUME  ·  $gainDb", color = devicePalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            val latestProject by rememberUpdatedState(project)
-                            Canvas(
-                                Modifier.fillMaxWidth().weight(1f)
-                                    .pointerInput(selectedTrack.id) {
-                                        detectDragGestures(
-                                            onDragStart = { start ->
-                                                val height = size.height.coerceAtLeast(1).toFloat()
-                                                val value = (1f - start.y / height).coerceIn(0f, 1f) * 1.5f
-                                                val current = latestProject
-                                                onProjectChange(current.copy(tracks = current.tracks.map {
-                                                    if (it.id == selectedTrack.id) it.copy(volume = value) else it
-                                                }))
-                                            },
-                                            onDrag = { change, _ ->
-                                                change.consume()
-                                                val height = size.height.coerceAtLeast(1).toFloat()
-                                                val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
-                                                val current = latestProject
-                                                onProjectChange(current.copy(tracks = current.tracks.map {
-                                                    if (it.id == selectedTrack.id) it.copy(volume = value) else it
-                                                }))
-                                            }
-                                        )
-                                    }
-                                    .pointerInput(selectedTrack.id) {
-                                        detectTapGestures(onTap = { offset ->
-                                            val height = size.height.coerceAtLeast(1).toFloat()
-                                            val value = (1f - offset.y / height).coerceIn(0f, 1f) * 1.5f
-                                            val current = latestProject
-                                            onProjectChange(current.copy(tracks = current.tracks.map {
-                                                if (it.id == selectedTrack.id) it.copy(volume = value) else it
-                                            }))
-                                        })
-                                    }
-                            ) {
-                                val railWidth = (size.width * 0.18f).coerceAtLeast(5f)
-                                val railLeft = (size.width - railWidth) / 2f
-                                val railTop = size.height * 0.06f
-                                val railBottom = size.height * 0.94f
-                                for (tick in 0..10) {
-                                    val y = railTop + (railBottom - railTop) * tick / 10f
-                                    drawLine(devicePalette.grid.copy(alpha = 0.65f),
-                                        Offset(size.width * 0.08f, y), Offset(size.width * 0.25f, y), 1f)
-                                }
-                                drawRoundRect(devicePalette.room, Offset(railLeft, railTop),
-                                    Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
-                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
-                                val fraction = selectedTrack.volume.coerceIn(0f, 1.5f) / 1.5f
-                                val thumbY = railBottom - fraction * (railBottom - railTop)
-                                drawRoundRect(devicePalette.accent.copy(alpha = 0.78f), Offset(railLeft, railTop),
-                                    Size(railWidth, (thumbY - railTop).coerceAtLeast(0f)),
-                                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
-                                drawRoundRect(devicePalette.text, Offset(size.width * 0.16f, thumbY - 3f),
-                                    Size(size.width * 0.68f, 6f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
-                            }
-                        }
-                        Column(Modifier.weight(0.9f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("PAN  ·  " + when {
-                                selectedTrack.pan <= -0.95f -> "L"
-                                selectedTrack.pan >= 0.95f -> "R"
-                                else -> (selectedTrack.pan * 100).toInt().toString()
-                            }, color = devicePalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            StudioWavePanKnob(
-                                value = selectedTrack.pan.coerceIn(-1f, 1f),
-                                palette = devicePalette,
-                                onValueChange = { value ->
-                                    onProjectChange(project.copy(tracks = project.tracks.map {
-                                        if (it.id == selectedTrack.id) it.copy(pan = value) else it
-                                    }))
-                                },
-                                modifier = Modifier.size(52.dp)
-                            )
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            SmallAction(if (selectedTrack.muted) "MUTED" else "MUTE") {
-                                onProjectChange(project.copy(tracks = project.tracks.map {
-                                    if (it.id == selectedTrack.id) it.copy(muted = !it.muted) else it
-                                }))
-                            }
-                            SmallAction(if (selectedTrack.solo) "SOLO ✓" else "SOLO") {
-                                onProjectChange(project.copy(tracks = project.tracks.map {
-                                    if (it.id == selectedTrack.id) it.copy(solo = !it.solo) else it
-                                }))
-                            }
-                        }
+                Row(
+                    Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    when (selectedTrack.kind) {
+                        "midi" -> DirectWaveDevicePanel(
+                            trackId = selectedTrack.id, trackName = selectedTrack.name,
+                            trackKind = selectedTrack.kind, palette = devicePalette
+                        )
+                        "drum" -> DeviceModuleCard(
+                            title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = devicePalette,
+                            body = "Open a drum clip to edit its steps. Only available device controls are shown here."
+                        )
+                        else -> DeviceModuleCard(
+                            title = "AUDIO SOURCE", subtitle = "CLIP / SAMPLE", palette = devicePalette,
+                            body = "Select an audio clip in Arrangement to inspect source waveform and supported editing controls."
+                        )
                     }
-                } else {
-                    Row(
-                        Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        when (selectedTrack.kind) {
-                            "midi" -> DirectWaveDevicePanel(
-                                trackId = selectedTrack.id, trackName = selectedTrack.name,
-                                trackKind = selectedTrack.kind, palette = devicePalette
-                            )
-                            "drum" -> DeviceModuleCard(
-                                title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = devicePalette,
-                                body = "Drum patterns open in the dedicated step sequencer. Double-tap a drum clip to edit hits."
-                            )
-                            else -> DeviceModuleCard(
-                                title = "AUDIO CLIP", subtitle = "SOURCE / WAVEFORM", palette = devicePalette,
-                                body = "Select an audio clip to inspect the source waveform and trim it in Clip View."
-                            )
-                        }
-
-                    }
+                }
                 }
             }
         }
