@@ -515,46 +515,68 @@ private fun TransportBar(
     onUndo: () -> Unit, onRedo: () -> Unit,
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
+    val livePanel = Color(0xFF303236)
+    val buttonPanel = Color(0xFF414449)
+    val textPrimary = Color(0xFFE6E7E8)
     Row(
-        Modifier.fillMaxWidth().height(44.dp).background(Raised, RoundedCornerShape(7.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
+        Modifier.fillMaxWidth().height(45.dp).background(Color(0xFF292B2F), RoundedCornerShape(4.dp))
+            .padding(horizontal = 5.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(3.dp)
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text("StudioWave", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Mint, maxLines = 1)
-        Text("BPM", color = MutedText, fontSize = 8.sp)
+        Text("StudioWave", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFFFFA65A), maxLines = 1)
+        Text("LIVE", color = Color(0xFFB5B8BD), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.width(3.dp))
         SmallAction("−") { onBpm(bpm - 1) }
-        Text(bpm.toString(), fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Surface(color = livePanel, shape = RoundedCornerShape(3.dp), modifier = Modifier.width(44.dp).height(30.dp)) {
+            Box(contentAlignment = Alignment.Center) { Text(bpm.toString(), color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+        }
         SmallAction("+") { onBpm(bpm + 1) }
-        Text(timeSignatureLabel, fontSize = 9.sp, color = MutedText, maxLines = 1)
-        Text(positionLabel, fontSize = 8.sp, color = Color(0xFFDADEE5), maxLines = 1)
-        SmallIconButton(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, if (playing) Green else Mint, onPlay)
-        SmallIconButton(Icons.Default.Stop, MutedText, onStop)
-        SmallIconButton(Icons.Default.Save, MutedText, onSaveProject)
-        SmallIconButton(Icons.Default.FolderOpen, MutedText, onOpenProject)
-        SmallIconButton(Icons.Default.Undo, MutedText, onUndo)
-        SmallIconButton(Icons.Default.Redo, MutedText, onRedo)
+        Surface(color = livePanel, shape = RoundedCornerShape(3.dp), modifier = Modifier.height(30.dp)) {
+            Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) { Text(timeSignatureLabel, color = textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
+        }
+        Spacer(Modifier.width(5.dp))
+        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onOpenProject)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.FolderOpen, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
+        }
+        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onSaveProject)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Save, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
+        }
+        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onUndo)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Undo, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
+        }
+        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onRedo)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Redo, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
+        }
         Spacer(Modifier.weight(1f))
-        Text("MST", color = MutedText, fontSize = 7.sp)
-        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(92.dp).height(32.dp), valueRange = 0f..1f)
-        Column(Modifier.width(166.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("P ${peakDbfs.toInt()} dBFS", color = Color(0xFFE4E8EF), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Text("M ${momentaryLufs.toInt()} LUFS", color = Mint, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(32.dp).clickable(onClick = onStop)) {
+            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Stop, null, tint = Color(0xFFD8DADD), modifier = Modifier.size(17.dp)) }
+        }
+        Surface(color = if (playing) Color(0xFFFFA65A) else Color(0xFF3C4145), shape = RoundedCornerShape(4.dp), modifier = Modifier.size(width = 38.dp, height = 32.dp).clickable(onClick = onPlay)) {
+            Box(contentAlignment = Alignment.Center) { Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = if (playing) Color(0xFF282A2D) else Color(0xFFE6E7E8), modifier = Modifier.size(20.dp)) }
+        }
+        Surface(color = livePanel, shape = RoundedCornerShape(3.dp), modifier = Modifier.height(30.dp)) {
+            Box(Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) { Text(positionLabel, color = textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+        }
+        Text("M", color = Color(0xFFB8BBC0), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(78.dp).height(30.dp), valueRange = 0f..1f)
+        Column(Modifier.width(122.dp).fillMaxHeight(), verticalArrangement = Arrangement.Center) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("P ${peakDbfs.toInt()}", color = textPrimary, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("${momentaryLufs.toInt()} LUFS", color = Color(0xFF75DCCC), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            Canvas(Modifier.fillMaxWidth().height(11.dp)) {
-                drawLine(Color(0xFF343A40), Offset(0f, size.height / 2f), Offset(size.width, size.height / 2f), size.height)
+            Canvas(Modifier.fillMaxWidth().height(9.dp)) {
+                drawRect(Color(0xFF181A1D))
                 peakHistory.forEachIndexed { index, level ->
                     val bar = (level.coerceIn(0f, 1f) * size.height).coerceAtLeast(1f)
                     val x = index * size.width / peakHistory.size.coerceAtLeast(1)
-                    drawLine(Mint.copy(alpha = 0.85f), Offset(x, size.height), Offset(x, size.height - bar),
-                        (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
+                    drawLine(if (level > 0.88f) Color(0xFFFF765E) else Color(0xFF75DCCC), Offset(x, size.height), Offset(x, size.height - bar), (size.width / peakHistory.size.coerceAtLeast(1)).coerceAtLeast(1f))
                 }
             }
-            Text("RMS ${rmsDbfs.toInt()} dBFS", color = MutedText, fontSize = 8.sp, maxLines = 1)
+            Text("RMS ${rmsDbfs.toInt()} dBFS", color = Color(0xFF9DA2A9), fontSize = 7.sp, maxLines = 1)
         }
     }
 }
-
 @Composable
 private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
     Column(
