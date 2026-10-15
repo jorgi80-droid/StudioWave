@@ -107,3 +107,14 @@
 - The preview is paint-only. Clip start/length controls, editor routing, project persistence, note/step data, timeline mapping, snap, playback, DSP, and the 1,800-bar cap are not intentionally changed.
 - This follows Ableton Live 12's Clip View concept of presenting clip-specific content and properties alongside a dedicated editor, adapted for compact native Android landscape touch use. References: https://www.ableton.com/en/manual/clip-view/ and https://www.ableton.com/en/live-manual/12/editing-midi/
 - Validation remains pending for this source head: check Android debug APK build, unit tests, and APK artifact upload. Physical Android landscape checks are still required. Keep PR #15 as draft.
+
+
+
+## Sample Editor import workflow — 2026-10-16
+- [f181d69b](https://github.com/jorgi80-droid/StudioWave/commit/f181d69b2406e2b931493e421161f6d28a5cee4e) adds an **IMPORT AUDIO** action inside the Audio Clip Sample Editor. It reuses the existing Android document picker and existing audio import/decode/project update path instead of creating a parallel import implementation.
+- After a successful import launched from the Sample Editor, StudioWave selects the newly created clip and returns to the Sample Editor. The import is placed on the selected audio track at the current playhead tick when available; existing project limits, URI permission handling, duration checks, and playback engine paths are reused.
+- [2e43de96](https://github.com/jorgi80-droid/StudioWave/commit/2e43de96e48913b992077560e84454974a4b160a) clears the editor-return flag if import fails, preventing a later unrelated import from navigating to the wrong workspace.
+- The start/end trim sliders are disabled when no audio source is attached. Existing waveform decoding and trim model fields remain in use; this does not add time-stretch/warp processing, reverse audio, or loop playback.
+- The change does not alter the shared timeline timebase/viewport, audio DSP routing, or 1,800-bar arrangement limit.
+- Validation is pending for the latest source head: verify Android debug APK build, unit tests and artifact upload; then test importing audio from inside Sample Editor, waveform generation, trim persistence after closing/reopening the project, and playback on a physical landscape Android device. Keep PR #15 as draft until validation is complete.
+- Ableton reference: https://www.ableton.com/en/manual/clip-view/ and https://www.ableton.com/en/live-manual/12/audio-clips-tempo-and-warping/.
