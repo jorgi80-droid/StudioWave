@@ -26,6 +26,8 @@ internal data class StudioWavePalette(
 )
 
 internal val LocalStudioWavePalette = compositionLocalOf {
+    // Shared Live-inspired neutral workstation palette: graphite room, raised mixer strips,
+    // soft aqua focus, warm orange selection, and clear green/red transport feedback.
     StudioWavePalette(Color(0xFF202124), Color(0xFF2B2D30), Color(0xFF383A3D), Color(0xFF414347),
         Color(0xFF303236), Color(0xFFE7E7E7), Color(0xFFAAAAAA), Color(0xFF65D9D0), Color(0xFFFF9A76),
         Color(0xFF4A4C50), Color(0xFF55575B), Color(0xFF6EE7A0), Color(0xFFFFD36E), Color(0xFFFF647C))
