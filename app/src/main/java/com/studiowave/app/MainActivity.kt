@@ -1349,7 +1349,7 @@ private fun ArrangementWorkspace(
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
                 .toFloat().coerceIn(0.1f, 16f)
         }
-        Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(7.dp)).padding(1.dp)) {
+        Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(2.dp)).border(1.dp, LocalStudioWavePalette.current.border, RoundedCornerShape(2.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(94.dp)) {
@@ -1416,7 +1416,7 @@ private fun ArrangementWorkspace(
                         Surface(
                             color = LocalStudioWavePalette.current.control,
                             contentColor = LocalStudioWavePalette.current.text,
-                            shape = RoundedCornerShape(7.dp),
+                            shape = RoundedCornerShape(2.dp),
                             border = BorderStroke(1.dp, LocalStudioWavePalette.current.border),
                             shadowElevation = 3.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
@@ -1440,7 +1440,8 @@ private fun ArrangementWorkspace(
                     if (showBottomAddTrack && addTrackMenu) {
                         Surface(
                             color = LocalStudioWavePalette.current.raised,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(2.dp),
+                            border = BorderStroke(1.dp, LocalStudioWavePalette.current.border),
                             shadowElevation = 8.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
                                 .offset(y = (addAnchorY - 174f).coerceAtLeast(0f).dp)
@@ -1653,8 +1654,8 @@ private fun ArrangementWorkspace(
             }
             Column(
                 Modifier.align(Alignment.TopEnd).padding(6.dp).width(228.dp)
-                    .background(arrangementPalette.panel.copy(alpha = 0.98f), RoundedCornerShape(6.dp))
-                    .border(1.dp, arrangementPalette.border, RoundedCornerShape(6.dp))
+                    .background(arrangementPalette.panel.copy(alpha = 0.98f), RoundedCornerShape(2.dp))
+                    .border(1.dp, arrangementPalette.border, RoundedCornerShape(2.dp))
                     .padding(7.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -1769,7 +1770,7 @@ private fun ArrangementWorkspace(
                 if (isError) {
                     Surface(
                         color = LocalStudioWavePalette.current.danger.copy(alpha = 0.22f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(2.dp),
                         modifier = Modifier.padding(4.dp).clickable { statusMessage = null }
                     ) {
                         Text(feedback, color = LocalStudioWavePalette.current.text, fontSize = 9.sp,
@@ -1777,7 +1778,7 @@ private fun ArrangementWorkspace(
                     }
                 }
             }
-            if (showTimelineMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showTimelineMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(2.dp), border = BorderStroke(1.dp, LocalStudioWavePalette.current.border), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(150.dp).padding(5.dp)) {
                     Text("TIMELINE", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     Text("Add track", color = LocalStudioWavePalette.current.text, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
@@ -1795,7 +1796,7 @@ private fun ArrangementWorkspace(
                     }.padding(9.dp))
                 }
             }
-            if (showAddTrack && !addTrackMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showAddTrack && !addTrackMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(2.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(155.dp).padding(5.dp)) {
                     Text("ADD TRACK", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
@@ -2964,7 +2965,8 @@ private fun TimelineGrid(
             Column(
                 Modifier.offset(x = x, y = y)
                     .width(menuWidth)
-                    .background(timelinePalette.panel, RoundedCornerShape(12.dp))
+                    .background(timelinePalette.panel, RoundedCornerShape(2.dp))
+                    .border(1.dp, timelinePalette.border, RoundedCornerShape(2.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -2978,7 +2980,7 @@ private fun TimelineGrid(
                             val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
                             Surface(
                                 color = if (action == "Open editor") timelinePalette.accent.copy(alpha = 0.18f) else timelinePalette.room,
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(2.dp),
                                 modifier = Modifier.weight(1f).height(29.dp).clickable {
                                     if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
                                 }
