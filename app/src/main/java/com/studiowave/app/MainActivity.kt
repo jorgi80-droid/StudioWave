@@ -3487,19 +3487,23 @@ private fun PianoRollWorkspace(
                                     val notesAtDown = gestureNotes.value
                                     val noteHitSlop = with(pianoDensity) { 8.dp.toPx() }
                                     val touchedNote = if (keyboardVisible && !velocityMode && !panMode) notesAtDown.firstOrNull { note ->
-                                        val noteLeftPx = ((note.startTick.toDouble() / stepTicks.toDouble()) - visibleStartStep) * gestureColWidth
-                                        val noteRightPx = (((note.startTick + note.durationTicks.coerceAtLeast(1L)).toDouble() / stepTicks.toDouble()) - visibleStartStep) * gestureColWidth
+                                        val noteLeftPx = (((note.startTick.toDouble() / stepTicks.toDouble()) -
+                                            visibleStartStep.toDouble()) * gestureColWidth.toDouble()).toFloat()
+                                        val noteRightPx = ((((note.startTick + note.durationTicks.coerceAtLeast(1L)).toDouble() /
+                                            stepTicks.toDouble()) - visibleStartStep.toDouble()) * gestureColWidth.toDouble()).toFloat()
                                         val noteCenterY = (currentTopPitch - note.pitch + 0.5f) * gestureRowHeight
                                         down.position.x >= noteLeftPx - noteHitSlop &&
                                             down.position.x <= noteRightPx + noteHitSlop &&
                                             kotlin.math.abs(down.position.y - noteCenterY) <= gestureRowHeight * 0.65f
                                     } else null
                                     val noteLeftEdgePx = touchedNote?.let { note ->
-                                        ((note.startTick.toDouble() / stepTicks.toDouble()) - visibleStartStep.toDouble()) * gestureColWidth
+                                        (((note.startTick.toDouble() / stepTicks.toDouble()) -
+                                            visibleStartStep.toDouble()) * gestureColWidth.toDouble()).toFloat()
                                     }
                                     val noteRightEdgePx = touchedNote?.let { note ->
-                                        (((note.startTick + note.durationTicks.coerceAtLeast(1L)).toDouble() /
-                                            stepTicks.toDouble()) - visibleStartStep.toDouble()) * gestureColWidth
+                                        ((((note.startTick + note.durationTicks.coerceAtLeast(1L)).toDouble() /
+                                            stepTicks.toDouble()) - visibleStartStep.toDouble()) *
+                                            gestureColWidth.toDouble()).toFloat()
                                     }
                                     // Leading and trailing grips mirror Arrangement clip resizing.
                                     // Keep the touch zones wide enough for mobile without stealing the note body.
