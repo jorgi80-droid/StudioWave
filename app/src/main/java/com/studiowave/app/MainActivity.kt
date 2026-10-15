@@ -92,10 +92,6 @@ import com.studiowave.app.audio.ArrangementPlaybackEngine
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioProjectFile
 import com.studiowave.app.data.StudioTrack
-import com.studiowave.app.data.TrackDevice
-import com.studiowave.app.data.defaultDeviceParameters
-import com.studiowave.app.data.EFFECT_DEVICE_TYPES
-import com.studiowave.app.data.INSTRUMENT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
 import android.widget.Toast
 
@@ -269,8 +265,7 @@ internal fun transformMidiNoteFromGesture(
     stepTicks: Long,
     deltaSteps: Int,
     deltaPitch: Int,
-    resize: Boolean,
-    resizeLeading: Boolean = false
+    resize: Boolean
 ): com.studiowave.app.data.MidiNote {
     val safeStep = stepTicks.coerceAtLeast(1L)
     val safeClipLength = clipLengthTicks.coerceAtLeast(1L)
@@ -282,19 +277,6 @@ internal fun transformMidiNoteFromGesture(
         (safeClipLength - noteStart).coerceAtLeast(effectiveStep)
     )
     val safeDeltaSteps = deltaSteps.coerceIn(-100_000, 100_000)
-    if (resizeLeading) {
-        val fixedEnd = (noteStart + originalDuration).coerceAtMost(safeClipLength)
-        val latestStart = (fixedEnd - effectiveStep).coerceAtLeast(0L)
-        val requestedStart = (noteStart.toDouble() + safeDeltaSteps.toDouble() * effectiveStep.toDouble())
-            .coerceIn(0.0, latestStart.toDouble()).toLong()
-        val snappedStart = (requestedStart.toDouble() / effectiveStep.toDouble()).roundToLong()
-            .coerceIn(0L, latestStart / effectiveStep) * effectiveStep
-        val safeStart = snappedStart.coerceIn(0L, latestStart)
-        return note.copy(
-            startTick = safeStart,
-            durationTicks = (fixedEnd - safeStart).coerceAtLeast(effectiveStep)
-        )
-    }
     if (resize) {
         val maxDuration = (safeClipLength - noteStart).coerceAtLeast(effectiveStep)
         val requested = originalDuration.toDouble() + safeDeltaSteps.toDouble() * effectiveStep.toDouble()
@@ -1355,7 +1337,7 @@ private fun ArrangementWorkspace(
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
                 .toFloat().coerceIn(0.1f, 16f)
         }
-        Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(2.dp)).padding(1.dp)) {
+        Column(Modifier.fillMaxSize().background(LocalStudioWavePalette.current.room, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(94.dp)) {
@@ -1422,7 +1404,7 @@ private fun ArrangementWorkspace(
                         Surface(
                             color = LocalStudioWavePalette.current.control,
                             contentColor = LocalStudioWavePalette.current.text,
-                            shape = RoundedCornerShape(2.dp),
+                            shape = RoundedCornerShape(7.dp),
                             border = BorderStroke(1.dp, LocalStudioWavePalette.current.border),
                             shadowElevation = 3.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
@@ -1446,7 +1428,7 @@ private fun ArrangementWorkspace(
                     if (showBottomAddTrack && addTrackMenu) {
                         Surface(
                             color = LocalStudioWavePalette.current.raised,
-                            shape = RoundedCornerShape(2.dp),
+                            shape = RoundedCornerShape(10.dp),
                             shadowElevation = 8.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
                                 .offset(y = (addAnchorY - 174f).coerceAtLeast(0f).dp)
@@ -1659,8 +1641,8 @@ private fun ArrangementWorkspace(
             }
             Column(
                 Modifier.align(Alignment.TopEnd).padding(6.dp).width(228.dp)
-                    .background(arrangementPalette.panel.copy(alpha = 0.98f), RoundedCornerShape(2.dp))
-                    .border(1.dp, arrangementPalette.border, RoundedCornerShape(2.dp))
+                    .background(arrangementPalette.panel.copy(alpha = 0.98f), RoundedCornerShape(6.dp))
+                    .border(1.dp, arrangementPalette.border, RoundedCornerShape(6.dp))
                     .padding(7.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -1775,7 +1757,7 @@ private fun ArrangementWorkspace(
                 if (isError) {
                     Surface(
                         color = LocalStudioWavePalette.current.danger.copy(alpha = 0.22f),
-                        shape = RoundedCornerShape(2.dp),
+                        shape = RoundedCornerShape(10.dp),
                         modifier = Modifier.padding(4.dp).clickable { statusMessage = null }
                     ) {
                         Text(feedback, color = LocalStudioWavePalette.current.text, fontSize = 9.sp,
@@ -1783,7 +1765,7 @@ private fun ArrangementWorkspace(
                     }
                 }
             }
-            if (showTimelineMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(2.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showTimelineMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(150.dp).padding(5.dp)) {
                     Text("TIMELINE", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     Text("Add track", color = LocalStudioWavePalette.current.text, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable {
@@ -1801,7 +1783,7 @@ private fun ArrangementWorkspace(
                     }.padding(9.dp))
                 }
             }
-            if (showAddTrack && !addTrackMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(2.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showAddTrack && !addTrackMenu) Surface(color = LocalStudioWavePalette.current.raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(155.dp).padding(5.dp)) {
                     Text("ADD TRACK", color = LocalStudioWavePalette.current.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
@@ -2184,16 +2166,15 @@ private fun TimelineGrid(
     // Compact Live-style Arrangement Overview above the beat ruler.
     val overviewHeightPx = with(density) { 18.dp.toPx() }
     val rulerHeightPx = with(density) { 18.dp.toPx() }
-    val timelineTopOffsetPx = overviewHeightPx + rulerHeightPx
-    // Track headers live in a sibling column; all Arrangement coordinates below are pane-local.
+    val trackHeaderWidthPx = with(density) { 94.dp.toPx() }
     val timebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
         TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
     }
     val requestedPixelsPerBar = baseBarWidthPx * zoom
     val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks, 0f)
         .effectivePixelsPerBar
-    val viewport = remember(timebase, pixelsPerBar, scrollTicks) {
-        arrangementPaneViewport(timebase, pixelsPerBar, scrollTicks, 0f)
+    val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
+        TimelineViewport(timebase, pixelsPerBar, scrollTicks, 0f, trackHeaderWidthPx)
     }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
@@ -2224,7 +2205,6 @@ private fun TimelineGrid(
     var liveResizeLength by remember { mutableLongStateOf(1L) }
     var dragFromTrack by remember { mutableIntStateOf(-1) }
     var dragOriginalTick by remember { mutableLongStateOf(0L) }
-    var dragStartLeftPx by remember { mutableFloatStateOf(0f) }
     var dragDx by remember { mutableFloatStateOf(0f) }
     var dragDy by remember { mutableFloatStateOf(0f) }
 
@@ -2239,7 +2219,7 @@ private fun TimelineGrid(
                     // to viewport navigation. Empty arrangement space may still pan.
                     val startsOnClip = run {
                         val hitProject = latestProject
-                        val rowY = firstDown.position.y - timelineTopOffsetPx
+                        val rowY = firstDown.position.y - rulerHeightPx
                         val rowIndex = hitProject.tracks.indices.firstOrNull { index ->
                             val row = currentTrackRows.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
                             val topPx = (row.topDp - currentScrollTracks) * currentVerticalZoom * density.density
@@ -2250,9 +2230,9 @@ private fun TimelineGrid(
                         if (hitTrack == null) {
                             false
                         } else {
-                            val hitViewport = arrangementPaneViewport(
+                            val hitViewport = TimelineViewport(
                                 timebase, baseBarWidthPx * currentZoom,
-                                currentScroll, size.width.toFloat()
+                                currentScroll, size.width.toFloat(), trackHeaderWidthPx
                             )
                             val pointerX = firstDown.position.x
                             hitTrack.clips.any { clip ->
@@ -2296,7 +2276,7 @@ private fun TimelineGrid(
                                 val oldZoom = currentZoom.coerceIn(0.1f, 16f)
                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
-                                val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - timelineTopOffsetPx) /
+                                val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
                                     (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
                                 if (kotlin.math.abs(newScroll - currentScroll) > 0.0005) currentOnScroll(newScroll)
@@ -2309,13 +2289,13 @@ private fun TimelineGrid(
                                 gesturePointerCount = pointers.size
                                 gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                 gestureBaseScrollTicks = currentScroll
-                                val baseViewport = arrangementPaneViewport(
+                                val baseViewport = TimelineViewport(
                                     timebase, baseBarWidthPx * gestureBaseZoom, gestureBaseScrollTicks, size.width.toFloat()
                                 )
                                 // Preserve a fractional tick anchor in the timeline's local coordinate space.
                                 gestureAnchorTick = baseViewport.scrollTimeTicks + centroid.x.toDouble() / baseViewport.pixelsPerTick
                                 gestureAnchorTrackDp = currentScrollTracks +
-                                    (centroid.y - timelineTopOffsetPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
+                                    (centroid.y - rulerHeightPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
                             }
                             previousCentroid = centroid
                             previousSpan = span
@@ -2331,8 +2311,8 @@ private fun TimelineGrid(
                                 if (!multiTouchGestureOccurred && !startsOnClip &&
                                     (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                                       val barWidthPx = arrangementPaneViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
-                                    val newScroll = arrangementPaneViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat()).panByScreenPixels(delta.x).scrollTimeTicks
+                                       val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
+                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
@@ -2355,9 +2335,9 @@ private fun TimelineGrid(
                     val dt = if (previousFrameNanos == 0L) 0.016f
                         else ((frameNanos - previousFrameNanos).coerceAtLeast(0L) / 1_000_000_000f).coerceIn(0f, 0.05f)
                     previousFrameNanos = frameNanos
-                    val currentViewport = arrangementPaneViewport(
+                    val currentViewport = TimelineViewport(
                         timebase, baseBarWidthPx * currentZoom, currentScroll,
-                        timelineWidthPx
+                        timelineWidthPx, trackHeaderWidthPx
                     )
                     val currentX = currentViewport.timeToViewportX(currentPlayhead)
                     val leftGuard = timelineWidthPx * 0.08f
@@ -2388,8 +2368,8 @@ private fun TimelineGrid(
                 }
                 val hitTrackId = hitIndex?.let { latestProject.tracks.getOrNull(it)?.id }
                 val hitTimebase = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                val hitViewport = arrangementPaneViewport(
-                    hitTimebase, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()
+                val hitViewport = TimelineViewport(
+                    hitTimebase, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat(), 0f
                 )
                 val tick = hitViewport.viewportXToTime(offset.x)
                 currentOnTimelineLongPress(hitTrackId, tick)
@@ -2449,8 +2429,8 @@ private fun TimelineGrid(
                         val maxTick = maxArrangementTick(timebase).coerceAtLeast(1L)
                         val targetTick = (point.x / size.width.coerceAtLeast(1).toDouble() *
                             maxTick.toDouble()).toLong().coerceIn(0L, maxTick)
-                        val visible = arrangementPaneViewport(timebase, viewport.effectivePixelsPerBar,
-                            scrollTicks, size.width.toFloat())
+                        val visible = TimelineViewport(timebase, viewport.effectivePixelsPerBar,
+                            scrollTicks, size.width.toFloat(), trackHeaderWidthPx)
                         currentOnScroll(visible.placeTickAtViewportX(targetTick, size.width * 0.5f).scrollTimeTicks)
                     })
                 }
@@ -2565,10 +2545,7 @@ private fun TimelineGrid(
                             Modifier
                                 .offset(x = with(density) { displayLeftPx.toDp() }, y = 0.dp)
                                 .graphicsLayer {
-                                    // Keep the clip's grabbed position under the finger if zoom/scroll changes.
-                                    translationX = if (draggingClip == clip.id) {
-                                        dragStartLeftPx + dragDx - currentViewport.timeToViewportX(dragOriginalTick)
-                                    } else 0f
+                                    translationX = if (draggingClip == clip.id) dragDx else 0f
                                     translationY = if (draggingClip == clip.id) dragDy else 0f
                                 }
                                 .padding(top = 7.dp, bottom = 7.dp)
@@ -2591,7 +2568,6 @@ private fun TimelineGrid(
                                                 draggingClip = clip.id
                                                 dragFromTrack = trackIndex
                                                 dragOriginalTick = clip.startTick
-                                                dragStartLeftPx = displayLeftPx
                                                 dragDx = 0f
                                                 dragDy = 0f
                                                 onSelectClip(clip.id)
@@ -2626,10 +2602,17 @@ private fun TimelineGrid(
                                                 } ?: startIndex
                                             }
                                             val target = currentTracks.getOrNull(targetIndex)
-                                            // Convert the physical drop position through the current viewport.
-                                            // This accounts for scroll/zoom changes that happened while dragging.
-                                            val rawStartTick = currentViewport.viewportXToTime(dragStartLeftPx + dragDx)
-                                            val newTick = currentViewport.snapTick(rawStartTick, currentSnapDivision, currentSnapEnabled)
+                                            val barWidthPx = currentViewport.effectivePixelsPerBar
+                                            val dragViewport = TimelineViewport(
+                                                timebase, barWidthPx, currentScroll,
+                                                timelineWidthPx, trackHeaderWidthPx
+                                            )
+                                            // Convert the total gesture delta to ticks from its original anchor.
+                                            // This avoids drift if playback autoscroll changes the viewport mid-drag.
+                                            val deltaTicks = dragViewport.pixelsToTickDelta(dragDx)
+                                            val rawStartTick = (dragOriginalTick.toDouble() + deltaTicks.toDouble())
+                                                .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong()
+                                            val newTick = dragViewport.snapTick(rawStartTick, snapDivision, snapToGrid)
                                             if (startIndex >= 0 && source != null && target != null && source.kind == target.kind) {
                                                 moveCommit(clip.id, target.id, newTick)
                                             }
@@ -2891,8 +2874,8 @@ private fun TimelineGrid(
         // Overlay the cursor after clips so it stays visible over audio, MIDI and drum patterns.
         val playheadPalette = timelinePalette
         Canvas(Modifier.fillMaxSize().padding(top = 36.dp).clipToBounds()) {
-            val playheadViewport = arrangementPaneViewport(
-                timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width
+            val playheadViewport = TimelineViewport(
+                timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
             )
             val x = playheadViewport.timeToViewportX(playheadTick)
             if (x >= 0f && x <= size.width) {
@@ -2904,8 +2887,9 @@ private fun TimelineGrid(
         if (menuTrack != null && menuClip != null && clipMenuClipId != null) {
             val trackIndex = project.tracks.indexOfFirst { it.id == menuTrack.id }
             val barWidth = viewport.effectivePixelsPerBar
-            val menuViewport = arrangementPaneViewport(
-                timebase, barWidth, scrollTicks.toDouble(), with(density) { maxWidth.toPx() }
+            val menuViewport = TimelineViewport(
+                timebase, barWidth, scrollTicks.toDouble(), with(density) { maxWidth.toPx() },
+                with(density) { 104.dp.toPx() }
             )
             val clipLeft = with(density) { menuViewport.timeToViewportX(menuClip.startTick).toDp() }
             val menuWidth = 258.dp
@@ -2920,7 +2904,7 @@ private fun TimelineGrid(
             Column(
                 Modifier.offset(x = x, y = y)
                     .width(menuWidth)
-                    .background(timelinePalette.panel, RoundedCornerShape(2.dp))
+                    .background(timelinePalette.panel, RoundedCornerShape(12.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -2934,7 +2918,7 @@ private fun TimelineGrid(
                             val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
                             Surface(
                                 color = if (action == "Open editor") timelinePalette.accent.copy(alpha = 0.18f) else timelinePalette.room,
-                                shape = RoundedCornerShape(2.dp),
+                                shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.weight(1f).height(29.dp).clickable {
                                     if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
                                 }
@@ -2965,10 +2949,6 @@ private fun PianoRollWorkspace(
 ) {
     val pianoPalette = LocalStudioWavePalette.current
     val pianoGridOpacity = LocalStudioWaveGridOpacity.current.coerceIn(0f, 1f)
-    val lightKeySurface = if (pianoPalette.room.luminance() > 0.45f) pianoPalette.control else Color(0xFFD8DADD)
-    val darkKeySurface = if (pianoPalette.room.luminance() > 0.45f) pianoPalette.room else Color(0xFF242629)
-    val keyLabelColor = if (pianoPalette.room.luminance() > 0.45f) pianoPalette.text else Color(0xFF414449)
-    val cKeyLabelColor = if (pianoPalette.room.luminance() > 0.45f) pianoPalette.accent else Color(0xFFB76532)
     val clip = track?.clips?.firstOrNull { it.id == selectedClipId } ?: track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
     var snapDenominator by remember(track?.id, clip?.id) { mutableIntStateOf(16) }
@@ -2979,7 +2959,7 @@ private fun PianoRollWorkspace(
     var zoomY by remember(track?.id) { mutableFloatStateOf(1.0f) }
     var startStep by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
     var lastViewportWidthPx by remember(track?.id, clip?.id) { mutableFloatStateOf(0f) }
-    var topPitch by remember(track?.id, clip?.id) { mutableIntStateOf(((notes.maxOfOrNull { it.pitch } ?: 68) + 4).coerceIn(24, 127)) }
+    var topPitch by remember(track?.id) { mutableIntStateOf(108) } // Start near C8; all 128 standard MIDI pitches remain reachable
     var selectedNoteId by remember(track?.id, clip?.id) { mutableStateOf<String?>(null) }
     var selectedNoteIds by remember(track?.id, clip?.id) { mutableStateOf<Set<String>>(emptySet()) }
     var selectionMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
@@ -2999,7 +2979,7 @@ private fun PianoRollWorkspace(
     val stepsPerBeat = kotlin.math.ceil(beatTicks.toDouble() / stepTicks.toDouble()).toInt().coerceAtLeast(1)
     val ticksPerBar = (beatTicks * project.numerator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
     val stepsPerBar = kotlin.math.ceil(ticksPerBar.toDouble() / stepTicks.toDouble()).toInt().coerceAtLeast(1)
-    val rowHeight = (14f * zoomY).coerceIn(10f, 44f)
+    val rowHeight = (18f * zoomY).coerceIn(10f, 44f)
     val rawLengthTicks = (clip?.lengthTicks ?: stepTicks * 32L).coerceAtLeast(stepTicks)
     // Base the visible musical span on the selected clip duration, like Arrangement zoom:
     // zoom changes pixels-per-step, not the duration represented by the viewport.
@@ -3321,14 +3301,6 @@ private fun PianoRollWorkspace(
         Row(Modifier.fillMaxWidth().weight(1f)) {
             if (keyboardVisible) {
                 Column(Modifier.width(54.dp).fillMaxHeight().background(pianoPalette.panel)) {
-                    Row(
-                        Modifier.fillMaxWidth().height(18.dp).background(pianoPalette.raised)
-                            .border(0.5.dp, pianoPalette.border),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Text("PITCH", color = pianoPalette.muted, fontSize = 6.sp, fontWeight = FontWeight.Black)
-                    }
                     BoxWithConstraints(Modifier.fillMaxSize()) {
                         val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
@@ -3348,8 +3320,7 @@ private fun PianoRollWorkspace(
                                 val isC = pitch % 12 == 0
                                 Box(
                                     Modifier.fillMaxWidth().height(rowHeight.dp)
-                                        .background(if (isBlack) darkKeySurface else lightKeySurface)
-                                        .border(0.5.dp, pianoPalette.border)
+                                        .background(if (isBlack) LocalStudioWavePalette.current.room else LocalStudioWavePalette.current.control)
                                         .clickable {
                                             topPitch = clampPianoRollTopPitch(
                                                 (pitch + keyVisibleRows - 1).coerceAtMost(127),
@@ -3358,16 +3329,8 @@ private fun PianoRollWorkspace(
                                         },
                                     contentAlignment = Alignment.CenterStart
                                 ) {
-                                    if (isBlack) {
-                                        Box(
-                                            Modifier.align(Alignment.CenterEnd)
-                                                .fillMaxWidth(0.64f).fillMaxHeight()
-                                                .background(darkKeySurface)
-                                                .border(0.5.dp, pianoPalette.border)
-                                        )
-                                    }
                                     if (isC || pitch % 12 == 4 || pitch % 12 == 7) {
-                                        Text(pitchLabel(pitch), color = if (isC) cKeyLabelColor else keyLabelColor,
+                                        Text(pitchLabel(pitch), color = if (isC) pianoPalette.accent else pianoPalette.text,
                                             fontSize = 7.sp, modifier = Modifier.padding(start = 3.dp), maxLines = 1)
                                     }
                                 }
@@ -3379,7 +3342,7 @@ private fun PianoRollWorkspace(
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
                     val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
-                    val viewportHeightPx = with(pianoDensity) { (maxHeight - 18.dp).coerceAtLeast(12.dp).toPx() }
+                    val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
                     LaunchedEffect(viewportWidthPx, clipLengthSteps, stepsPerBar, zoomX) {
                         if (lastViewportWidthPx > 0f && viewportWidthPx > 0f &&
                             kotlin.math.abs(viewportWidthPx - lastViewportWidthPx) > 1f) {
@@ -3392,7 +3355,7 @@ private fun PianoRollWorkspace(
                     }
                     val gridStepsPerBar = stepsPerBar.coerceAtLeast(1)
                     val currentStepsOnScreen = pianoRollVisibleSteps(gridStepsPerBar, gestureZoomX.value)
-                    val currentRowHeight = (14f * gestureZoomY.value).coerceIn(10f, 44f)
+                    val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
                     val rowHeightPx = with(pianoDensity) { currentRowHeight.dp.toPx() }
                     val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
                     val currentTopPitch = clampPianoRollTopPitch(gestureTopPitch.value, visiblePitchRows)
@@ -3401,7 +3364,6 @@ private fun PianoRollWorkspace(
                     val maxHorizontalScroll = (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0)
                     val contentModifier = Modifier
                         .fillMaxSize()
-                        .padding(top = 18.dp)
                         .pointerInput(track?.id, clip?.id, snapDenominator, keyboardVisible, viewportWidthPx, viewportHeightPx) {
                             awaitEachGesture {
                                 val down = awaitFirstDown(requireUnconsumed = false)
@@ -3417,7 +3379,7 @@ private fun PianoRollWorkspace(
                                     val baseStepsOnScreen = pianoRollVisibleSteps(stepsPerBar, baseZoomX)
                                     val baseColWidth = (viewportWidthPx / baseStepsOnScreen.toFloat()).coerceAtLeast(2f)
                                     val baseRowHeight = with(pianoDensity) {
-                                        (14f * baseZoomY).coerceIn(10f, 44f).dp.toPx()
+                                        (18f * baseZoomY).coerceIn(10f, 44f).dp.toPx()
                                     }.coerceAtLeast(1f)
                                     val anchorStep = baseStart + initialMid.x / baseColWidth
                                     val anchorPitch = baseTop - initialMid.y / baseRowHeight
@@ -3433,7 +3395,7 @@ private fun PianoRollWorkspace(
                                             val newSteps = pianoRollVisibleSteps(stepsPerBar, newZoomX)
                                             val newColWidth = (viewportWidthPx / newSteps.toFloat()).coerceAtLeast(2f)
                                             val newRowHeight = with(pianoDensity) {
-                                                (14f * newZoomY).coerceIn(10f, 44f).dp.toPx()
+                                                (18f * newZoomY).coerceIn(10f, 44f).dp.toPx()
                                             }.coerceAtLeast(1f)
                                             val newClipSteps = kotlin.math.ceil(rawLengthTicks.toDouble() / stepTicks.toDouble())
                                                 .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(newSteps)
@@ -3455,7 +3417,7 @@ private fun PianoRollWorkspace(
                                     val currentStepsForGesture = pianoRollVisibleSteps(stepsPerBar, gestureZoomX.value)
                                     val gestureColWidth = (viewportWidthPx / currentStepsForGesture.toFloat()).coerceAtLeast(2f)
                                     val gestureRowHeight = with(pianoDensity) {
-                                        (14f * gestureZoomY.value).coerceIn(10f, 44f).dp.toPx()
+                                        (18f * gestureZoomY.value).coerceIn(10f, 44f).dp.toPx()
                                     }.coerceAtLeast(1f)
                                     val visibleStartStep = gestureStartStep.value.coerceIn(
                                         0, (clipLengthSteps - currentStepsForGesture).coerceAtLeast(0)
@@ -3475,26 +3437,17 @@ private fun PianoRollWorkspace(
                                             down.position.x <= noteRightPx + noteHitSlop &&
                                             kotlin.math.abs(down.position.y - noteCenterY) <= gestureRowHeight * 0.65f
                                     } else null
-                                    val noteLeftEdgePx = touchedNote?.let { note ->
-                                        ((note.startTick.toDouble() / stepTicks.toDouble()) - visibleStartStep.toDouble()) * gestureColWidth
-                                    }
                                     val noteRightEdgePx = touchedNote?.let { note ->
                                         (((note.startTick + note.durationTicks.coerceAtLeast(1L)).toDouble() /
                                             stepTicks.toDouble()) - visibleStartStep.toDouble()) * gestureColWidth
                                     }
-                                    // Leading and trailing grips mirror Arrangement clip resizing.
-                                    // Keep the touch zones wide enough for mobile without stealing the note body.
+                                    // Prefer the note's trailing edge; use a generous but bounded touch zone
+                                    // so resizing works on phone screens while ordinary note drags remain moves.
                                     val resizeSlopPx = maxOf(with(pianoDensity) { 12.dp.toPx() }, (gestureColWidth * 0.34f).coerceAtMost(with(pianoDensity) { 30.dp.toPx() }))
-                                    val nearLeading = touchedNote != null && noteLeftEdgePx != null &&
-                                        noteLeftEdgePx >= 0f &&
-                                        kotlin.math.abs(down.position.x - noteLeftEdgePx) <= resizeSlopPx
-                                    val nearTrailing = touchedNote != null && noteRightEdgePx != null &&
+                                    val resizeNote = touchedNote != null && noteRightEdgePx != null &&
                                         noteRightEdgePx >= 0f &&
-                                        kotlin.math.abs(down.position.x - noteRightEdgePx) <= resizeSlopPx
-                                    val resizeLeadingNote = nearLeading && (!nearTrailing ||
-                                        kotlin.math.abs(down.position.x - (noteLeftEdgePx ?: 0f)) <
-                                        kotlin.math.abs(down.position.x - (noteRightEdgePx ?: 0f)))
-                                    val resizeNote = nearTrailing && !resizeLeadingNote
+                                        down.position.x >= noteRightEdgePx - resizeSlopPx &&
+                                        down.position.x <= noteRightEdgePx + resizeSlopPx
                                     if (selectionMode && keyboardVisible) {
                                         val origin = down.position
                                         var current = origin
@@ -3602,13 +3555,12 @@ private fun PianoRollWorkspace(
                                                 stepTicks = stepTicks,
                                                 deltaSteps = stepDelta,
                                                 deltaPitch = pitchDelta,
-                                                resize = resizeNote,
-                                                resizeLeading = resizeLeadingNote
+                                                resize = resizeNote
                                             )
                                             gestureNoteWriter.value(latestNotes.map { note ->
                                                 if (note.id == touchedNote.id) updatedNote else note
                                             })
-                                            editMessage = when { resizeLeadingNote -> "Note start changed"; resizeNote -> "Note length changed"; else -> "Note moved" }
+                                            editMessage = if (resizeNote) "Note length changed" else "Note moved"
                                         } else {
                                             editMessage = "Note selected"
                                         }
@@ -3650,38 +3602,6 @@ private fun PianoRollWorkspace(
                                     }                                }
                             }
                         }
-                    Canvas(
-                        Modifier.fillMaxWidth().height(18.dp).align(Alignment.TopStart)
-                            .background(pianoPalette.panel)
-                            .border(0.5.dp, pianoPalette.border)
-                    ) {
-                        val rulerSteps = currentStepsOnScreen.coerceAtLeast(1)
-                        val stepWidth = size.width / rulerSteps.toFloat()
-                        val labelPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                            color = if (pianoPalette.room.luminance() > 0.45f) android.graphics.Color.DKGRAY else android.graphics.Color.LTGRAY
-                            textSize = with(pianoDensity) { 7.sp.toPx() }
-                            typeface = android.graphics.Typeface.DEFAULT_BOLD
-                        }
-                        for (column in 0..rulerSteps) {
-                            val absoluteStep = pageStartStep + column
-                            val x = column * stepWidth
-                            val isBar = absoluteStep % stepsPerBar == 0
-                            val isBeat = absoluteStep % stepsPerBeat == 0
-                            if (isBar) {
-                                drawLine(pianoPalette.orange, Offset(x, 0f), Offset(x, size.height), 1.15f)
-                                drawContext.canvas.nativeCanvas.drawText(
-                                    (absoluteStep / stepsPerBar + 1).toString(),
-                                    x + with(pianoDensity) { 4.dp.toPx() },
-                                    size.height * 0.72f,
-                                    labelPaint
-                                )
-                            } else if (isBeat) {
-                                drawLine(pianoPalette.border, Offset(x, size.height * 0.42f), Offset(x, size.height), 0.8f)
-                            } else {
-                                drawLine(pianoPalette.grid, Offset(x, size.height * 0.68f), Offset(x, size.height), 0.45f)
-                            }
-                        }
-                    }
                     Box(contentModifier) {
                         Canvas(Modifier.fillMaxSize()) {
                             val localRowHeight = rowHeightPx
@@ -3724,12 +3644,8 @@ private fun PianoRollWorkspace(
                                         size = Size(width, (localRowHeight - 2f).coerceAtLeast(2f)),
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
                                     )
-                                    // Visible leading/trailing resize handles mirror Arrangement clip grips.
-                                    val gripHeight = (localRowHeight - 2f).coerceAtLeast(2f)
-                                    drawRect(Color.White.copy(alpha = 0.68f),
-                                        Offset(x.toFloat(), y + 1f), Size(2f, gripHeight))
-                                    drawRect(Color.White.copy(alpha = 0.92f),
-                                        Offset(x.toFloat() + width - 3f, y + 1f), Size(2f, gripHeight))
+                                    drawRect(Color.White.copy(alpha = 0.8f),
+                                        Offset(x.toFloat() + width - 3f, y + 1f), Size(2f, (localRowHeight - 2f).coerceAtLeast(2f)))
                                 }
                             }
                         }
@@ -3801,10 +3717,10 @@ private fun MixerWorkspace(
 ) {
     val mixerPalette = LocalStudioWavePalette.current
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(2.dp)).padding(4.dp)
+        Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(7.dp)).padding(4.dp)
     ) {
         // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
-        val channelWidth = 148.dp
+        val channelWidth = 164.dp
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -4287,261 +4203,115 @@ private fun DeviceDock(
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     val palette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
-    var showAddDialog by remember { mutableStateOf(false) }
-
-    fun updateDevices(devices: List<TrackDevice>) {
-        val track = selectedTrack ?: return
-        onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(devices = devices) else it }))
-    }
-    fun addDevice(type: String, name: String) {
-        val old = selectedTrack?.devices ?: return
-        val newDevice = TrackDevice(type = type, name = name, parameters = defaultDeviceParameters(type))
-        val next = if (type in INSTRUMENT_DEVICE_TYPES) old.filterNot { it.type in INSTRUMENT_DEVICE_TYPES } + newDevice else old + newDevice
-        updateDevices(next)
-        showAddDialog = false
-    }
-
     Column(
-        (if (fullScreen) Modifier.fillMaxWidth().fillMaxHeight() else Modifier.fillMaxWidth().height(if (expanded) 328.dp else 42.dp))
-            .background(palette.room, RoundedCornerShape(3.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(3.dp))
-            .padding(horizontal = 5.dp, vertical = 4.dp),
+        (if (fullScreen) Modifier.fillMaxWidth().fillMaxHeight()
+            else Modifier.fillMaxWidth().height(if (expanded) 328.dp else 42.dp))
+            .background(palette.room, RoundedCornerShape(5.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(5.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
-            Modifier.fillMaxWidth().height(30.dp).background(palette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 6.dp),
+            Modifier.fillMaxWidth().height(31.dp)
+                .background(palette.panel, RoundedCornerShape(3.dp))
+                .padding(horizontal = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Box(Modifier.size(6.dp).background(palette.orange, RoundedCornerShape(1.dp)))
+            Box(Modifier.size(7.dp).background(palette.orange, RoundedCornerShape(1.dp)))
             Text("DEVICE VIEW", color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black)
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                project.tracks.forEach { track ->
-                    val active = selectedTrack?.id == track.id
-                    Surface(
-                        color = if (active) palette.accent.copy(alpha = 0.16f) else palette.control,
-                        border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
-                        shape = RoundedCornerShape(2.dp),
-                        modifier = Modifier.height(23.dp).clickable { onSelectTrack(track.id) }
-                    ) {
-                        Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Box(Modifier.size(6.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
-                            Text(track.name.uppercase(), color = if (active) palette.accent else palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(" / ", color = palette.muted, fontSize = 9.sp)
+            if (project.tracks.isNotEmpty()) {
+                Row(
+                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    project.tracks.forEach { track ->
+                        val active = selectedTrack?.id == track.id
+                        Surface(
+                            color = if (active) palette.accent.copy(alpha = 0.16f) else palette.control,
+                            border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
+                            shape = RoundedCornerShape(3.dp),
+                            modifier = Modifier.height(24.dp).clickable { onSelectTrack(track.id) }
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(Modifier.size(6.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
+                                Text(
+                                    track.name.uppercase(),
+                                    color = if (active) palette.accent else palette.text,
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1
+                                )
+                            }
                         }
                     }
                 }
-            }
+            } else Spacer(Modifier.weight(1f))
             DirectWaveStateButton(if (expanded) "FOLD" else "UNFOLD", expanded, palette) { expanded = !expanded }
             DirectWaveStateButton("×", false, palette, onToggle)
         }
-
         if (expanded) {
             if (selectedTrack == null) {
-                DeviceModuleCard("NO DEVICE", "TRACK DEVICE CHAIN", palette, "Create a track in Arrangement to open its instrument or audio device.")
+                DeviceModuleCard(
+                    title = "NO DEVICE",
+                    subtitle = "TRACK DEVICE CHAIN",
+                    palette = palette,
+                    body = "Create a track in Arrangement to open its instrument or audio device."
+                )
             } else {
-                val track = selectedTrack
-                val instrument = track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
-                val effects = track.devices.filter { it.type in EFFECT_DEVICE_TYPES }
-                Row(Modifier.fillMaxWidth().weight(1f).clipToBounds(), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f).fillMaxHeight().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        when {
-                            track.kind == "drum" -> DeviceModuleCard("DRUM RACK", "INSTRUMENT", palette, "Edit its 16-step pattern in Drum Sequencer.")
-                            track.kind == "midi" && (instrument == null || instrument.type == "DIRECTWAVE") -> DirectWaveDevicePanel(track.id, track.name, track.kind, palette, fullScreen)
-                            track.kind == "midi" && instrument != null -> BasicSynthDevicePanel(track, instrument, palette) { updated ->
-                                updateDevices(track.devices.map { if (it.id == updated.id) updated else it })
-                            }
-                            else -> DeviceModuleCard("AUDIO TRACK", "SOURCE / INSERTS", palette, "Edit source trim and waveform in Clip View. Insert effects process during playback.")
-                        }
-                        effects.forEach { device ->
-                            TrackEffectDeviceCard(
-                                device, palette,
-                                onUpdate = { updated -> updateDevices(track.devices.map { if (it.id == updated.id) updated else it }) },
-                                onRemove = { updateDevices(track.devices.filterNot { it.id == device.id }) }
-                            )
-                        }
-                    }
-                    Column(Modifier.width(70.dp).fillMaxHeight().padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Surface(
-                            color = palette.orange.copy(alpha = 0.18f), border = BorderStroke(1.dp, palette.orange),
-                            shape = RoundedCornerShape(2.dp), modifier = Modifier.fillMaxWidth().weight(1f).clickable { showAddDialog = true }
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                                Text("+", color = palette.orange, fontSize = 22.sp, fontWeight = FontWeight.Light)
-                                Text("ADD FX /", color = palette.text, fontSize = 6.sp, fontWeight = FontWeight.Black)
-                                Text("DEVICE", color = palette.text, fontSize = 6.sp, fontWeight = FontWeight.Black)
-                            }
-                        }
-                        Text("${effects.size} FX", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                    }
+                when (selectedTrack.kind) {
+                    "midi" -> DirectWaveDevicePanel(
+                        trackId = selectedTrack.id,
+                        trackName = selectedTrack.name,
+                        trackKind = selectedTrack.kind,
+                        palette = palette,
+                        fullHeight = fullScreen
+                    )
+                    "drum" -> DeviceModuleCard(
+                        title = "DRUM RACK",
+                        subtitle = "STEP SEQUENCER",
+                        palette = palette,
+                        body = "The current drum track uses the native step sequencer. Select a MIDI track to open DirectWave."
+                    )
+                    else -> DeviceModuleCard(
+                        title = "AUDIO TRACK",
+                        subtitle = "CLIP / SAMPLE SOURCE",
+                        palette = palette,
+                        body = "Audio source editing and trim remain in Clip View. An effect insert is shown only when a real processor is available."
+                    )
                 }
             }
         }
     }
-
-    if (showAddDialog) {
-        val midiTrack = selectedTrack?.kind == "midi"
-        val drumTrack = selectedTrack?.kind == "drum"
-        AlertDialog(
-            onDismissRequest = { showAddDialog = false },
-            containerColor = palette.panel,
-            title = { Text("ADD DEVICE", color = palette.text, fontWeight = FontWeight.Black) },
-            text = {
-                Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("INSTRUMENTS", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                    if (midiTrack) {
-                        listOf(
-                            Triple("DIRECTWAVE", "DirectWave Sampler", "Sample instrument · ADSR / pitch / loop"),
-                            Triple("SYNTH_SINE", "Analog Sine", "Basic oscillator synth"),
-                            Triple("SYNTH_SAW", "Analog Saw", "Saw oscillator synth"),
-                            Triple("SYNTH_SQUARE", "Square Synth", "Pulse oscillator synth"),
-                            Triple("SYNTH_TRIANGLE", "Triangle Synth", "Triangle oscillator synth"),
-                            Triple("FM_SYNTH", "FM Synth", "Two-operator FM tone generator")
-                        ).forEach { item -> DeviceCatalogRow(item.second, item.third, palette) { addDevice(item.first, item.second) } }
-                    } else if (drumTrack) {
-                        DeviceCatalogRow("Drum Rack", "Native drum step sequencer", palette) { addDevice("DRUM_RACK", "Drum Rack") }
-                    } else {
-                        Text("Audio tracks accept mixing and mastering effects.", color = palette.muted, fontSize = 9.sp)
-                    }
-                    HorizontalDivider(color = palette.border, modifier = Modifier.padding(vertical = 4.dp))
-                    Text("MIXING / MASTERING FX", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                    listOf(
-                        Triple("EQ", "EQ Three", "3-band low / mid / high tone shaping"),
-                        Triple("PARAM_EQ_8", "Parametric EQ Eight", "Eight-band parametric equalizer"),
-                        Triple("FILTER", "Auto Filter", "Low-pass, high-pass or band-pass"),
-                        Triple("COMPRESSOR", "Compressor", "Threshold, ratio, attack, release, makeup"),
-                        Triple("SATURATOR", "Saturator", "Drive, wet/dry and output"),
-                        Triple("DELAY", "Delay", "Feedback delay line"),
-                        Triple("REVERB", "Reverb", "Room size, decay and wet level"),
-                        Triple("LIMITER", "Limiter", "Output ceiling and release")
-                    ).forEach { item -> DeviceCatalogRow(item.second, item.third, palette) { addDevice(item.first, item.second) } }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showAddDialog = false }) { Text("DONE", color = palette.orange) } }
-        )
-    }
 }
 
 @Composable
-private fun DeviceCatalogRow(title: String, detail: String, palette: StudioWavePalette, onClick: () -> Unit) {
-    Surface(color = palette.control, shape = RoundedCornerShape(2.dp), border = BorderStroke(1.dp, palette.border), modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text(detail, color = palette.muted, fontSize = 7.sp)
-            }
-            Text("+", color = palette.orange, fontSize = 17.sp, fontWeight = FontWeight.Light)
+private fun DeviceModuleCard(
+    title: String,
+    subtitle: String,
+    palette: StudioWavePalette,
+    body: String
+) {
+    Column(
+        Modifier.width(320.dp).height(160.dp)
+            .background(palette.panel, RoundedCornerShape(4.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(4.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(8.dp).background(palette.orange, RoundedCornerShape(1.dp)))
+            Text(title, color = palette.text, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
         }
-    }
-}
-
-@Composable
-private fun BasicSynthDevicePanel(track: StudioTrack, device: TrackDevice, palette: StudioWavePalette, onUpdate: (TrackDevice) -> Unit) {
-    val params = device.parameters
-    Column(Modifier.width(242.dp).fillMaxHeight().background(palette.panel, RoundedCornerShape(2.dp)).border(1.dp, palette.border, RoundedCornerShape(2.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(device.name.uppercase(), color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-            DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) { onUpdate(device.copy(enabled = !device.enabled)) }
-        }
-        Text("BASIC SYNTH / ${track.name.uppercase()}", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        DeviceParameterSlider("LEVEL", params["level"] ?: 0.8f, 0f..1f, palette) { onUpdate(device.copy(parameters = params + ("level" to it))) }
-        DeviceParameterSlider("ATTACK", params["attackMs"] ?: 8f, 0f..1000f, palette, " ms") { onUpdate(device.copy(parameters = params + ("attackMs" to it))) }
-        DeviceParameterSlider("RELEASE", params["releaseMs"] ?: 90f, 0f..1500f, palette, " ms") { onUpdate(device.copy(parameters = params + ("releaseMs" to it))) }
-        Spacer(Modifier.weight(1f))
-        Text("Polyphonic · audio engine", color = palette.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun TrackEffectDeviceCard(device: TrackDevice, palette: StudioWavePalette, onUpdate: (TrackDevice) -> Unit, onRemove: () -> Unit) {
-    val p = device.parameters
-    Column(Modifier.width(238.dp).fillMaxHeight().background(palette.canvas, RoundedCornerShape(2.dp)).border(1.dp, palette.border, RoundedCornerShape(2.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Box(Modifier.size(6.dp).background(if (device.enabled) palette.orange else palette.muted, RoundedCornerShape(1.dp)))
-            Text(device.name.uppercase(), color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
-            DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) { onUpdate(device.copy(enabled = !device.enabled)) }
-            DirectWaveStateButton("×", false, palette) { onRemove() }
-        }
+        Text(subtitle, color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
         HorizontalDivider(color = palette.border)
-        when (device.type) {
-            "EQ" -> {
-                DeviceParameterSlider("LOW", p["lowDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("lowDb" to it))) }
-                DeviceParameterSlider("MID", p["midDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("midDb" to it))) }
-                DeviceParameterSlider("HIGH", p["highDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("highDb" to it))) }
-            }
-            "PARAM_EQ_8" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.dp), verticalAlignment = Alignment.Bottom) {
-                (1..8).forEach { band ->
-                    val key = "band$band"
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(listOf("60","120","250","500","1k","2k","5k","10k")[band-1], color = palette.muted, fontSize = 5.sp)
-                        Slider(value = p[key] ?: 0f, onValueChange = { onUpdate(device.copy(parameters = p + (key to it))) }, valueRange = -12f..12f, modifier = Modifier.height(112.dp).graphicsLayer { rotationZ = 180f },
-                            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent, inactiveTrackColor = palette.control, activeTickColor = palette.accent))
-                    }
-                }
-            }
-            "FILTER" -> {
-                DeviceParameterSlider("CUTOFF", p["cutoffHz"] ?: 16000f, 20f..20000f, palette, " Hz") { onUpdate(device.copy(parameters = p + ("cutoffHz" to it))) }
-                DeviceParameterSlider("RESONANCE", p["resonance"] ?: 0.15f, 0f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("resonance" to it))) }
-                val mode = (p["mode"] ?: 0f).toInt().coerceIn(0,2)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("MODE", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    listOf("LP","HP","BP").forEachIndexed { index, label -> DirectWaveStateButton(label, mode == index, palette) { onUpdate(device.copy(parameters = p + ("mode" to index.toFloat()))) } }
-                }
-            }
-            "DELAY" -> {
-                DeviceParameterSlider("TIME", p["timeMs"] ?: 320f, 10f..900f, palette, " ms") { onUpdate(device.copy(parameters = p + ("timeMs" to it))) }
-                DeviceParameterSlider("FEEDBACK", p["feedback"] ?: 0.32f, 0f..0.85f, palette) { onUpdate(device.copy(parameters = p + ("feedback" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.2f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
-            }
-            "REVERB" -> {
-                DeviceParameterSlider("ROOM", p["room"] ?: 0.45f, 0.05f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("room" to it))) }
-                DeviceParameterSlider("DECAY", p["decay"] ?: 1.6f, 0.2f..6f, palette, " s") { onUpdate(device.copy(parameters = p + ("decay" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.22f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
-            }
-            "COMPRESSOR" -> {
-                DeviceParameterSlider("THRESHOLD", p["thresholdDb"] ?: -18f, -60f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("thresholdDb" to it))) }
-                DeviceParameterSlider("RATIO", p["ratio"] ?: 3f, 1f..20f, palette, ":1") { onUpdate(device.copy(parameters = p + ("ratio" to it))) }
-                DeviceParameterSlider("ATTACK", p["attackMs"] ?: 10f, 0.1f..250f, palette, " ms") { onUpdate(device.copy(parameters = p + ("attackMs" to it))) }
-                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 120f, 1f..1500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
-                DeviceParameterSlider("MAKEUP", p["makeupDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("makeupDb" to it))) }
-            }
-            "SATURATOR" -> {
-                DeviceParameterSlider("DRIVE", p["drive"] ?: 2.5f, 0.2f..12f, palette) { onUpdate(device.copy(parameters = p + ("drive" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.35f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
-                DeviceParameterSlider("OUTPUT", p["outputDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("outputDb" to it))) }
-            }
-            "LIMITER" -> {
-                DeviceParameterSlider("CEILING", p["ceilingDb"] ?: -1f, -12f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("ceilingDb" to it))) }
-                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 80f, 10f..500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Text(when (device.type) {
-            "PARAM_EQ_8" -> "8-band parametric EQ"
-            "EQ" -> "3-band tone control"
-            "FILTER" -> "Low / high / band-pass"
-            "DELAY" -> "Feedback delay"
-            "REVERB" -> "Multi-tap room reverb"
-            "COMPRESSOR" -> "Dynamics / gain reduction"
-            "SATURATOR" -> "Soft-clipping saturation"
-            else -> "Peak output protection"
-        }, color = palette.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-@Composable
-private fun DeviceParameterSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, palette: StudioWavePalette, unit: String = "", onChange: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            val shown = when {
-                value.absoluteValue >= 1000f -> "%.1fk".format(value / 1000f)
-                value.absoluteValue >= 10f -> "%.1f".format(value)
-                else -> "%.2f".format(value)
-            }
-            Text(shown + unit, color = palette.text, fontSize = 6.sp, fontWeight = FontWeight.Bold)
-        }
-        Slider(value = value.coerceIn(range.start, range.endInclusive), onValueChange = onChange, valueRange = range, modifier = Modifier.fillMaxWidth().height(20.dp),
-            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent, inactiveTrackColor = palette.control, activeTickColor = palette.accent))
+        Text(body, color = palette.muted, fontSize = 9.sp, lineHeight = 13.sp)
     }
 }
 
