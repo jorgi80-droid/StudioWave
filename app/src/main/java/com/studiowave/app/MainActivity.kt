@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -52,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -2229,64 +2231,111 @@ private fun MixerWorkspace(
 @Composable
 private fun BrowserWorkspace(onImportAudio: () -> Unit) {
     val entries = listOf(
-        Triple("hard-kick-01.wav", "KICK  /  HARD TRAP", "WAV"),
-        Triple("hard-snare-01.wav", "SNARE  /  HARD TRAP", "WAV"),
+        Triple("hard-kick-01.wav", "KICK / HARD TRAP", "WAV"),
+        Triple("hard-snare-01.wav", "SNARE / HARD TRAP", "WAV"),
         Triple("hi-hat-closed-01.wav", "CLOSED HAT", "WAV"),
         Triple("808-bass-sub.wav", "808 SUB BASS", "WAV"),
-        Triple("bounce-kick-01.wav", "KICK  /  BOUNCE", "WAV"),
-        Triple("vintage-kick-01.wav", "KICK  /  VINTAGE", "WAV")
+        Triple("bounce-kick-01.wav", "KICK / BOUNCE", "WAV"),
+        Triple("vintage-kick-01.wav", "KICK / VINTAGE", "WAV")
     )
-    Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(8.dp)) {
-        Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("BROWSER", color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp)
+    var query by remember { mutableStateOf("") }
+    var selectedPlace by remember { mutableStateOf("DirectWave") }
+    var selectedSample by remember { mutableStateOf("hard-kick-01.wav") }
+    val filteredEntries = entries.filter { entry ->
+        selectedPlace != "User Library" &&
+            (query.isBlank() || entry.first.contains(query, ignoreCase = true) || entry.second.contains(query, ignoreCase = true))
+    }
+    Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(4.dp)).padding(6.dp)) {
+        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2D3034), RoundedCornerShape(3.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("BROWSER", color = Color(0xFFE8E9EB), fontWeight = FontWeight.Black, fontSize = 10.sp)
             Spacer(Modifier.width(8.dp))
-            Text("FACTORY LIBRARY", color = Color(0xFFAEB4BD), fontSize = 8.sp)
+            Box(Modifier.width(3.dp).height(13.dp).background(Color(0xFFFFA65A), RoundedCornerShape(1.dp)))
+            Text("FACTORY LIBRARY", color = Color(0xFFB8BDC5), fontSize = 7.sp)
             Spacer(Modifier.weight(1f))
-            Text("CC0  •  OFFLINE AFTER BUILD", color = Color(0xFF80DFD2), fontSize = 7.sp)
-            Spacer(Modifier.width(8.dp))
-            Button(onClick = onImportAudio, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp), modifier = Modifier.height(27.dp), shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF444A50))) {
-                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color(0xFF80DFD2), modifier = Modifier.size(13.dp))
+            Text("CC0 / OFFLINE ASSETS", color = Color(0xFF75DCCC), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(7.dp))
+            Button(onClick = onImportAudio, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 0.dp), modifier = Modifier.height(25.dp), shape = RoundedCornerShape(3.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF44484E))) {
+                Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color(0xFFFFA65A), modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("IMPORT AUDIO", fontSize = 8.sp, color = Color.White)
+                Text("IMPORT AUDIO", fontSize = 7.sp, color = Color.White)
             }
         }
         Spacer(Modifier.height(5.dp))
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Column(Modifier.width(142.dp).fillMaxHeight().background(Color(0xFF26292D), RoundedCornerShape(4.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("PLACES", color = Color(0xFFAEB4BD), fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                listOf("Factory", "DirectWave", "Drums", "User Library").forEachIndexed { index, label ->
-                    Row(Modifier.fillMaxWidth().height(27.dp).background(if (index == 1) Color(0xFF444950) else Color.Transparent, RoundedCornerShape(3.dp)).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(5.dp).background(if (index == 1) Color(0xFFFFB347) else Color(0xFF737A84), RoundedCornerShape(2.dp)))
-                        Spacer(Modifier.width(6.dp))
-                        Text(label, color = if (index == 1) Color.White else Color(0xFFD2D5DA), fontSize = 9.sp)
-                    }
-                }
-                Spacer(Modifier.weight(1f))
-                Text("STUDIOWAVE", color = Color(0xFF7DD9CB), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF191B1E), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(3.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color(0xFF9EA4AC), modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(7.dp))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (query.isBlank()) Text("Search factory samples...", color = Color(0xFF858B93), fontSize = 8.sp)
+                BasicTextField(value = query, onValueChange = { query = it }, singleLine = true,
+                    textStyle = TextStyle(color = Color(0xFFE8E9EB), fontSize = 9.sp), modifier = Modifier.fillMaxWidth())
             }
-            Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF26292D), RoundedCornerShape(4.dp)).padding(7.dp)) {
-                Text("DIRECTWAVE / FACTORY ONE-SHOTS", color = Color(0xFFE7E9EC), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text("Boochi44 free-drum-samples  •  CC0 1.0", color = MutedText, fontSize = 7.sp)
-                Spacer(Modifier.height(5.dp))
-                entries.forEachIndexed { index, entry ->
-                    Row(Modifier.fillMaxWidth().height(34.dp).background(if (index == 0) Color(0xFF3B4247) else Color(0xFF2D3035), RoundedCornerShape(3.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.width(3.dp).height(20.dp).background(if (index == 0) Color(0xFF80DFD2) else Color(0xFF59616A), RoundedCornerShape(2.dp)))
-                        Spacer(Modifier.width(7.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(entry.first, color = Color(0xFFF1F2F4), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                            Text(entry.second, color = MutedText, fontSize = 6.sp, maxLines = 1)
-                        }
-                        Text(entry.third, color = Color(0xFF9DA3AD), fontSize = 7.sp)
+            Text("${filteredEntries.size} ITEMS", color = Color(0xFF9EA4AC), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.height(5.dp))
+        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Column(Modifier.width(142.dp).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF41454B), RoundedCornerShape(3.dp)).padding(5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("PLACES", color = Color(0xFF9EA4AC), fontSize = 7.sp, fontWeight = FontWeight.Black)
+                listOf("Factory", "DirectWave", "Drums", "User Library").forEach { label ->
+                    val active = selectedPlace == label
+                    Row(
+                        Modifier.fillMaxWidth().height(28.dp)
+                            .background(if (active) Color(0xFF4A3B31) else Color.Transparent, RoundedCornerShape(2.dp))
+                            .then(if (active) Modifier.border(1.dp, Color(0xFF6B4D37), RoundedCornerShape(2.dp)) else Modifier)
+                            .clickable { selectedPlace = label }
+                            .padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.width(3.dp).height(15.dp).background(if (active) Color(0xFFFFA65A) else Color(0xFF656B73), RoundedCornerShape(1.dp)))
+                        Spacer(Modifier.width(6.dp))
+                        Text(label, color = if (active) Color(0xFFFFC08B) else Color(0xFFD2D5DA), fontSize = 8.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
                     }
-                    Spacer(Modifier.height(3.dp))
                 }
                 Spacer(Modifier.weight(1f))
-                Text("Import audio remains available. Sample audition/PCM decoding needs sampler-engine integration.", color = MutedText, fontSize = 7.sp, maxLines = 2)
+                Text("STUDIOWAVE", color = Color(0xFFFFA65A), fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Text("LOCAL PROJECT", color = Color(0xFF818791), fontSize = 6.sp)
+            }
+            Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF41454B), RoundedCornerShape(3.dp)).padding(6.dp)) {
+                Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${selectedPlace.uppercase()} / FACTORY ONE-SHOTS", color = Color(0xFFE7E9EC), fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                    Spacer(Modifier.weight(1f))
+                    Text("WAV", color = Color(0xFFFFA65A), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                }
+                Text("Boochi44 free-drum-samples • CC0 1.0", color = Color(0xFF9EA4AC), fontSize = 7.sp)
+                Spacer(Modifier.height(5.dp))
+                if (filteredEntries.isEmpty()) {
+                    Column(Modifier.weight(1f).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Text(if (selectedPlace == "User Library") "USER LIBRARY IS EMPTY" else "NO MATCHING SAMPLES", color = Color(0xFFBCC0C6), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Text(if (selectedPlace == "User Library") "Import audio to add a source to this project." else "Try another search term.", color = Color(0xFF8F959E), fontSize = 7.sp)
+                    }
+                } else {
+                    filteredEntries.forEach { entry ->
+                        val active = selectedSample == entry.first
+                        Row(
+                            Modifier.fillMaxWidth().height(35.dp)
+                                .background(if (active) Color(0xFF4A3B31) else Color(0xFF242629), RoundedCornerShape(2.dp))
+                                .then(if (active) Modifier.border(1.dp, Color(0xFF765239), RoundedCornerShape(2.dp)) else Modifier)
+                                .clickable { selectedSample = entry.first }
+                                .padding(horizontal = 7.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(Modifier.width(3.dp).height(21.dp).background(if (active) Color(0xFFFFA65A) else Color(0xFF555C64), RoundedCornerShape(1.dp)))
+                            Spacer(Modifier.width(7.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(entry.first, color = if (active) Color(0xFFFFC08B) else Color(0xFFF1F2F4), fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Text(entry.second, color = Color(0xFF9EA4AC), fontSize = 6.sp, maxLines = 1)
+                            }
+                            Text(entry.third, color = Color(0xFFA8AEB6), fontSize = 7.sp)
+                        }
+                        Spacer(Modifier.height(3.dp))
+                    }
+                    Spacer(Modifier.weight(1f))
+                }
+                Text("Selected sample: $selectedSample • audition/PCM decoding is not yet connected.", color = Color(0xFF9299A3), fontSize = 6.sp, maxLines = 1)
             }
         }
     }
 }
-
 @Composable
 private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
     var selectedSample by remember { mutableIntStateOf(0) }
@@ -2305,8 +2354,8 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
         Triple("BOUNCE KICK 01", "bounce-kick-01.wav", "KICK / BOUNCE"),
         Triple("VINTAGE KICK 01", "vintage-kick-01.wav", "KICK / VINTAGE")
     )
-    Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(7.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2A2D31), RoundedCornerShape(4.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(4.dp)).border(1.dp, Color(0xFF45494F), RoundedCornerShape(4.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2A2D31), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF44484E), RoundedCornerShape(3.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(8.dp).background(Color(0xFFFFA52E), RoundedCornerShape(50.dp)))
             Text("DIRECTWAVE", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
             Text("SAMPLER  /  INSTRUMENT DEVICE", color = Color(0xFFB8BDC5), fontSize = 8.sp)
@@ -2317,10 +2366,10 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
             SmallAction("BACK") { onBack() }
         }
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Column(Modifier.width(176.dp).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(5.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.width(176.dp).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(3.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("FACTORY SAMPLES", color = Color(0xFFC0C5CC), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 samples.forEachIndexed { index, sample ->
-                    Row(Modifier.fillMaxWidth().height(34.dp).background(if (selectedSample == index) Color(0xFF454A50) else Color(0xFF25272B), RoundedCornerShape(3.dp)).clickable { selectedSample = index }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().height(34.dp).background(if (selectedSample == index) Color(0xFF4A3B31) else Color(0xFF25272B), RoundedCornerShape(3.dp)).then(if (selectedSample == index) Modifier.border(1.dp, Color(0xFF765239), RoundedCornerShape(3.dp)) else Modifier).clickable { selectedSample = index }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.width(3.dp).height(21.dp).background(if (selectedSample == index) Color(0xFFFFB347) else Color(0xFF5F6670), RoundedCornerShape(2.dp)))
                         Spacer(Modifier.width(6.dp))
                         Column(Modifier.weight(1f)) {
@@ -2338,13 +2387,13 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
                 }
                 Text("CC0 source recorded with assets", color = Color(0xFF89919B), fontSize = 6.sp)
             }
-            Column(Modifier.weight(1.05f).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(5.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1.05f).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(3.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("SAMPLE VIEW", color = Color(0xFFC0C5CC), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                     Text("START 0%    END 100%", color = Color(0xFF9299A3), fontSize = 7.sp)
                 }
-                Canvas(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF1B1D20), RoundedCornerShape(4.dp)).padding(8.dp)) {
+                Canvas(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF1B1D20), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF41464D), RoundedCornerShape(3.dp)).padding(8.dp)) {
                     val center = size.height / 2f
                     val count = 172
                     val profile = when (selectedSample) { 0 -> 0.96f; 1 -> 0.74f; 2 -> 0.32f; 3 -> 0.82f; 4 -> 0.54f; else -> 0.42f }
@@ -2409,13 +2458,23 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
 
 @Composable
 private fun DeviceSection(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxHeight().background(Color(0xFF35383D), RoundedCornerShape(4.dp)).padding(5.dp)) {
-        Text(title, color = Color(0xFFC6CBD2), fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    Column(
+        modifier.fillMaxHeight()
+            .background(Color(0xFF303338), RoundedCornerShape(3.dp))
+            .border(1.dp, Color(0xFF484C52), RoundedCornerShape(3.dp))
+            .padding(5.dp)
+    ) {
+        Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(3.dp).height(9.dp).background(Color(0xFFFFA65A), RoundedCornerShape(1.dp)))
+            Spacer(Modifier.width(5.dp))
+            Text(title.uppercase(), color = Color(0xFFD0D3D8), fontSize = 7.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            Spacer(Modifier.weight(1f))
+            Box(Modifier.width(12.dp).height(2.dp).background(Color(0xFF5B6068), RoundedCornerShape(1.dp)))
+        }
         Spacer(Modifier.height(3.dp))
         content()
     }
 }
-
 @Composable
 private fun AbletonKnob(
     label: String,
