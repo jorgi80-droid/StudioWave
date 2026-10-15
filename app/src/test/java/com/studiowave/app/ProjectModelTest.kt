@@ -237,4 +237,15 @@ class ProjectModelTest {
         assertEquals(migrated.sourceLengthMicros, reopenedClip.sourceLengthMicros)
     }
 
+
+    @Test fun trimSliderFractionsConvertDirectlyToAbsoluteMicroseconds() {
+        val range = audioTrimMicrosRangeFromFractions(0.25f, 0.75f, 4_000_000L)!!
+        assertEquals(1_000_000L, range.startMicros)
+        assertEquals(3_000_000L, range.endMicrosExclusive)
+        assertEquals(null, audioTrimMicrosRangeFromFractions(0f, 1f, 1L))
+        val invalidFractions = audioTrimMicrosRangeFromFractions(Float.NaN, Float.POSITIVE_INFINITY, 4_000_000L)!!
+        assertEquals(0L, invalidFractions.startMicros)
+        assertEquals(4_000_000L, invalidFractions.endMicrosExclusive)
+    }
+
 }
