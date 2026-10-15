@@ -163,4 +163,28 @@ class TimelineViewportTest {
         assertTrue(kotlin.math.abs(zoomed.pixelsToTickDelta(renderedWidth) - duration) <= 1L)
     }
 
+    @Test fun malformedViewportInputsAreNormalizedBeforeMapping() {
+        val viewport = TimelineViewport(
+            timebase = common,
+            pixelsPerBar = Float.NaN,
+            scrollTimeTicks = Double.NaN,
+            viewportWidthPx = Float.NaN,
+            trackHeaderWidthPx = Float.NaN
+        )
+        assertEquals(TimelineViewport.MIN_PIXELS_PER_BAR, viewport.effectivePixelsPerBar, 0f)
+        assertEquals(0.0, viewport.effectiveScrollTimeTicks, 0.0)
+        assertEquals(0f, viewport.effectiveViewportWidthPx, 0f)
+        assertEquals(0f, viewport.safeTrackHeaderWidthPx, 0f)
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.NaN))
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.POSITIVE_INFINITY))
+        assertEquals(0.0, viewport.panByScreenPixels(Float.NaN).effectiveScrollTimeTicks, 0.0)
+    }
+
+    @Test fun viewportHitTestingClampsOutsideArrangementBounds() {
+        val viewport = arrangementPaneViewport(common, 148f, 0.0, 900f)
+        assertEquals(0L, viewport.viewportXToTime(-500f))
+        assertEquals(maxArrangementTick(common), viewport.viewportXToTime(Float.MAX_VALUE))
+        assertEquals(maxArrangementTick(common), viewport.screenXToTime(Float.POSITIVE_INFINITY))
+    }
+
 }
