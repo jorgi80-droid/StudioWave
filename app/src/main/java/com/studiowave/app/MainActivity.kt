@@ -4802,15 +4802,19 @@ private fun TrackEffectDeviceCard(
 ) {
     val p = device.parameters
     Column(
-        Modifier.width(242.dp).height(250.dp).verticalScroll(rememberScrollState())
+        Modifier.width(252.dp).height(264.dp).verticalScroll(rememberScrollState())
             .background(palette.panel, RoundedCornerShape(1.dp))
             .border(1.dp, palette.border, RoundedCornerShape(1.dp))
-            .padding(7.dp),
+            .padding(5.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Box(Modifier.fillMaxWidth().height(2.dp).background(if (device.enabled) palette.orange else palette.border))
+        // Device-rack faceplate: active strip, squared header and hairline perimeter.
+        Box(Modifier.fillMaxWidth().height(3.dp).background(if (device.enabled) palette.orange else palette.border))
         Row(
-            Modifier.fillMaxWidth().background(palette.raised).padding(horizontal = 4.dp, vertical = 3.dp),
+            Modifier.fillMaxWidth().height(25.dp)
+                .background(palette.raised, RoundedCornerShape(1.dp))
+                .border(1.dp, palette.border, RoundedCornerShape(1.dp))
+                .padding(horizontal = 5.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(Modifier.size(6.dp).background(if (device.enabled) palette.orange else palette.muted, RoundedCornerShape(1.dp)))
@@ -4870,11 +4874,15 @@ private fun TrackEffectDeviceCard(
                         val x = size.width * division / 6f
                         drawLine(palette.border.copy(alpha = 0.42f), Offset(x, 0f), Offset(x, size.height), 0.6.dp.toPx())
                     }
+                    // This is a band-gain overview, not a measured FFT or summed filter response.
+                    // Sort by frequency before connecting points so moving bands cannot make the
+                    // overview double back across the graph.
+                    val curveOrder = (0..7).sortedBy { bandFreqNorms[it] }
                     val curve = androidx.compose.ui.graphics.Path()
-                    gains.forEachIndexed { index, bandGain ->
-                        val x = size.width * bandFreqNorms[index]
-                        val y = midY - (bandGain / 18f) * (size.height * 0.44f)
-                        if (index == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
+                    curveOrder.forEachIndexed { orderIndex, bandIndex ->
+                        val x = size.width * bandFreqNorms[bandIndex]
+                        val y = midY - (gains[bandIndex] / 18f) * (size.height * 0.44f)
+                        if (orderIndex == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
                     }
                     drawPath(curve, palette.orange, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
                     gains.forEachIndexed { index, bandGain ->
@@ -5021,7 +5029,12 @@ private fun TrackEffectDeviceCard(
                 }
             }
         }
-        Text("Track insert · parameters persist and route through playback.", color = palette.muted, fontSize = 6.sp)
+        HorizontalDivider(color = palette.border, thickness = 1.dp)
+        Text(
+            if (device.enabled) "INSERT  ·  ENABLED  ·  PROJECT PARAMETERS" else "INSERT  ·  BYPASSED  ·  PROJECT PARAMETERS",
+            color = if (device.enabled) palette.orange else palette.muted,
+            fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1
+        )
     }
 }
 
@@ -5114,7 +5127,7 @@ private fun DirectWaveKnob(
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
             )
             drawArc(
-                palette.accent, 135f, 270f * fraction, false, rectTop, rectSize,
+                palette.orange, 135f, 270f * fraction, false, rectTop, rectSize,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
             )
             for (tick in 0..10) {
@@ -5137,7 +5150,14 @@ private fun DirectWaveKnob(
             drawCircle(palette.muted.copy(alpha = 0.55f), radius * 0.09f, center)
         }
         Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Black, maxLines = 1)
-        Text(valueLabel, color = palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        Box(
+            Modifier.background(palette.canvas, RoundedCornerShape(1.dp))
+                .border(1.dp, palette.border, RoundedCornerShape(1.dp))
+                .padding(horizontal = 3.dp, vertical = 1.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(valueLabel, color = palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        }
     }
 }
 
