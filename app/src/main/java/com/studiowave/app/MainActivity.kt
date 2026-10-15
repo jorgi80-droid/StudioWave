@@ -2644,6 +2644,12 @@ private fun TimelineGrid(
                             animationSpec = tween(durationMillis = 140),
                             label = "clipSelectionFill"
                         )
+                        val clipBorderColor by androidx.compose.animation.animateColorAsState(
+                            targetValue = if (selectedClip == clip.id) timelinePalette.orange
+                                else accent.copy(alpha = if (isLightTheme) 0.72f else 0.9f),
+                            animationSpec = tween(durationMillis = 120),
+                            label = "clipSelectionBorder"
+                        )
                         Column(
                             Modifier
                                 .offset(x = with(density) { displayLeftPx.toDp() }, y = 0.dp)
@@ -2657,7 +2663,7 @@ private fun TimelineGrid(
                                 .background(clipFill, RoundedCornerShape(1.dp))
                                 .border(
                                     width = if (selectedClip == clip.id) 1.25.dp else 0.5.dp,
-                                    color = if (selectedClip == clip.id) timelinePalette.orange else accent.copy(alpha = if (isLightTheme) 0.72f else 0.9f),
+                                    color = clipBorderColor,
                                     shape = RoundedCornerShape(1.dp)
                                 )
                                 .pointerInput(clip.id, trackIndex) {
@@ -4934,6 +4940,16 @@ private fun TrackEffectDeviceCard(
     onRemove: () -> Unit
 ) {
     val p = device.parameters
+    val enabledAccent by androidx.compose.animation.animateColorAsState(
+        targetValue = if (device.enabled) palette.orange else palette.border,
+        animationSpec = tween(durationMillis = 120),
+        label = "deviceEnabledAccent_" + device.id
+    )
+    val enabledIndicator by androidx.compose.animation.animateColorAsState(
+        targetValue = if (device.enabled) palette.orange else palette.muted,
+        animationSpec = tween(durationMillis = 120),
+        label = "deviceEnabledIndicator_" + device.id
+    )
     Column(
         Modifier.width(252.dp).height(264.dp).verticalScroll(rememberScrollState())
             .background(palette.panel, RoundedCornerShape(1.dp))
@@ -4941,8 +4957,8 @@ private fun TrackEffectDeviceCard(
             .padding(5.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        // Device-rack faceplate: active strip, squared header and hairline perimeter.
-        Box(Modifier.fillMaxWidth().height(3.dp).background(if (device.enabled) palette.orange else palette.border))
+        // Device-rack faceplate: active strip and indicator ease between enabled/disabled states.
+        Box(Modifier.fillMaxWidth().height(3.dp).background(enabledAccent))
         Row(
             Modifier.fillMaxWidth().height(25.dp)
                 .background(palette.raised, RoundedCornerShape(1.dp))
@@ -4950,7 +4966,7 @@ private fun TrackEffectDeviceCard(
                 .padding(horizontal = 5.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(6.dp).background(if (device.enabled) palette.orange else palette.muted, RoundedCornerShape(1.dp)))
+            Box(Modifier.size(6.dp).background(enabledIndicator, RoundedCornerShape(1.dp)))
             Text(device.name.uppercase(), color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Black,
                 maxLines = 1, modifier = Modifier.weight(1f))
             DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) {
