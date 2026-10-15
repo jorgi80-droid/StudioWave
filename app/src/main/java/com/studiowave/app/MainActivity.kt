@@ -3831,11 +3831,18 @@ private fun MixerWorkspace(
                         drawRoundRect(mixerPalette.room, Offset(railLeft, railTop),
                             Size(railWidth, (railBottom - railTop).coerceAtLeast(1f)),
                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(railWidth / 2f))
-                        for (tick in 0..12) {
-                            val y = railTop + (railBottom - railTop) * tick / 12f
-                            drawLine(mixerPalette.grid.copy(alpha = 0.72f),
-                                Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
-                        }
+                        val channelMaxDb = 20.0 * kotlin.math.log10(1.5)
+                val channelMinDb = minOf(-60.0, channelMaxDb - 60.0)
+                listOf(3.5, 0.0, -6.0, -12.0, -24.0, -48.0).forEach { db ->
+                    if (db in channelMinDb..channelMaxDb) {
+                        val fraction = ((db - channelMinDb) / (channelMaxDb - channelMinDb)).toFloat()
+                        val y = railBottom - fraction * (railBottom - railTop)
+                        val major = db == 0.0 || db == -12.0 || db == -24.0
+                        drawLine(mixerPalette.grid.copy(alpha = if (major) 0.95f else 0.65f),
+                            Offset(railLeft - if (major) 8f else 5f, y), Offset(railLeft - 1f, y),
+                            if (major) 1.3f else 0.8f)
+                    }
+                }
                         val fraction = mixerFaderFractionForGain(track.volume, 1.5f)
                         val thumbY = railBottom - fraction * (railBottom - railTop)
                         val capLeft = size.width * 0.08f
@@ -3909,10 +3916,13 @@ private fun MixerWorkspace(
                 val railLeft = (size.width - railWidth) / 2f
                 drawRoundRect(mixerPalette.room, Offset(railLeft, 0f), Size(railWidth, size.height),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-                for (tick in 0..12) {
-                    val y = size.height * tick / 12f
-                    drawLine(mixerPalette.grid.copy(alpha = 0.68f),
-                        Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
+                listOf(0.0, -6.0, -12.0, -24.0, -48.0).forEach { db ->
+                    val fraction = ((db + 60.0) / 60.0).toFloat()
+                    val y = size.height * (1f - fraction)
+                    val major = db == 0.0 || db == -12.0 || db == -24.0
+                    drawLine(mixerPalette.grid.copy(alpha = if (major) 0.95f else 0.65f),
+                        Offset(railLeft - if (major) 8f else 5f, y), Offset(railLeft - 1f, y),
+                        if (major) 1.3f else 0.8f)
                 }
                 val gain = mixerFaderFractionForGain(master, 1f)
                 val thumbY = size.height * (1f - gain)
