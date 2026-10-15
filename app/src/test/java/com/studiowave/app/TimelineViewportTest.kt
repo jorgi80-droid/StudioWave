@@ -186,4 +186,47 @@ class TimelineViewportTest {
         }
     }
 
+
+    @Test fun panAndPlaceTickStayInside1800BarArrangement() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val end = maxArrangementTick(timebase)
+        assertEquals(1800L * timebase.ticksPerBar, end)
+        val initial = TimelineViewport(timebase, 74f, 0.0, 900f)
+        assertEquals(0.0, initial.panByScreenPixels(Float.NaN).effectiveScrollTimeTicks, 0.0)
+        val atEnd = initial.placeTickAtViewportX(end, 900f)
+        val maxScroll = end.toDouble() - 900.0 / atEnd.pixelsPerTick
+        assertTrue(atEnd.effectiveScrollTimeTicks <= maxScroll + 1e-6)
+        assertEquals(end, atEnd.screenXToTime(Float.POSITIVE_INFINITY))
+        assertEquals(1799L, atEnd.lastVisibleBar(10))
+        assertTrue(atEnd.panByScreenPixels(-100000f).effectiveScrollTimeTicks <= end.toDouble())
+    }
+
+    @Test fun fractionalZoomAnchorRemainsStableAtHighZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewport = TimelineViewport(timebase, 82f, 200000.125, 900f, 104f)
+        val x = 104f + 420f
+        val tick = viewport.effectiveScrollTimeTicks + (x - viewport.safeTrackHeaderWidthPx) / viewport.pixelsPerTick
+        val zoomed = viewport.zoomKeepingAnchor(4800f, x)
+        val tickAfter = zoomed.effectiveScrollTimeTicks + (x - zoomed.safeTrackHeaderWidthPx) / zoomed.pixelsPerTick
+        assertEquals(tick, tickAfter, 1e-5)
+    }
+
+    @Test fun viewportCapsExtremeScrollAndKeepsWholeBarExtent() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewport = TimelineViewport(timebase, 74f, Long.MAX_VALUE.toDouble(), 900f, 104f)
+        val end = maxArrangementTick(timebase)
+        assertTrue(viewport.effectiveScrollTimeTicks <= end.toDouble())
+        assertTrue(viewport.effectiveScrollTimeTicks + viewport.effectiveViewportWidthPx / viewport.pixelsPerTick <= end.toDouble() + 1e-6)
+        assertEquals(1800L, TimelineViewport.MAX_ARRANGEMENT_BARS)
+    }
+
+    @Test fun subdivisionsBecomeFinerWhenZoomIncreases() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val distant = TimelineViewport(timebase, 20f, 0.0, 800f).visibleSubdivisionTicks()
+        val close = TimelineViewport(timebase, 4800f, 0.0, 800f).visibleSubdivisionTicks()
+        assertTrue(close <= distant)
+        assertTrue(distant > 0L && close > 0L)
+    }
+
+
 }
