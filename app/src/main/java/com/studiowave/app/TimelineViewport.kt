@@ -165,7 +165,8 @@ data class TimelineViewport(
     /** Place a fractional musical tick at a screen point without integer-tick rounding. */
     fun placeTickAtViewportX(tick: Double, viewportX: Float): TimelineViewport {
         if (!viewportX.isFinite() || !tick.isFinite()) return this
-        val newScroll = (tick.coerceAtLeast(0.0) - viewportX.toDouble() / pixelsPerTick)
+        val boundedTick = tick.coerceIn(0.0, maxArrangementTick(timebase).toDouble())
+        val newScroll = (boundedTick - viewportX.toDouble() / pixelsPerTick)
             .coerceIn(0.0, maxScrollTicks())
         return copy(scrollTimeTicks = newScroll)
     }
