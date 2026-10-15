@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.draw.clipToBounds
@@ -1569,8 +1570,8 @@ private fun TimelineGrid(
                                 .padding(top = 7.dp, bottom = 7.dp)
                                 .width(clipWidthDp.dp)
                                 .fillMaxHeight()
-                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
-                                .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
+                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.94f else 0.76f), RoundedCornerShape(3.dp))
+                                .then(if (selectedClip == clip.id) Modifier.border(1.5.dp, Color(0xFFFFE8CB), RoundedCornerShape(3.dp)) else Modifier)
                                 .pointerInput(clip.id, trackIndex, zoom, trackHeightPx) {
                                     // The trailing grip owns resize gestures. Do not let the clip-body
                                     // drag handler consume those pointer changes first.
@@ -1657,12 +1658,12 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Text(clip.name, fontSize = 8.sp, color = Color.White, maxLines = 1)
+                            Text(clip.name, fontSize = 8.sp, color = Color(0xFF202124), fontWeight = FontWeight.Bold, maxLines = 1)
                             if (track.kind == "drum") {
                                 Row(Modifier.fillMaxSize().padding(top = 16.dp, bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.Bottom) {
                                     (0 until 16).forEach { step ->
                                         val active = clip.drumSteps.getOrNull(step) ?: false
-                                        Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.88f else 0.24f).background(if (active) accent.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.16f), RoundedCornerShape(1.dp)))
+                                        Box(Modifier.weight(1f).fillMaxHeight(if (active) 0.88f else 0.24f).background(if (active) Color(0xFF202124).copy(alpha = 0.72f) else Color.White.copy(alpha = 0.46f), RoundedCornerShape(1.dp)))
                                     }
                                 }
                             } else if (track.kind == "midi") {
@@ -1672,7 +1673,7 @@ private fun TimelineGrid(
                                         val noteW = note.durationTicks.toFloat() / clip.lengthTicks.coerceAtLeast(1) * size.width
                                         val y = (127 - note.pitch).toFloat() / 127f * size.height
                                         drawRoundRect(
-                                            Color.White.copy(alpha = 0.8f),
+                                            Color(0xFF202124).copy(alpha = 0.72f),
                                             Offset(noteX, y),
                                             Size(noteW.coerceAtLeast(2f), 3.dp.toPx()),
                                             cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f)
@@ -1680,7 +1681,7 @@ private fun TimelineGrid(
                                     }
                                 }
                             } else if (track.kind == "audio") {
-                                AudioClipWaveform(clip.sourceUri, accent)
+                                AudioClipWaveform(clip.sourceUri, Color(0xFF202124))
                             }
                                 }
                                 var leftResizeDeltaPx by remember(clip.id) { mutableFloatStateOf(0f) }
@@ -1845,7 +1846,7 @@ private fun PianoRollWorkspace(
     val accent = Color(0xFFFFA65A)
     val ticksPerBar = timebase.ticksPerBar.coerceAtLeast(1L)
     val visibleBars = (2.0 / horizontalZoom.coerceAtLeast(0.25f)).coerceAtLeast(0.5)
-    val clipEnd = clip?.let { it.startTick + it.lengthTicks.coerceAtLeast(ticksPerBar) } ?: ticksPerBar * 8L
+    val clipEnd = clip?.lengthTicks?.coerceAtLeast(ticksPerBar) ?: ticksPerBar * 8L
     val viewTicks = (ticksPerBar * visibleBars).toLong().coerceAtLeast(1L)
     fun commitNotes(updated: List<com.studiowave.app.data.MidiNote>) {
         if (track == null || clip == null) return
