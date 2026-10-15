@@ -13,6 +13,8 @@ import android.os.Process
 import com.studiowave.app.data.MidiNote
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioTrack
+import com.studiowave.app.data.TrackDevice
+import com.studiowave.app.data.EFFECT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -119,7 +121,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val volume: Float,
         val pan: Float,
         val muted: Boolean,
-        val solo: Boolean
+        val solo: Boolean,
+        val devices: List<TrackDevice>
     )
 
     private data class MixSnapshot(
@@ -453,6 +456,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
+        val perTrackMix = HashMap<String, FloatArray>()
+        val deviceDsp = HashMap<String, TrackDeviceDsp>()
         val sampleRate = plan.sampleRate
         val scheduledAudio = plan.audio
         val scheduledNotes = plan.notes
@@ -498,6 +503,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
                 val sampleCount = frames * 2
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
+                perTrackMix.values.forEach { java.util.Arrays.fill(it, 0, sampleCount, 0f) }
                 val blockEnd = position + frames
                 val mixState = liveMix
 
@@ -521,6 +527,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val to = min(blockEnd, event.endFrame)
                     val trackGain = channelMix.volume * liveMasterGain
                     val pan = channelMix.pan
+                    val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     // Read the atomic scrub offset once per audio event/block, not per sample.
@@ -538,8 +545,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val sourceFrame = Math.floorMod(rawSourceFrame, event.asset.frames.toLong()).toInt()
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
-                        mix[outIndex] += event.asset.pcmStereo[sourceIndex] / 32768f * trackGain * leftPan
-                        mix[outIndex + 1] += event.asset.pcmStereo[sourceIndex + 1] / 32768f * trackGain * rightPan
+                        val sourceLeft = event.asset.pcmStereo[sourceIndex] / 32768f * channelMix.volume * leftPan
+                        val sourceRight = event.asset.pcmStereo[sourceIndex + 1] / 32768f * channelMix.volume * rightPan
+                        mix[outIndex] += sourceLeft * liveMasterGain
+                        mix[outIndex + 1] += sourceRight * liveMasterGain
+                        channelBuffer[outIndex] += sourceLeft
+                        channelBuffer[outIndex + 1] += sourceRight
                     }
                 }
 
@@ -550,7 +561,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val to = min(blockEnd, note.endFrame)
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
                     val gain = channelMix.volume * liveMasterGain * (note.velocity / 127f) * 0.19f
-                    val pan = channelMix.pan
+                    val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
+                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     for (absolute in from until to) {
@@ -583,6 +595,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val outIndex = ((absolute - position) * 2).toInt()
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
+                        channelBuffer[outIndex] += channelWave * leftPan
+                        channelBuffer[outIndex + 1] += channelWave * rightPan
+                    }
+                }
+
+                // Run the persisted track insert chain on the summed channel signal before mastering.
+                perTrackMix.forEach { (trackId, channel) ->
+                    val trackMix = mixState.tracks[trackId] ?: return@forEach
+                    if (trackMix.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
+                        deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
+                            .process(channel, mix, sampleCount, liveMasterGain, trackMix.devices)
                     }
                 }
 
@@ -655,7 +678,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 volume = track.volume.coerceIn(0f, 1.5f),
                 pan = track.pan.coerceIn(-1f, 1f),
                 muted = track.muted,
-                solo = track.solo
+                solo = track.solo,
+                devices = track.devices
             )
         }
         liveMix = MixSnapshot(
