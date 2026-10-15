@@ -146,13 +146,13 @@ data class TimelineViewport(
     /** Change scale without changing the musical tick under the screen anchor. */
     fun zoomKeepingAnchor(newPixelsPerBar: Float, anchorScreenX: Float): TimelineViewport {
         val anchorTick = effectiveScrollTimeTicks +
-            (anchorScreenX - trackHeaderWidthPx).toDouble() / pixelsPerTick
+            (anchorScreenX - safeTrackHeaderWidthPx).toDouble() / pixelsPerTick
         val requestedScale = if (newPixelsPerBar.isFinite()) newPixelsPerBar else MAX_PIXELS_PER_BAR
         val clampedScale = requestedScale.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
         // Anchor positions are fractional ticks: integer rounding at each pinch frame causes
         // cumulative visible movement, especially at high zoom or far into a long arrangement.
         return copy(pixelsPerBar = clampedScale)
-            .placeTickAtViewportX(anchorTick, anchorScreenX - trackHeaderWidthPx)
+            .placeTickAtViewportX(anchorTick, anchorScreenX - safeTrackHeaderWidthPx)
     }
 
     /**
@@ -182,7 +182,7 @@ data class TimelineViewport(
     ): TimelineViewport {
         if (!effectiveViewportWidthPx.isFinite() || effectiveViewportWidthPx <= 0f || tick < 0L) return this
         val width = effectiveViewportWidthPx
-        val x = (tick.toDouble() - scrollTimeTicks) * pixelsPerTick
+        val x = (tick.toDouble() - effectiveScrollTimeTicks) * pixelsPerTick
         val threshold = width * followFraction.coerceIn(0.2f, 0.95f)
         if (x >= 0.0 && x <= threshold.toDouble()) return this
         val targetX = (width * targetFraction.coerceIn(0.1f, 0.9f)).coerceIn(0f, width)
