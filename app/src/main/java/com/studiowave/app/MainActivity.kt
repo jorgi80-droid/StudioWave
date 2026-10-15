@@ -1623,14 +1623,18 @@ private fun ArrangementWorkspace(
                                     } else {
                                         (clip.sourceOffsetTicks.coerceAtLeast(0L) + safeDelta).coerceAtLeast(0L)
                                     },
-                                    sourceOffsetMicros = if (clip.sourceUri != null) ArrangementTiming.ticksToMicros(
-                                        if (safeDelta >= 0L) {
-                                            val oldOffset = clip.sourceOffsetTicks.coerceAtLeast(0L)
-                                            if (oldOffset > Long.MAX_VALUE - safeDelta) Long.MAX_VALUE else oldOffset + safeDelta
-                                        } else {
-                                            (clip.sourceOffsetTicks.coerceAtLeast(0L) + safeDelta).coerceAtLeast(0L)
-                                        }, project.bpm, project.ppq
-                                    ) else clip.sourceOffsetMicros,
+                                    sourceOffsetMicros = if (clip.sourceUri != null) {
+                                        if (safeDelta == 0L) clip.sourceOffsetMicros
+                                            ?: ArrangementTiming.ticksToMicros(clip.sourceOffsetTicks, project.bpm, project.ppq)
+                                        else ArrangementTiming.ticksToMicros(
+                                            if (safeDelta > 0L) {
+                                                val oldOffset = clip.sourceOffsetTicks.coerceAtLeast(0L)
+                                                if (oldOffset > Long.MAX_VALUE - safeDelta) Long.MAX_VALUE else oldOffset + safeDelta
+                                            } else {
+                                                (clip.sourceOffsetTicks.coerceAtLeast(0L) + safeDelta).coerceAtLeast(0L)
+                                            }, project.bpm, project.ppq
+                                        )
+                                    } else clip.sourceOffsetMicros,
                                     sourceLengthMicros = if (clip.sourceUri != null)
                                         ArrangementTiming.ticksToMicros(safeLength, project.bpm, project.ppq).coerceAtLeast(1L)
                                     else clip.sourceLengthMicros,
