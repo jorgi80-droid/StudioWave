@@ -27,6 +27,29 @@ data class WaveClip(
     val sourceOffsetTicks: Long = 0L
 )
 
+data class TrackDevice(
+    val id: String = UUID.randomUUID().toString(),
+    val type: String,
+    val name: String,
+    val enabled: Boolean = true,
+    val parameters: Map<String, Float> = emptyMap()
+)
+
+internal val EFFECT_DEVICE_TYPES = setOf("EQ", "PARAM_EQ_8", "REVERB", "DELAY", "COMPRESSOR", "SATURATOR", "FILTER", "LIMITER")
+internal val INSTRUMENT_DEVICE_TYPES = setOf("DIRECTWAVE", "SYNTH_SINE", "SYNTH_SAW", "SYNTH_SQUARE", "SYNTH_TRIANGLE", "FM_SYNTH", "DRUM_RACK")
+internal fun defaultDeviceParameters(type: String): Map<String, Float> = when (type) {
+    "EQ" -> mapOf("lowDb" to 0f, "midDb" to 0f, "highDb" to 0f)
+    "PARAM_EQ_8" -> (1..8).associate { "band$it" to 0f }
+    "REVERB" -> mapOf("room" to 0.45f, "decay" to 1.6f, "wet" to 0.22f)
+    "DELAY" -> mapOf("timeMs" to 320f, "feedback" to 0.32f, "wet" to 0.2f)
+    "COMPRESSOR" -> mapOf("thresholdDb" to -18f, "ratio" to 3f, "attackMs" to 10f, "releaseMs" to 120f, "makeupDb" to 0f)
+    "SATURATOR" -> mapOf("drive" to 2.5f, "wet" to 0.35f, "outputDb" to 0f)
+    "FILTER" -> mapOf("cutoffHz" to 16000f, "resonance" to 0.15f, "mode" to 0f)
+    "LIMITER" -> mapOf("ceilingDb" to -1f, "releaseMs" to 80f)
+    "SYNTH_SINE", "SYNTH_SAW", "SYNTH_SQUARE", "SYNTH_TRIANGLE", "FM_SYNTH" -> mapOf("level" to 0.8f, "attackMs" to 8f, "releaseMs" to 90f)
+    else -> emptyMap()
+}
+
 data class StudioTrack(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -36,7 +59,8 @@ data class StudioTrack(
     val solo: Boolean = false,
     val volume: Float = 0.8f,
     val pan: Float = 0f,
-    val clips: List<WaveClip> = emptyList()
+    val clips: List<WaveClip> = emptyList(),
+    val devices: List<TrackDevice> = emptyList()
 )
 
 data class StudioProject(
@@ -84,6 +108,21 @@ data class StudioProject(
                     put("kind", tr.kind); put("muted", tr.muted); put("solo", tr.solo)
                     put("volume", tr.volume.coerceIn(0f, 1.5f).toDouble())
                     put("pan", tr.pan.coerceIn(-1f, 1f).toDouble())
+                    put("devices", JSONArray().apply {
+                        tr.devices.forEach { device ->
+                            put(JSONObject().apply {
+                                put("id", device.id)
+                                put("type", device.type)
+                                put("name", device.name)
+                                put("enabled", device.enabled)
+                                put("parameters", JSONObject().apply {
+                                    device.parameters.forEach { (key, value) ->
+                                        if (key.isNotBlank() && value.isFinite()) put(key, value.toDouble())
+                                    }
+                                })
+                            })
+                        }
+                    })
                     put("clips", JSONArray().apply {
                         tr.clips.forEach { clip ->
                             put(JSONObject().apply {
@@ -113,6 +152,7 @@ data class StudioProject(
         const val CURRENT_SCHEMA_VERSION = 1
         const val MAX_TRACKS = 256
         const val MAX_CLIPS_PER_TRACK = 4096
+        const val MAX_DEVICES_PER_TRACK = 64
         const val MAX_TOTAL_CLIPS = 16384
         const val MAX_NOTES_PER_CLIP = 16384
         const val MAX_TOTAL_MIDI_NOTES = 65536
@@ -166,6 +206,32 @@ data class StudioProject(
                             ))
                         }
                     }
+                    val deviceArray = t.optJSONArray("devices") ?: JSONArray()
+                    require(deviceArray.length() <= MAX_DEVICES_PER_TRACK) { "Track contains too many devices" }
+                    val devices = buildList {
+                        for (deviceIndex in 0 until deviceArray.length()) {
+                            val item = deviceArray.getJSONObject(deviceIndex)
+                            val type = item.optString("type", "")
+                            require(type in INSTRUMENT_DEVICE_TYPES || type in EFFECT_DEVICE_TYPES) { "Unsupported device type: $type" }
+                            val encodedParams = item.optJSONObject("parameters") ?: JSONObject()
+                            val params = buildMap {
+                                val keys = encodedParams.keys()
+                                while (keys.hasNext()) {
+                                    val key = keys.next()
+                                    val value = encodedParams.optDouble(key, Double.NaN).toFloat()
+                                    if (key.isNotBlank() && value.isFinite()) put(key, value)
+                                }
+                            }
+                            add(TrackDevice(
+                                id = item.optString("id", UUID.randomUUID().toString()),
+                                type = type,
+                                name = item.optString("name", type.replace('_', ' ')),
+                                enabled = item.optBoolean("enabled", true),
+                                parameters = defaultDeviceParameters(type) + params
+                            ))
+                        }
+                    }
+                    require(devices.count { it.type in INSTRUMENT_DEVICE_TYPES } <= 1) { "A track can contain only one instrument device" }
                     add(StudioTrack(
                         id = t.optString("id", UUID.randomUUID().toString()),
                         name = t.optString("name", "Track ${i + 1}"),
@@ -175,7 +241,8 @@ data class StudioProject(
                         solo = t.optBoolean("solo"),
                         volume = t.optDouble("volume", 0.8).toFloat().coerceIn(0f, 1.5f),
                         pan = t.optDouble("pan", 0.0).toFloat().coerceIn(-1f, 1f),
-                        clips = clips
+                        clips = clips,
+                        devices = devices
                     ))
                 }
             }
