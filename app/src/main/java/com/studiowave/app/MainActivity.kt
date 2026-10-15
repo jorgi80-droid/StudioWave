@@ -1798,52 +1798,204 @@ private fun PianoRollWorkspace(
 ) {
     val clip = track?.clips?.firstOrNull()
     val notes = clip?.midiNotes ?: emptyList()
-    Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(8.dp)).padding(8.dp)) {
-        Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("PIANO ROLL", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-            Spacer(Modifier.width(8.dp))
-            Text(track?.name ?: "Select a MIDI track", color = MutedText, fontSize = 9.sp, maxLines = 1)
+    val timebase = remember(project.bpm, project.ppq, project.numerator, project.denominator) {
+        TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+    }
+    var horizontalZoom by remember(clip?.id) { mutableFloatStateOf(1f) }
+    var horizontalScroll by remember(clip?.id) { mutableFloatStateOf(0f) }
+    var verticalScroll by remember(clip?.id) { mutableIntStateOf(48) }
+    var selectedNoteId by remember(clip?.id) { mutableStateOf<String?>(null) }
+    var snapTicks by remember { mutableLongStateOf((timebase.ticksPerBeat / 4L).coerceAtLeast(1L)) }
+    val pianoWhite = Color(0xFFD8D9DB)
+    val pianoBlack = Color(0xFF383A3F)
+    val accent = Color(0xFFFFA65A)
+    val ticksPerBar = timebase.ticksPerBar.coerceAtLeast(1L)
+    val visibleBars = (8.0 / horizontalZoom.coerceAtLeast(0.25f)).coerceAtLeast(1.0)
+    val clipEnd = clip?.let { it.startTick + it.lengthTicks.coerceAtLeast(ticksPerBar) } ?: ticksPerBar * 8L
+    val viewTicks = (ticksPerBar * visibleBars).toLong().coerceAtLeast(1L)
+    fun commitNotes(updated: List<com.studiowave.app.data.MidiNote>) {
+        if (track == null || clip == null) return
+        onProjectChange(project.copy(tracks = project.tracks.map { item ->
+            if (item.id == track.id) item.copy(clips = item.clips.map { c ->
+                if (c.id == clip.id) c.copy(midiNotes = updated) else c
+            }) else item
+        }))
+    }
+    Column(Modifier.fillMaxSize().background(Color(0xFF1E1F22)).padding(5.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(27.dp).background(Color(0xFF303236)).padding(horizontal = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Text("MIDI NOTE EDITOR", color = Color(0xFFE6E7E8), fontSize = 9.sp, fontWeight = FontWeight.Black)
+            Box(Modifier.width(3.dp).height(14.dp).background(accent, RoundedCornerShape(1.dp)))
+            Text(track?.name ?: "NO MIDI TRACK", color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(clip?.name ?: "No clip", color = Color(0xFFB7BAC0), fontSize = 8.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text("TAP GRID: ADD / REMOVE NOTE", color = MutedText, fontSize = 9.sp)
-            Spacer(Modifier.width(8.dp))
-            Surface(color = Raised, shape = RoundedCornerShape(6.dp), modifier = Modifier.size(27.dp).clickable { onBack() }) {
-                Box(contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 20.sp) }
+            Text("SNAP", color = Color(0xFFB7BAC0), fontSize = 7.sp)
+            listOf("1/4", "1/8", "1/16", "1/32").forEachIndexed { index, label ->
+                val divisor = listOf(1L, 2L, 4L, 8L)[index]
+                val step = (timebase.ticksPerBeat / divisor).coerceAtLeast(1L)
+                Surface(
+                    color = if (snapTicks == step) accent.copy(alpha = 0.24f) else Color(0xFF42454A),
+                    shape = RoundedCornerShape(3.dp),
+                    modifier = Modifier.height(19.dp).clickable { snapTicks = step }
+                ) {
+                    Box(Modifier.padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
+                        Text(label, color = if (snapTicks == step) accent else Color(0xFFE0E1E3), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Text("−", color = Color.White, modifier = Modifier.clickable { horizontalZoom = (horizontalZoom / 1.25f).coerceIn(0.25f, 8f) }.padding(horizontal = 3.dp))
+            Text("+", color = Color.White, modifier = Modifier.clickable { horizontalZoom = (horizontalZoom * 1.25f).coerceIn(0.25f, 8f) }.padding(horizontal = 3.dp))
+            Text("×", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable { onBack() }.padding(start = 5.dp))
+        }
+        Spacer(Modifier.height(3.dp))
+        Row(Modifier.fillMaxSize().background(Color(0xFF232528))) {
+            Column(Modifier.width(48.dp).fillMaxHeight().background(Color(0xFF292B2F))) {
+                Box(Modifier.fillMaxWidth().height(20.dp).background(Color(0xFF3A3C40)), contentAlignment = Alignment.Center) {
+                    Text("NOTE", color = Color(0xFFBFC1C4), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                }
+                Canvas(Modifier.fillMaxSize().pointerInput(verticalScroll) {
+                    detectDragGestures { change, drag ->
+                        change.consume()
+                        verticalScroll = (verticalScroll - (drag.y / (size.height / 48f).coerceAtLeast(1f)).toInt()).coerceIn(0, 80)
+                    }
+                }) {
+                    val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
+                    val names = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
+                    for (row in 0 until 48) {
+                        val pitch = (verticalScroll + 47 - row).coerceIn(0, 127)
+                        val black = pitch % 12 in setOf(1, 3, 6, 8, 10)
+                        val y = row * rowHeight
+                        drawRect(if (black) pianoBlack else pianoWhite, Offset(0f, y), Size(size.width, rowHeight))
+                        drawLine(Color(0xFF8B8D90), Offset(0f, y + rowHeight), Offset(size.width, y + rowHeight), 0.5f)
+                        if (pitch % 12 == 0) {
+                            drawContext.canvas.nativeCanvas.drawText(
+                                names[pitch % 12] + (pitch / 12 - 1),
+                                4.dp.toPx(), y + rowHeight * 0.68f,
+                                android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                                    color = android.graphics.Color.DKGRAY
+                                    textSize = 8.sp.toPx()
+                                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            Column(Modifier.weight(1f).fillMaxHeight()) {
+                Canvas(Modifier.fillMaxWidth().height(20.dp).background(Color(0xFF333539)).pointerInput(horizontalZoom, horizontalScroll) {
+                    detectDragGestures { change, drag ->
+                        change.consume()
+                        horizontalScroll = (horizontalScroll - drag.x / size.width * viewTicks).coerceIn(0f, (clipEnd - viewTicks).coerceAtLeast(0L).toFloat())
+                    }
+                }) {
+                    val pxPerTick = size.width / viewTicks.toFloat()
+                    val firstBar = (horizontalScroll / ticksPerBar).toInt().coerceAtLeast(0)
+                    val lastBar = firstBar + kotlin.math.ceil(viewTicks.toDouble() / ticksPerBar).toInt() + 1
+                    for (bar in firstBar..lastBar) {
+                        val x = (bar * ticksPerBar - horizontalScroll) * pxPerTick
+                        drawLine(if (bar % 4 == 0) Color(0xFFB8BBC0) else Color(0xFF777A7F), Offset(x, 0f), Offset(x, size.height), if (bar % 4 == 0) 1.2f else 0.6f)
+                        drawContext.canvas.nativeCanvas.drawText((bar + 1).toString(), x + 4.dp.toPx(), size.height * 0.72f,
+                            android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.LTGRAY; textSize = 8.sp.toPx() })
+                    }
+                }
+                Canvas(Modifier.fillMaxSize().pointerInput(track?.id, clip?.id, notes, horizontalZoom, horizontalScroll, verticalScroll, snapTicks) {
+                    detectTapGestures { point ->
+                        if (track == null || clip == null) return@detectTapGestures
+                        val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
+                        val pitch = (verticalScroll + 47 - (point.y / rowHeight).toInt()).coerceIn(0, 127)
+                        val pxPerTick = size.width / viewTicks.toFloat()
+                        val rawTick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
+                        val startTick = ((rawTick + snapTicks / 2L) / snapTicks * snapTicks).coerceAtLeast(0L)
+                        val existing = notes.firstOrNull { it.pitch == pitch && startTick >= it.startTick && startTick < it.startTick + it.durationTicks }
+                        if (existing != null) {
+                            selectedNoteId = existing.id
+                            commitNotes(notes.filterNot { it.id == existing.id })
+                        } else {
+                            val note = com.studiowave.app.data.MidiNote(pitch = pitch, startTick = startTick, durationTicks = snapTicks.coerceAtLeast(1L))
+                            selectedNoteId = note.id
+                            commitNotes(notes + note)
+                        }
+                    }
+                }.pointerInput(horizontalZoom, horizontalScroll, verticalScroll, snapTicks, notes) {
+                    detectDragGestures(
+                        onDragStart = { point ->
+                            val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
+                            val pitch = (verticalScroll + 47 - (point.y / rowHeight).toInt()).coerceIn(0, 127)
+                            val pxPerTick = size.width / viewTicks.toFloat()
+                            val tick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
+                            selectedNoteId = notes.firstOrNull { it.pitch == pitch && tick >= it.startTick && tick <= it.startTick + it.durationTicks }?.id
+                        },
+                        onDrag = { change, drag ->
+                            change.consume()
+                            val id = selectedNoteId ?: return@detectDragGestures
+                            val original = notes.firstOrNull { it.id == id } ?: return@detectDragGestures
+                            val deltaTicks = (drag.x / size.width * viewTicks).toLong()
+                            val deltaPitch = (-drag.y / (size.height / 48f).coerceAtLeast(1f)).toInt()
+                            val step = snapTicks.coerceAtLeast(1L)
+                            val moved = original.copy(
+                                startTick = (original.startTick + deltaTicks).coerceAtLeast(0L) / step * step,
+                                pitch = (original.pitch + deltaPitch).coerceIn(0, 127)
+                            )
+                            commitNotes(notes.map { if (it.id == id) moved else it })
+                        }
+                    )
+                }) {
+                    val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
+                    val pxPerTick = size.width / viewTicks.toFloat()
+                    val firstBar = (horizontalScroll / ticksPerBar).toInt().coerceAtLeast(0)
+                    val lastBar = firstBar + kotlin.math.ceil(viewTicks.toDouble() / ticksPerBar).toInt() + 1
+                    for (row in 0..48) {
+                        val y = row * rowHeight
+                        val pitch = verticalScroll + 47 - row
+                        drawLine(if (pitch % 12 == 0) Color(0xFF65686E) else Color(0xFF3B3D42), Offset(0f, y), Offset(size.width, y), if (pitch % 12 == 0) 1.15f else 0.45f)
+                    }
+                    for (bar in firstBar..lastBar) {
+                        val barTick = bar.toLong() * ticksPerBar
+                        val x = (barTick - horizontalScroll) * pxPerTick
+                        if (x in -1f..size.width + 1f) {
+                            drawLine(Color(0xFF686B70), Offset(x, 0f), Offset(x, size.height), 1.1f)
+                            for (beat in 1 until timebase.safeNumerator) {
+                                val beatX = x + beat * timebase.ticksPerBeat * pxPerTick
+                                drawLine(Color(0xFF45474C), Offset(beatX, 0f), Offset(beatX, size.height), 0.7f)
+                            }
+                            if (snapTicks * pxPerTick >= 5f) {
+                                var sub = snapTicks
+                                while (sub < ticksPerBar) {
+                                    val subX = x + sub * pxPerTick
+                                    drawLine(Color(0xFF303236), Offset(subX, 0f), Offset(subX, size.height), 0.45f)
+                                    sub += snapTicks
+                                }
+                            }
+                        }
+                    }
+                    notes.forEach { note ->
+                        val x = (note.startTick - horizontalScroll) * pxPerTick
+                        val y = (verticalScroll + 47 - note.pitch) * rowHeight
+                        val width = note.durationTicks * pxPerTick
+                        if (x + width >= 0f && x <= size.width && y >= -rowHeight && y <= size.height) {
+                            val selected = selectedNoteId == note.id
+                            drawRoundRect(if (selected) Color(0xFFFFBB7D) else accent, Offset(x, y + 1f), Size(width.coerceAtLeast(3f), rowHeight - 2f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                            drawLine(Color(0xFFFFE0C4), Offset(x + 2f, y + 2f), Offset((x + width - 2f).coerceAtLeast(x + 2f), y + 2f), 1f)
+                            if (width > 14f) drawLine(Color(0xFF7B4A2A), Offset(x + width - 4f, y + 2f), Offset(x + width - 4f, y + rowHeight - 2f), 2f)
+                        }
+                    }
+                }
             }
         }
-        Canvas(Modifier.fillMaxSize().padding(top = 4.dp).pointerInput(track?.id, clip?.id, notes) {
-            detectTapGestures { point ->
-                if (track == null || clip == null) return@detectTapGestures
-                val rowH = size.height / 24f
-                val colW = size.width / 32f
-                val row = (point.y / rowH).toInt().coerceIn(0, 23)
-                val col = (point.x / colW).toInt().coerceIn(0, 31)
-                val pitch = (84 - row * 3).coerceIn(0, 127)
-                val startTick = col * 240L
-                val existing = notes.firstOrNull { it.pitch == pitch && it.startTick == startTick }
-                val updatedNotes = if (existing != null) notes.filterNot { it.id == existing.id }
-                    else notes + com.studiowave.app.data.MidiNote(pitch = pitch, startTick = startTick, durationTicks = 240)
-                onProjectChange(project.copy(tracks = project.tracks.map { item ->
-                    if (item.id == track.id) item.copy(clips = item.clips.map { c -> if (c.id == clip.id) c.copy(midiNotes = updatedNotes) else c }) else item
-                }))
-            }
-        }) {
-            val rowH = size.height / 24f
-            val colW = size.width / 32f
-            for (r in 0..24) drawLine(if (r % 12 == 0) Color(0xFF5D626B) else Color(0xFF343840),
-                Offset(0f, r * rowH), Offset(size.width, r * rowH), if (r % 12 == 0) 1.5f else 0.6f)
-            for (col in 0..32) drawLine(if (col % 4 == 0) Color(0xFF5D626B) else Color(0xFF343840),
-                Offset(col * colW, 0f), Offset(col * colW, size.height), if (col % 4 == 0) 1.2f else 0.6f)
-            notes.forEach { note ->
-                val x = note.startTick.toFloat() / 240f * colW
-                val y = (84 - note.pitch).toFloat() / 3f * rowH
-                val width = note.durationTicks.toFloat() / 240f * colW
-                drawRoundRect(Mint, Offset(x, y.coerceIn(0f, size.height - rowH)), Size(width.coerceAtLeast(3f), rowH * 0.72f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
-            }
+        Row(Modifier.fillMaxWidth().height(23.dp).background(Color(0xFF303236)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("${notes.size} NOTES", color = Color(0xFFB8BBC0), fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(12.dp))
+            Text("BPM ${project.bpm}", color = Color(0xFFB8BBC0), fontSize = 7.sp)
+            Spacer(Modifier.width(12.dp))
+            Text("DRAG TO MOVE • TAP EMPTY GRID TO ADD", color = Color(0xFFB8BBC0), fontSize = 7.sp)
+            Spacer(Modifier.weight(1f))
+            Text("VIEW ${horizontalZoom}×", color = accent, fontSize = 7.sp)
         }
     }
 }
-
 @Composable
 private fun MixerWorkspace(
     project: StudioProject,
