@@ -3717,20 +3717,75 @@ private fun PianoRollWorkspace(
                             val localRowHeight = rowHeightPx
                             val localColWidth = size.width / currentStepsOnScreen.toFloat()
                             val rowsVisible = (size.height / localRowHeight).toInt().coerceAtLeast(1)
+                            // Alternate octave/semitone lanes like a piano-keybed editor: black-key
+                            // pitches receive a recessed graphite wash, while each C row gets a
+                            // faint octave landmark. These are paint-only overlays; note hit-testing
+                            // and musical coordinate mapping remain unchanged.
                             for (row in 0..rowsVisible) {
                                 val pitch = currentTopPitch - row
-                                val isC = pitch >= 0 && pitch % 12 == 0
-                                drawLine(if (isC) pianoPalette.border.copy(alpha = pianoGridOpacity) else pianoPalette.grid.copy(alpha = pianoGridOpacity),
-                                    Offset(0f, row * localRowHeight), Offset(size.width, row * localRowHeight),
-                                    if (isC) 1.2f else 0.45f)
+                                val pitchClass = Math.floorMod(pitch, 12)
+                                val isBlackKey = pitchClass in setOf(1, 3, 6, 8, 10)
+                                val isC = pitch >= 0 && pitchClass == 0
+                                val top = row * localRowHeight
+                                if (row < rowsVisible) {
+                                    if (isBlackKey) {
+                                        drawRect(
+                                            pianoPalette.room.copy(alpha = 0.42f * pianoGridOpacity),
+                                            Offset(0f, top),
+                                            Size(size.width, localRowHeight)
+                                        )
+                                    } else if ((pitchClass == 2 || pitchClass == 4 || pitchClass == 7 || pitchClass == 9 || pitchClass == 11)) {
+                                        drawRect(
+                                            pianoPalette.canvas.copy(alpha = 0.18f * pianoGridOpacity),
+                                            Offset(0f, top),
+                                            Size(size.width, localRowHeight)
+                                        )
+                                    }
+                                    if (isC) {
+                                        drawRect(
+                                            pianoPalette.orange.copy(alpha = 0.035f * pianoGridOpacity),
+                                            Offset(0f, top),
+                                            Size(size.width, localRowHeight)
+                                        )
+                                    }
+                                }
+                                drawLine(
+                                    if (isC) pianoPalette.border.copy(alpha = pianoGridOpacity)
+                                    else pianoPalette.grid.copy(alpha = pianoGridOpacity),
+                                    Offset(0f, top), Offset(size.width, top),
+                                    if (isC) 1.25f else 0.5f
+                                )
+                            }
+                            // Slight alternating bar tint establishes phrase grouping without
+                            // competing with note bodies or beat/subdivision lines.
+                            for (barIndex in 0..(currentStepsOnScreen / stepsPerBar + 1)) {
+                                val barStartStep = barIndex * stepsPerBar
+                                if (barIndex % 2 == 1) {
+                                    val x = (barStartStep - (pageStartStep % stepsPerBar) - (pageStartStep / stepsPerBar) * stepsPerBar + pageStartStep - pageStartStep).toFloat() * localColWidth
+                                    val visibleStart = (barStartStep + (pageStartStep / stepsPerBar) * stepsPerBar - pageStartStep).toFloat() * localColWidth
+                                    val width = stepsPerBar * localColWidth
+                                    if (visibleStart < size.width && visibleStart + width > 0f) {
+                                        drawRect(
+                                            pianoPalette.room.copy(alpha = 0.055f * pianoGridOpacity),
+                                            Offset(visibleStart.coerceAtLeast(0f), 0f),
+                                            Size((minOf(size.width, visibleStart + width) - visibleStart.coerceAtLeast(0f)).coerceAtLeast(0f), size.height)
+                                        )
+                                    }
+                                }
                             }
                             for (col in 0..currentStepsOnScreen) {
                                 val stepAbsolute = pageStartStep + col
                                 val bar = stepAbsolute % stepsPerBar == 0
                                 val beat = stepAbsolute % stepsPerBeat == 0
-                                drawLine(when { bar -> pianoPalette.border.copy(alpha = pianoGridOpacity); beat -> pianoPalette.grid.copy(alpha = pianoGridOpacity); else -> pianoPalette.grid.copy(alpha = pianoGridOpacity * 0.65f) },
+                                drawLine(
+                                    when {
+                                        bar -> pianoPalette.orange.copy(alpha = 0.42f * pianoGridOpacity)
+                                        beat -> pianoPalette.border.copy(alpha = pianoGridOpacity)
+                                        else -> pianoPalette.grid.copy(alpha = pianoGridOpacity * 0.72f)
+                                    },
                                     Offset(col * localColWidth, 0f), Offset(col * localColWidth, size.height),
-                                    when { bar -> 1.4f; beat -> 0.9f; else -> 0.45f })
+                                    when { bar -> 1.35f; beat -> 0.9f; else -> 0.45f }
+                                )
                             }
                             selectionDrag?.let { (origin, current) ->
                                 val left = minOf(origin.x, current.x).coerceIn(0f, size.width)
