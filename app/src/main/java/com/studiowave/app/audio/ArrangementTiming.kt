@@ -25,10 +25,16 @@ internal object ArrangementTiming {
     /** Convert absolute source time to output frames without involving project tempo. */
     fun microsToFrames(micros: Long, sampleRate: Int = DEFAULT_SAMPLE_RATE): Long {
         val safeMicros = micros.coerceAtLeast(0L)
-        val safeRate = sampleRate.coerceIn(8000, 192000)
-        val frames = safeMicros.toDouble() * safeRate.toDouble() / 1_000_000.0
-        return if (!frames.isFinite() || frames >= Long.MAX_VALUE.toDouble()) Long.MAX_VALUE
-        else frames.toLong().coerceAtLeast(0L)
+        val safeRate = sampleRate.coerceIn(8000, 192000).toLong()
+        // Split whole seconds from the fractional second so large source times do not
+        // lose integer precision through Double before the saturation check.
+        val wholeSeconds = safeMicros / 1_000_000L
+        val remainingMicros = safeMicros % 1_000_000L
+        if (wholeSeconds > Long.MAX_VALUE / safeRate) return Long.MAX_VALUE
+        val wholeFrames = wholeSeconds * safeRate
+        val fractionalFrames = remainingMicros * safeRate / 1_000_000L
+        if (wholeFrames > Long.MAX_VALUE - fractionalFrames) return Long.MAX_VALUE
+        return wholeFrames + fractionalFrames
     }
 
     /** Convert legacy musical ticks to absolute source microseconds at the project's current tempo. */
