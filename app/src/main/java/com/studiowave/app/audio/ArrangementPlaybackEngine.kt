@@ -16,6 +16,9 @@ import com.studiowave.app.data.EFFECT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.awaitAll
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
@@ -205,6 +208,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val sampleRate: Int,
         val bpm: Int,
         val ppq: Int,
+        val numerator: Int,
+        val denominator: Int,
         val totalFrames: Long,
         val audio: List<AudioEvent>,
         val notes: List<NoteEvent>,
@@ -230,7 +235,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         onCompleted: () -> Unit = {},
         onError: (String) -> Unit = {},
         startAtTick: Long = 0L,
-        onProgress: (Long) -> Unit = {}
+        onProgress: (Long) -> Unit = {},
+        parallelPreparation: Boolean = false,
+        metronomeEnabled: Boolean = false,
+        metronomeLevel: Float = 0.25f,
+        queueTargetFrames: Int = 1024
     ) {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
@@ -243,7 +252,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             publishTrackMeter(track.id, 0f, 0f, 0f, 0f)
         }
         updateMix(project)
-        val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
+        val plan = withContext(Dispatchers.IO) { buildPlan(project, token, parallelPreparation) }
         check(!closed.get()) { "Playback engine is closed" }
         check(generation.get() == token) { "Playback start was cancelled" }
         val startFrame = ArrangementTiming.ticksToFrames(
@@ -253,7 +262,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             onProgress(ArrangementTiming.framesToTicks(startFrame, plan.bpm, plan.ppq, plan.sampleRate))
         }
         val nativeOutput = NativeAudioEngine()
-        nativeOutput.start(plan.sampleRate)
+        nativeOutput.start(plan.sampleRate, queueTargetFrames.coerceIn(256, 4096))
         synchronized(this) {
             if (closed.get() || generation.get() != token) {
                 nativeOutput.close()
@@ -264,7 +273,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             try {
                 worker = Thread({
                     Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-                    renderPlan(nativeOutput, plan, token, startFrame, onProgress, onCompleted, onError)
+                    renderPlan(
+                        nativeOutput, plan, token, startFrame, onProgress, onCompleted, onError,
+                        metronomeEnabled, metronomeLevel.coerceIn(0f, 1f)
+                    )
                 }, "StudioWave-Arrangement").also { it.start() }
             } catch (failure: Throwable) {
                 running.set(false)
@@ -275,7 +287,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
 
-    private fun buildPlan(project: StudioProject, token: Long): Plan {
+    private suspend fun buildPlan(project: StudioProject, token: Long, parallelPreparation: Boolean): Plan {
         fun ensureCurrent() {
             check(!closed.get() && generation.get() == token) { "Playback preparation cancelled" }
         }
@@ -315,29 +327,53 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, sourceEndTicks)
             }
         }
-        val assets = HashMap<String, AudioAsset>()
+        data class SourceRequest(
+            val uriString: String,
+            val sourceSeconds: Double,
+            val requestedFrames: Int,
+            val cacheKey: String
+        )
+        val sourceRequests = ArrayList<SourceRequest>(requestedTicksByUri.size)
         var estimatedBytes = 0L
         requestedTicksByUri.forEach { (uriString, ticks) ->
             ensureCurrent()
-            // Prefer the actual media duration. Clip length may be shorter after trimming
-            // or longer when looped; neither should change cached source PCM.
+            // Metadata inspection and the memory-budget check happen before any parallel
+            // decode starts, so concurrent preparation cannot oversubscribe the PCM budget.
             val requiredSeconds = (ticks.toDouble() * 60.0 / (bpm.toDouble() * ppq))
                 .coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
             val sourceSeconds = readSourceDurationSeconds(Uri.parse(uriString))
                 ?.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble()) ?: requiredSeconds
             val requestedFrames = ceil(sourceSeconds * sampleRate).toLong()
                 .coerceIn(1L, sampleRate.toLong() * MAX_SOURCE_SECONDS).toInt()
-            val cacheKey = "$uriString|$sampleRate|$requestedFrames"
-            val cached = audioAssetCache.get(cacheKey)
             estimatedBytes += requestedFrames.toLong() * 4L
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
                 "Arrangement audio cache exceeds the safe memory budget; shorten clips or reduce the number of source files"
             }
-            assets[uriString] = cached ?: decodeAudioAsset(Uri.parse(uriString), sourceSeconds, token).also { decoded ->
-                ensureCurrent()
-                audioAssetCache.put(cacheKey, decoded)
-            }
+            sourceRequests += SourceRequest(uriString, sourceSeconds, requestedFrames,
+                "$uriString|$sampleRate|$requestedFrames")
         }
+
+        suspend fun prepareSource(request: SourceRequest): Pair<String, AudioAsset> {
+            ensureCurrent()
+            val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
+            if (cached != null) return request.uriString to cached
+            val decoded = decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token)
+            ensureCurrent()
+            // LruCache is not thread-safe; decoding happens outside the monitor, only cache
+            // lookup/insert is synchronized. Each distinct source URI has only one request.
+            synchronized(audioAssetCache) { audioAssetCache.put(request.cacheKey, decoded) }
+            return request.uriString to decoded
+        }
+
+        val assets = HashMap<String, AudioAsset>()
+        val preparedSources = if (parallelPreparation && sourceRequests.size > 1) {
+            coroutineScope {
+                sourceRequests.map { request -> async(Dispatchers.IO) { prepareSource(request) } }.awaitAll()
+            }
+        } else {
+            sourceRequests.map { request -> prepareSource(request) }
+        }
+        preparedSources.forEach { (uri, asset) -> assets[uri] = asset }
 
         val audioEvents = ArrayList<AudioEvent>()
         val notes = ArrayList<NoteEvent>()
@@ -435,6 +471,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             sampleRate,
             bpm,
             ppq,
+            project.numerator.coerceIn(1, 32),
+            project.denominator.coerceIn(1, 32),
             totalFrames,
             audioEvents.sortedBy { it.startFrame },
             notes.sortedBy { it.startFrame },
@@ -605,7 +643,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         startFrame: Long,
         onProgress: (Long) -> Unit,
         onCompleted: () -> Unit,
-        onError: (String) -> Unit
+        onError: (String) -> Unit,
+        metronomeEnabled: Boolean,
+        metronomeLevel: Float
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
@@ -798,6 +838,29 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         mix[outIndex + 1] += wave * rightPan
                         channelBuffer[outIndex] += sourceLeft
                         channelBuffer[outIndex + 1] += sourceRight
+                    }
+                }
+
+                // The metronome is a deterministic master-bus click. It is generated in the
+                // render worker, not by a UI timer, so it stays aligned to the musical timebase.
+                if (metronomeEnabled && metronomeLevel > 0f) {
+                    val beatTicks = (plan.ppq.toLong() * 4L / plan.denominator.coerceIn(1, 32).toLong()).coerceAtLeast(1L)
+                    val beatFrames = ArrangementTiming.ticksToFrames(beatTicks, plan.bpm, plan.ppq, sampleRate).coerceAtLeast(1L)
+                    val barFrames = (beatFrames * plan.numerator.coerceIn(1, 32).toLong()).coerceAtLeast(1L)
+                    val clickDuration = (sampleRate * 0.018f).toInt().coerceAtLeast(1)
+                    for (frameOffset in 0 until frames) {
+                        val absoluteFrame = position + frameOffset
+                        val inBeat = absoluteFrame % beatFrames
+                        if (inBeat >= clickDuration) continue
+                        val beatIndex = absoluteFrame / beatFrames
+                        val downbeat = (absoluteFrame % barFrames) < beatFrames
+                        val frequency = if (downbeat) 2200.0 else 1650.0
+                        val envelope = 1.0 - inBeat.toDouble() / clickDuration.toDouble()
+                        val click = (sin(2.0 * PI * frequency * inBeat / sampleRate) *
+                            envelope * metronomeLevel * if (downbeat) 0.30 else 0.18).toFloat()
+                        val outIndex = frameOffset * 2
+                        mix[outIndex] += click
+                        mix[outIndex + 1] += click
                     }
                 }
 
