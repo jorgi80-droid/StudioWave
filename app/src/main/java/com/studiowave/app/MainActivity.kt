@@ -3299,12 +3299,16 @@ private fun PianoRollWorkspace(
                                             kotlin.math.abs(down.position.y - noteCenterY) <= gestureRowHeight * 0.65f
                                     } else null
                                     val noteRightEdgePx = touchedNote?.let { note ->
-                                        ((note.startTick.toDouble() + note.durationTicks.coerceAtLeast(1L).toDouble()) /
-                                            stepTicks.toDouble() - visibleStartStep.toDouble()) * gestureColWidth.toDouble()
-                                    }?.toFloat()
+                                        (((note.startTick + note.durationTicks.coerceAtLeast(1L)).toDouble() /
+                                            stepTicks.toDouble()) - visibleStartStep.toDouble()) * gestureColWidth
+                                    }
+                                    // Prefer the note's trailing edge; use a generous but bounded touch zone
+                                    // so resizing works on phone screens while ordinary note drags remain moves.
+                                    val resizeSlopPx = maxOf(with(pianoDensity) { 10.dp.toPx() }, (gestureColWidth * 0.22f).coerceAtMost(with(pianoDensity) { 24.dp.toPx() }))
                                     val resizeNote = touchedNote != null && noteRightEdgePx != null &&
-                                        noteRightEdgePx >= 0f && kotlin.math.abs(down.position.x - noteRightEdgePx) <=
-                                        maxOf(with(pianoDensity) { 12.dp.toPx() }, gestureColWidth * 0.18f)
+                                        noteRightEdgePx >= 0f &&
+                                        down.position.x >= noteRightEdgePx - resizeSlopPx &&
+                                        down.position.x <= noteRightEdgePx + resizeSlopPx
                                     if (selectionMode && keyboardVisible) {
                                         val origin = down.position
                                         var current = origin
@@ -3381,7 +3385,8 @@ private fun PianoRollWorkspace(
                                     } while (event.changes.any { it.pressed })
 
                                     val latestNotes = gestureNotes.value
-                                    if ((velocityMode || panMode) && keyboardVisible && track != null && clip != null) {
+                                    val meaningfulDrag = accumulatedDelta.getDistance() > with(pianoDensity) { 3.dp.toPx() }
+                                    if ((velocityMode || panMode) && keyboardVisible && track != null && clip != null && meaningfulDrag) {
                                         val targetTick = clickedStep.toDouble() * stepTicks.toDouble()
                                         val nearest = latestNotes.minByOrNull { note -> kotlin.math.abs(note.startTick.toDouble() - targetTick) }
                                         if (nearest != null) {
