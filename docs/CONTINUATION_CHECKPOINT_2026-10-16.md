@@ -47,3 +47,11 @@
 - CI status before this pass: run [38789057427](https://github.com/jorgi80-droid/StudioWave/actions/runs/38789057427) failed at Android SDK/NDK setup before Gradle build/tests; inspect/retry this infrastructure failure separately. The new visual commit requires its own complete build, unit-test, and APK-artifact run.
 - Physical-device visual/touch validation remains outstanding.
 
+
+
+## Arrangement track/clip visual hierarchy pass — 2026-10-16
+- Commit: [6bc05a51](https://github.com/jorgi80-droid/StudioWave/commit/6bc05a51529f18522c74c6492f6c16caf2866acf).
+- Track-name labels now use the graphite raised surface with a fine border; track identity remains visible through the dedicated color rail rather than a full-width saturated name block.
+- Arrangement clips now use a restrained tinted body, a stronger track-color title strip, and a clearer non-selected accent outline; selected clips retain the orange focus border. This follows the Live-inspired hierarchy of colored clip headers over darker clip content while preserving the existing note/drum/audio preview rendering.
+- Only Compose surface styling changed. No timeline timebase, viewport transforms, clip hit-testing, snapping, drag/resize callbacks, playback, or 1,800-bar limit was intentionally changed.
+- The source edit is committed, but CI for this commit is pending. Verify debug APK build, unit tests, and artifact upload before treating the batch as validated. Physical landscape-device visual/touch checks remain outstanding.
