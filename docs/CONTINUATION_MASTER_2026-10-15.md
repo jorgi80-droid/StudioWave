@@ -161,3 +161,9 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - This is a native Compose styling pass, not copied Ableton code/assets or a claim of pixel-identical reproduction. It does not intentionally alter musical coordinate mapping, clip edit callbacks, snap, transport, or the 1,800-bar limit.
 - Validation status: no CI result was returned for this exact commit from the available status/workflow lookup. The current CI result is therefore unverified; check debug APK build, unit tests, and artifact upload before treating this pass as green. Physical landscape-device validation remains outstanding.
 - Next visual audit should focus on remaining workspace-specific differences (Arrangement clip/track hierarchy, Piano Roll ruler/note/velocity styling, Device Dock control/readout hierarchy, and Mixer meter/fader contrast) while preserving existing interaction bindings.
+
+## Cross-workspace geometry follow-up — 2026-10-16
+- [66a72137](https://github.com/jorgi80-droid/StudioWave/commit/66a7213729282964105a7ef995b1aa505bbb3479) standardizes another 25 rounded Compose surfaces/controls from 3–5 dp to a consistent compact 2 dp radius and adds a thin Piano Roll workspace outline.
+- [fbea51c9](https://github.com/jorgi80-droid/StudioWave/commit/fbea51c980e6a1ca21b0533c259f9e26235fa0f5) applies the same crisp geometry to drum step buttons.
+- These are visual-only edits to Compose shapes and borders; callbacks, musical mapping, clip geometry, DSP parameters, and project serialization are unchanged by intent.
+- Validation: latest-head CI result has not been verified. Require successful assembleDebug, testDebugUnitTest, and APK artifact upload before declaring this pass green. Physical Android landscape checks remain outstanding.
