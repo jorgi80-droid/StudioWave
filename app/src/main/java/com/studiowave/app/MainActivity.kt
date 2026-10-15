@@ -580,8 +580,8 @@ private fun TransportBar(
 @Composable
 private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
     Column(
-        Modifier.width(48.dp).fillMaxHeight().background(Raised, RoundedCornerShape(7.dp)).padding(2.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+        Modifier.width(46.dp).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(4.dp)).padding(3.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
         RailButton("KEYS", selected == "PIANO ROLL", Icons.Default.Keyboard) { onSelect("PIANO ROLL") }
@@ -593,17 +593,24 @@ private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
 
 @Composable
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(40.dp), shape = RoundedCornerShape(10.dp),
-        contentPadding = PaddingValues(1.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = if (selected) Color(0xFF18443F) else Color(0xFF202226),
-            contentColor = if (selected) Mint else MutedText)) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(17.dp))
-            Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    val accent = Color(0xFFFFA65A)
+    val body = if (selected) Color(0xFF4A4037) else Color(0xFF35383D)
+    Surface(
+        color = body,
+        contentColor = if (selected) accent else Color(0xFFBABDC2),
+        shape = RoundedCornerShape(3.dp),
+        modifier = Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onClick)
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            if (selected) Box(Modifier.align(Alignment.CenterStart).width(3.dp).fillMaxHeight().padding(vertical = 5.dp).background(accent, RoundedCornerShape(2.dp)))
+            Column(Modifier.fillMaxSize().padding(2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.height(2.dp))
+                Text(label, fontSize = 7.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            }
         }
     }
 }
-
 @Composable
 private fun ArrangementWorkspace(
     project: StudioProject,
