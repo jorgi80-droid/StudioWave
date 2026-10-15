@@ -167,3 +167,12 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - [fbea51c9](https://github.com/jorgi80-droid/StudioWave/commit/fbea51c980e6a1ca21b0533c259f9e26235fa0f5) applies the same crisp geometry to drum step buttons.
 - These are visual-only edits to Compose shapes and borders; callbacks, musical mapping, clip geometry, DSP parameters, and project serialization are unchanged by intent.
 - Validation: latest-head CI result has not been verified. Require successful assembleDebug, testDebugUnitTest, and APK artifact upload before declaring this pass green. Physical Android landscape checks remain outstanding.
+
+
+## Continuation update — Browser visual and responsive pass (2026-10-16)
+
+- Commit `8ddcae3347887402d05b698c2407f7b72cf5e0bc` sharpens Browser hierarchy: square search field with palette-matched fill/cursor/focus border, compact category surfaces, squared import/open actions, crisp track/clip rows, and a thin workspace boundary. Existing search, category filtering, import, select and editor-open callbacks are retained.
+- Commit `7ea19bfee25e864a63542da9c747efca6dc261f9` removes the fixed 320 dp width from the Browser's Device Library placeholder only. DeviceDock's device modules keep their intended 320 dp width; Browser's device-library card fills the available content pane so it does not clip on narrow landscape phones.
+- Neither commit changes audio DSP, timeline coordinates, clip data, Piano Roll note mapping, project serialization, or the 1,800-bar limit.
+- Validation gate: verify Android CI for the latest head `7ea19bfee25e864a63542da9c747efca6dc261f9`, including `assembleDebug`, `testDebugUnitTest`, and APK artifact upload. Physical Android landscape visual/gesture checks remain required.
+- Scope note: this is a native, Live-inspired interface pass, not a claim of pixel-identical reproduction or copied proprietary Ableton assets/code.
