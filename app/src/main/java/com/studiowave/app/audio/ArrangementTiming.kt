@@ -22,6 +22,13 @@ internal object ArrangementTiming {
         else frames.toLong().coerceAtLeast(0L)
     }
 
+    /** Saturating non-negative tick addition for source windows and clip extents. */
+    fun addTicksSaturated(startTicks: Long, lengthTicks: Long): Long {
+        val start = startTicks.coerceAtLeast(0L)
+        val length = lengthTicks.coerceAtLeast(0L)
+        return if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
+    }
+
     /** End tick of an arrangement whose visible musical extent is limited to [bars] bars. */
     fun maxArrangementTick(numerator: Int, denominator: Int, ppq: Int, bars: Int): Long {
         val safePpq = ppq.coerceIn(24, 3840)
