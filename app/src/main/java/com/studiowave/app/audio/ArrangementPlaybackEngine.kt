@@ -304,12 +304,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         tracks.filter { it.kind == "audio" }.forEach { track ->
             track.clips.forEach clipLoop@{ clip ->
                 val uri = clip.sourceUri?.takeIf { it.isNotBlank() } ?: return@clipLoop
-                // Saturate before any duration conversion; Long addition must not wrap negative.
-                val sourceEnd = ArrangementTiming.addTicksSaturated(
-                    clip.sourceOffsetTicks,
-                    clip.lengthTicks.coerceAtLeast(1L)
-                )
-                requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, sourceEnd)
+                // Absolute source coordinates are tempo-independent. Convert only for the
+                // legacy "unknown source duration" fallback used while preparing the PCM cache.
+                val offsetMicros = clip.sourceOffsetMicros
+                    ?: ArrangementTiming.ticksToMicros(clip.sourceOffsetTicks, bpm, ppq)
+                val lengthMicros = clip.sourceLengthMicros
+                    ?: ArrangementTiming.ticksToMicros(clip.lengthTicks.coerceAtLeast(1L), bpm, ppq)
+                val sourceEndMicros = ArrangementTiming.addTicksSaturated(offsetMicros, lengthMicros)
+                val sourceEndTicks = ArrangementTiming.microsToTicks(sourceEndMicros, bpm, ppq)
+                requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, sourceEndTicks)
             }
         }
         val assets = HashMap<String, AudioAsset>()
@@ -382,13 +385,18 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     "audio" -> {
                         val source = clip.sourceUri ?: return@clipLoop
                         val asset = assets[source] ?: return@clipLoop
-                        // Store both offset and window in the decoded asset's frame domain.
-                        val sourceOffsetFrame = (ticksToFrames(clip.sourceOffsetTicks.coerceAtLeast(0L))
-                            .toDouble() * asset.sampleRate.toDouble() / sampleRate.toDouble())
-                            .toLong().coerceAtLeast(0L)
-                        val sourceWindowFrames = (clipLength.toDouble() *
-                            asset.sampleRate.toDouble() / sampleRate.toDouble())
-                            .toLong().coerceAtLeast(1L)
+                        // Source trim is stored in absolute microseconds so changing BPM
+                        // changes arrangement timing, not the source sample selected by the trim.
+                        val sourceOffsetMicros = clip.sourceOffsetMicros
+                            ?: ArrangementTiming.ticksToMicros(clip.sourceOffsetTicks, bpm, ppq)
+                        val sourceLengthMicros = clip.sourceLengthMicros
+                            ?: ArrangementTiming.ticksToMicros(clip.lengthTicks.coerceAtLeast(1L), bpm, ppq)
+                        val sourceOffsetFrame = ArrangementTiming.microsToFrames(
+                            sourceOffsetMicros, asset.sampleRate
+                        ).coerceAtLeast(0L)
+                        val sourceWindowFrames = ArrangementTiming.microsToFrames(
+                            sourceLengthMicros, asset.sampleRate
+                        ).coerceAtLeast(1L)
                         audioEvents.add(AudioEvent(
                             clipStart, clipEnd, sourceOffsetFrame, sourceWindowFrames,
                             track, clip, asset
