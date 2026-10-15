@@ -42,14 +42,14 @@ internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolea
             Color(0xFFC5C6C8), Color(0xFF202124), Color(0xFF55575A), Color(0xFF168F85), Color(0xFFB7654A),
             Color(0xFFB3B4B6), Color(0xFF8C8D90), Color(0xFF207C55), Color(0xFF8C6A27), Color(0xFFB11E37))
         "Live Mid" -> StudioWavePalette(
-            Color(0xFF343537), Color(0xFF28292B), Color(0xFF3B3C3F), Color(0xFF44464A),
-            Color(0xFF303235), Color(0xFFF0F0F0), Color(0xFFB8BABD), Color(0xFF6EDBD2),
-            Color(0xFFFF936F), Color(0xFF57595D), Color(0xFF65676B), Color(0xFF65D99B),
+            Color(0xFF323436), Color(0xFF232426), Color(0xFF36383B), Color(0xFF414347),
+            Color(0xFF2B2D30), Color(0xFFF0F1F2), Color(0xFFB7BABD), Color(0xFF6EDBD2),
+            Color(0xFFFF936F), Color(0xFF4D5054), Color(0xFF606368), Color(0xFF65D99B),
             Color(0xFFFFCA66), Color(0xFFFF5F75)
         )
-        else -> StudioWavePalette(Color(0xFF202124), Color(0xFF2B2D30), Color(0xFF383A3D), Color(0xFF414347),
-            Color(0xFF303236), Color(0xFFE7E7E7), Color(0xFFAAAAAA), Color(0xFF65D9D0), Color(0xFFFF9A76),
-            Color(0xFF4A4C50), Color(0xFF55575B), Color(0xFF6EE7A0), Color(0xFFFFD36E), Color(0xFFFF647C))
+        else -> StudioWavePalette(Color(0xFF1B1C1E), Color(0xFF232527), Color(0xFF303235), Color(0xFF3D3F42),
+            Color(0xFF292B2E), Color(0xFFE7E8E9), Color(0xFFAAADB1), Color(0xFF65D9D0), Color(0xFFFF9877),
+            Color(0xFF484B4F), Color(0xFF575A5E), Color(0xFF6EE7A0), Color(0xFFFFD36E), Color(0xFFFF647C))
     }
     val toned = when (tone) {
         "Warm" -> base.copy(accent = if (theme == "Live Light") Color(0xFF98602C) else Color(0xFFFFB15E), orange = Color(0xFFFF8B52))

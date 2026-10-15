@@ -1043,7 +1043,7 @@ private fun WorkspaceRail(
 ) {
     val p = LocalStudioWavePalette.current
     Column(
-        Modifier.width(48.dp).fillMaxHeight().background(p.panel, RoundedCornerShape(7.dp)).padding(3.dp),
+        Modifier.width(42.dp).fillMaxHeight().background(p.panel, RoundedCornerShape(2.dp)).padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
@@ -1056,9 +1056,9 @@ private fun WorkspaceRail(
 private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     val p = LocalStudioWavePalette.current
     Surface(
-        color = if (selected) p.accent.copy(alpha = 0.18f) else p.room,
+        color = if (selected) p.accent.copy(alpha = 0.14f) else p.panel,
         contentColor = if (selected) p.accent else p.muted,
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(2.dp),
         border = if (selected) BorderStroke(1.dp, p.accent.copy(alpha = 0.65f)) else null,
         modifier = Modifier.fillMaxWidth().height(43.dp).clickable(onClick = onClick)
     ) {
@@ -1307,6 +1307,9 @@ private fun ArrangementWorkspace(
         Box(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(94.dp)) {
+                Row(Modifier.fillMaxWidth().height(18.dp).background(LocalStudioWavePalette.current.panel), verticalAlignment = Alignment.CenterVertically) {
+                    Text("OVERVIEW", fontSize = 7.sp, fontWeight = FontWeight.Bold, color = LocalStudioWavePalette.current.muted, modifier = Modifier.padding(start = 5.dp))
+                }
                 Row(Modifier.fillMaxWidth().height(19.dp).background(LocalStudioWavePalette.current.raised), verticalAlignment = Alignment.CenterVertically) {
                     Text("TRACKS", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = LocalStudioWavePalette.current.muted, modifier = Modifier.padding(start = 5.dp))
                 }
@@ -1563,9 +1566,9 @@ private fun ArrangementWorkspace(
         // becoming a separate Column child that could steal timeline height.
         Row(
             Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
-                .background(Raised.copy(alpha = 0.96f), RoundedCornerShape(22.dp))
-                .border(1.dp, LocalStudioWavePalette.current.border.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
-                .padding(horizontal = 5.dp, vertical = 4.dp),
+                .background(LocalStudioWavePalette.current.panel.copy(alpha = 0.98f), RoundedCornerShape(3.dp))
+                .border(1.dp, LocalStudioWavePalette.current.border, RoundedCornerShape(3.dp))
+                .padding(horizontal = 3.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -2126,7 +2129,8 @@ private fun TimelineGrid(
     val timelineGridOpacity = LocalStudioWaveGridOpacity.current.coerceIn(0f, 1f)
     val density = androidx.compose.ui.platform.LocalDensity.current
     val baseBarWidthPx = with(density) { 74.dp.toPx() }
-    // One compact time ruler; no separate overview/mini-map consumes workspace height.
+    // Compact Live-style Arrangement Overview above the beat ruler.
+    val overviewHeightPx = with(density) { 18.dp.toPx() }
     val rulerHeightPx = with(density) { 18.dp.toPx() }
     val trackHeaderWidthPx = with(density) { 94.dp.toPx() }
     val timebase = remember(project.bpm, project.numerator, project.denominator, project.ppq) {
@@ -2322,7 +2326,7 @@ private fun TimelineGrid(
         // drag that starts on a clip or its resize handle.
         Canvas(Modifier.fillMaxSize().pointerInput(Unit) {
             detectTapGestures(onLongPress = { offset ->
-                val yDp = ((offset.y - rulerHeightPx).coerceAtLeast(0f) / density.density /
+                val yDp = ((offset.y - rulerHeightPx - overviewHeightPx).coerceAtLeast(0f) / density.density /
                     currentVerticalZoom.coerceAtLeast(0.1f)) + currentScrollTracks
                 val hitIndex = currentTrackRows.indices.firstOrNull { index ->
                     val row = currentTrackRows[index]
@@ -2383,6 +2387,44 @@ private fun TimelineGrid(
             }
         }
 
+        // Overview navigator: actual clip locations and visible timeline window.
+        Canvas(
+            Modifier.fillMaxWidth().height(18.dp).background(timelinePalette.panel)
+                .pointerInput(project.tracks, scrollTicks, zoom, timebase) {
+                    detectTapGestures(onTap = { point ->
+                        val maxTick = maxArrangementTick(timebase).coerceAtLeast(1L)
+                        val targetTick = (point.x / size.width.coerceAtLeast(1).toDouble() *
+                            maxTick.toDouble()).toLong().coerceIn(0L, maxTick)
+                        val visible = TimelineViewport(timebase, viewport.effectivePixelsPerBar,
+                            scrollTicks, size.width.toFloat(), trackHeaderWidthPx)
+                        currentOnScroll(visible.placeTickAtViewportX(targetTick, size.width * 0.5f).scrollTimeTicks)
+                    })
+                }
+        ) {
+            val maxTick = maxArrangementTick(timebase).coerceAtLeast(1L)
+            val trackCountSafe = project.tracks.size.coerceAtLeast(1)
+            project.tracks.forEachIndexed { index, track ->
+                val y = size.height * (index + 0.5f) / trackCountSafe
+                track.clips.forEach { clip ->
+                    val rawLeft = clip.startTick.coerceAtLeast(0L).toDouble() / maxTick * size.width
+                    val rawWidth = clip.lengthTicks.coerceAtLeast(1L).toDouble() / maxTick * size.width
+                    val left = rawLeft.toFloat().coerceIn(0f, size.width)
+                    val width = rawWidth.toFloat().coerceIn(1f, (size.width - left).coerceAtLeast(1f))
+                    drawRoundRect(Color((clip.colorArgb ?: track.colorArgb).toInt()).copy(alpha = 0.95f),
+                        Offset(left, y - 2f), Size(width, 4f),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
+                }
+            }
+            val totalBars = (maxTick.toDouble() / timebase.ticksPerBar.toDouble()).toFloat().coerceAtLeast(1f)
+            val visibleBars = (size.width / viewport.effectivePixelsPerBar).coerceAtLeast(1f)
+            val frameWidth = (visibleBars / totalBars * size.width).coerceIn(8f, size.width)
+            val frameLeft = (scrollTicks / timebase.ticksPerBar.toDouble() / totalBars * size.width)
+                .toFloat().coerceIn(0f, (size.width - frameWidth).coerceAtLeast(0f))
+            drawRect(timelinePalette.accent.copy(alpha = 0.08f), Offset(frameLeft, 0f), Size(frameWidth, size.height))
+            drawRect(timelinePalette.accent.copy(alpha = 0.85f), Offset(frameLeft, 0f), Size(frameWidth, size.height),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()))
+        }
+
         // Draw ruler labels only for bars that are currently visible.
         Canvas(
             Modifier
@@ -2422,7 +2464,7 @@ private fun TimelineGrid(
             }
         }
 
-        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 18.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(top = 36.dp)) {
             val timelineViewportHeightDp = maxHeight.value
             Box(Modifier.fillMaxSize()) {
                 project.tracks.forEachIndexed { trackIndex, track ->
@@ -4064,21 +4106,33 @@ private fun DeviceDock(
     Column(
         (if (fullScreen) Modifier.fillMaxWidth().fillMaxHeight()
             else Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp))
-            .background(palette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+            .background(palette.canvas, RoundedCornerShape(2.dp)).padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICES", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
+        Row(Modifier.fillMaxWidth().height(29.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("DEVICE VIEW", color = palette.orange, fontSize = 10.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.width(8.dp))
-            Text(selectedTrack?.let {
-                when (it.kind) {
-                    "midi" -> "INSTRUMENTS & EFFECTS"
-                    "drum" -> "DRUM DEVICES"
-                    else -> "AUDIO EFFECTS"
+            if (project.tracks.isNotEmpty()) {
+                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    project.tracks.forEach { track ->
+                        val active = selectedTrack?.id == track.id
+                        Surface(
+                            color = if (active) palette.accent.copy(alpha = 0.15f) else palette.control,
+                            border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
+                            shape = RoundedCornerShape(2.dp),
+                            modifier = Modifier.height(25.dp).clickable { onSelectTrack(track.id) }
+                        ) {
+                            Row(Modifier.padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Box(Modifier.size(5.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
+                                Text(track.name, color = if (active) palette.accent else palette.text,
+                                    fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
+                    }
                 }
-            } ?: "NO DEVICE CHAIN", color = palette.text, fontSize = 9.sp, maxLines = 1)
-            Spacer(Modifier.weight(1f))
-            SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
+            } else Spacer(Modifier.weight(1f))
+            SmallAction(if (expanded) "FOLD" else "UNFOLD") { expanded = !expanded }
             SmallAction("×") { onToggle() }
         }
         if (expanded) {
@@ -4365,7 +4419,7 @@ private fun DirectWaveDevicePanel(
                 preferences.edit().putInt("release.$trackId", it.toInt()).apply()
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.fillMaxWidth().height(if (fullHeight) 25.dp else 23.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             listOf(48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67).forEach { note ->
                 val label = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")[note % 12]
                 Surface(
@@ -4512,11 +4566,11 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
     Surface(
         color = LocalStudioWavePalette.current.control,
         contentColor = LocalStudioWavePalette.current.text,
-        shape = RoundedCornerShape(8.dp),
-        modifier = Modifier.height(40.dp).defaultMinSize(minWidth = 44.dp)
+        shape = RoundedCornerShape(3.dp),
+        modifier = Modifier.height(34.dp).defaultMinSize(minWidth = 42.dp)
             .clickable(onClickLabel = description, onClick = onClick)
     ) {
-        Box(Modifier.padding(horizontal = 9.dp, vertical = 5.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
             Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
         }
     }
