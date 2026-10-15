@@ -2896,7 +2896,11 @@ private fun PianoRollWorkspace(
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
                 modifier = Modifier.widthIn(max = 90.dp))
             Spacer(Modifier.weight(1f))
-            SmallAction(if (keyboardVisible) "KEYS" else "KEYS OFF") { keyboardVisible = !keyboardVisible }
+            SmallAction(if (keyboardVisible) "NOTES" else "VEL LANE") {
+                keyboardVisible = !keyboardVisible
+                velocityMode = !keyboardVisible
+                panMode = false
+            }
             SmallAction(if (virtualKeyboardVisible) "INPUT ON" else "INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
             SmallAction("1/${snapDenominator}") {
                 snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
@@ -2920,10 +2924,6 @@ private fun PianoRollWorkspace(
             }
             TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
             TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
-            SmallAction(if (velocityMode) "VEL" else "NOTE") {
-                velocityMode = !velocityMode
-                if (velocityMode) panMode = false
-            }
             Box {
                 SmallAction("⋮") { noteContextMenuExpanded = true }
                 DropdownMenu(
