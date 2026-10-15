@@ -3432,6 +3432,7 @@ private fun PianoRollWorkspace(
         }
                     }
                 }
+                }
             }
         }
         if (virtualKeyboardVisible) {
@@ -4099,6 +4100,7 @@ private fun DeviceDock(
                             body = "More processors can be added here once they have working DSP implementations."
                         )
                     }
+                }
             }
         }
     }
