@@ -103,6 +103,34 @@ class TimelineViewportTest {
         assertEquals(2880L, threeFour.ticksPerBar)
     }
 
+    @Test fun arrangementPaneUsesPaneLocalCoordinatesForClipGridAndRuler() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val scroll = 38_400.25
+        val viewport = arrangementPaneViewport(timebase, 148f, scroll, 720f)
+        val clipStart = 76_800L
+        val clipLength = 11_520L
+        val expectedLeft = (clipStart.toDouble() - scroll) * viewport.pixelsPerTick
+        val expectedWidth = clipLength.toDouble() * viewport.pixelsPerTick
+
+        assertEquals(0f, viewport.safeTrackHeaderWidthPx, 0f)
+        assertEquals(expectedLeft.toFloat(), viewport.timeToViewportX(clipStart), 0.001f)
+        assertEquals(expectedWidth.toFloat(),
+            viewport.timeToViewportX(clipStart + clipLength) - viewport.timeToViewportX(clipStart), 0.01f)
+        assertEquals(clipStart, viewport.viewportXToTime(viewport.timeToViewportX(clipStart)))
+    }
+
+    @Test fun arrangementPaneZoomRestoresTheMusicalTickUnderTheFinger() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val initial = arrangementPaneViewport(timebase, 74f, 123_456.375, 900f)
+        val anchorX = 417.25f
+        val anchorTick = initial.scrollTimeTicks + anchorX / initial.pixelsPerTick
+        val zoomed = initial.zoomKeepingAnchor(222f, anchorX)
+        val restored = zoomed.zoomKeepingAnchor(74f, anchorX)
+
+        assertEquals(anchorTick, restored.scrollTimeTicks + anchorX / restored.pixelsPerTick, 1e-6)
+        assertEquals(0f, zoomed.safeTrackHeaderWidthPx, 0f)
+    }
+
     @Test fun tickAndScreenCoordinatesRoundTripWithHeaderOffset() {
         val timebase = TimelineTimebase(120, 4, 4, 960)
         val viewport = TimelineViewport(timebase, pixelsPerBar = 148f, scrollTimeTicks = 7680.0,
