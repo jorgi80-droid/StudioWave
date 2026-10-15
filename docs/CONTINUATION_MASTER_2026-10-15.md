@@ -120,3 +120,10 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - Android CI should be checked against the latest branch head after both commits. Physical Android landscape testing remains necessary for toolbar fit/touch targets and screen-width behavior; build success alone does not validate visual fidelity.
 
 - Commit `efc55b8c26e4c517ff88fe956077a9e0a82c3cb2` continues the same geometry through workspace title/back bars and the device dock frame, reducing rounded-card styling in those structural panels.
+
+
+## Mixer + device control visual pass — 2026-10-16
+- Commit `f755d72cbec37b4c0a07de66e1750a6b90d2ae5a` standardizes compact action buttons and timeline floating controls with thin, square-edged borders; the Mixer workspace outer frame and channel strips use a more consistent Live-inspired graphite hierarchy.
+- Commit `2a516ec764bbc98b07a0d63e8528499c1bca18f8` applies the same square-edged device state controls and master channel panel, and sharpens the audio clip editor waveform frame. Existing click callbacks, fader/pan bindings, mute/solo state and effect routing are preserved.
+- This is a native UI consistency pass, not a claim of pixel-identical Ableton parity. The full UI still needs screenshot comparison and interaction validation on a landscape Android device.
+- Validation gate: check Android CI against the new head and verify build, unit tests and APK artifact upload. Physical-device testing is still pending.
