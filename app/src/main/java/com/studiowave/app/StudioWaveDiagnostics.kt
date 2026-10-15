@@ -53,7 +53,7 @@ internal object StudioWaveDiagnostics {
             if (file.exists()) {
                 if (file.length() > MAX_FILE_BYTES) {
                     val tail = file.readLines().takeLast(MAX_ENTRIES)
-                    file.writeText(tail.joinToString(separator = "\\n", postfix = if (tail.isEmpty()) "" else "\\n"))
+                    file.writeText(tail.joinToString(separator = "\n", postfix = if (tail.isEmpty()) "" else "\n"))
                 }
                 file.readLines().takeLast(MAX_ENTRIES).forEach { line ->
                     if (entries.size >= MAX_ENTRIES) entries.pollFirst()
@@ -77,9 +77,9 @@ internal object StudioWaveDiagnostics {
                     synchronized(target) {
                         if (target.exists() && target.length() > MAX_FILE_BYTES) {
                             val tail = target.readLines().takeLast(MAX_ENTRIES / 2)
-                            target.writeText(tail.joinToString(separator = "\\n", postfix = if (tail.isEmpty()) "" else "\\n"))
+                            target.writeText(tail.joinToString(separator = "\n", postfix = if (tail.isEmpty()) "" else "\n"))
                         }
-                        target.appendText(line + "\\n")
+                        target.appendText(line + "\n")
                     }
                 }
             }
