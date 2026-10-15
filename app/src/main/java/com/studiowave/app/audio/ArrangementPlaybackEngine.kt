@@ -589,7 +589,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val pcm = ShortArray(BLOCK_FRAMES * 2)
         val perTrackMix = HashMap<String, FloatArray>()
         val deviceDsp = HashMap<String, TrackDeviceDsp>()
-        val perTrackMix = HashMap<String, FloatArray>()
         val sampleRate = plan.sampleRate
         val scheduledAudio = plan.audio
         val scheduledNotes = plan.notes
