@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -3894,12 +3895,12 @@ private fun MixerWorkspace(
         Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(1.dp)).border(1.dp, mixerPalette.border.copy(alpha = 0.85f), RoundedCornerShape(1.dp)).padding(4.dp)
     ) {
         // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
-        val channelWidth = 164.dp
+        val channelWidth = 142.dp
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-        project.tracks.forEach { track ->
+        project.tracks.forEachIndexed { trackIndex, track ->
             Column(
                 Modifier.width(channelWidth).fillMaxHeight()
                     .background(mixerPalette.panel, RoundedCornerShape(1.dp))
@@ -3908,7 +3909,7 @@ private fun MixerWorkspace(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    Modifier.fillMaxWidth().height(26.dp)
+                    Modifier.fillMaxWidth().height(29.dp)
                         .background(mixerPalette.canvas, RoundedCornerShape(1.dp))
                         .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp))
                         .padding(horizontal = 5.dp),
@@ -3921,6 +3922,8 @@ private fun MixerWorkspace(
                         Modifier.width(3.dp).fillMaxHeight()
                             .background(Color(track.colorArgb.toInt()))
                     )
+                    Text("%02d".format(trackIndex + 1), fontSize = 7.sp, fontWeight = FontWeight.Black,
+                        color = Color(track.colorArgb.toInt()), maxLines = 1)
                     Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1,
                         color = mixerPalette.text,
                         modifier = Modifier.weight(1f))
@@ -3963,15 +3966,26 @@ private fun MixerWorkspace(
                         repeat(2) { channel ->
                             Canvas(Modifier.weight(1f).fillMaxHeight()) {
                                 val meter = trackMeterReadings[track.id]
-                                val channelPeak = (if (channel == 0) meter?.peakLeft else meter?.peakRight)
+                                val targetPeak = (if (channel == 0) meter?.peakLeft else meter?.peakRight)
                                     ?.coerceIn(0f, 1f) ?: 0f
-                                val channelRms = (if (channel == 0) meter?.rmsLeft else meter?.rmsRight)
+                                val targetRms = (if (channel == 0) meter?.rmsLeft else meter?.rmsRight)
                                     ?.coerceIn(0f, 1f) ?: 0f
+                                // Smooth the meter's visual response without touching the audio signal.
+                                val animatedPeak by animateFloatAsState(
+                                    targetValue = targetPeak,
+                                    animationSpec = tween(durationMillis = 85),
+                                    label = "mixer_peak_${track.id}_$channel"
+                                )
+                                val animatedRms by animateFloatAsState(
+                                    targetValue = targetRms,
+                                    animationSpec = tween(durationMillis = 100),
+                                    label = "mixer_rms_${track.id}_$channel"
+                                )
                                 val lane = (size.width * 0.76f).coerceAtLeast(2f)
                                 for (segment in 0 until 24) {
                                     val segmentHeight = size.height / 24f
                                     val y = size.height - (segment + 1) * segmentHeight
-                                    val active = (segment + 1) / 24f <= channelPeak
+                                    val active = (segment + 1) / 24f <= animatedPeak
                                     val color = when {
                                         !active -> mixerPalette.room
                                         segment >= 21 -> mixerPalette.meterHigh
@@ -3983,8 +3997,8 @@ private fun MixerWorkspace(
                                         cornerRadius = androidx.compose.ui.geometry.CornerRadius(0.7f))
                                 }
                                 drawLine(mixerPalette.text.copy(alpha = 0.84f),
-                                    Offset((size.width - lane) / 2f, size.height * (1f - channelRms).coerceIn(0f, 1f)),
-                                    Offset((size.width + lane) / 2f, size.height * (1f - channelRms).coerceIn(0f, 1f)), 1f)
+                                    Offset((size.width - lane) / 2f, size.height * (1f - animatedRms).coerceIn(0f, 1f)),
+                                    Offset((size.width + lane) / 2f, size.height * (1f - animatedRms).coerceIn(0f, 1f)), 1f)
                             }
                         }
                     }
