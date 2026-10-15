@@ -1,6 +1,8 @@
 package com.studiowave.app
 
 import com.studiowave.app.data.StudioProject
+import com.studiowave.app.data.TrackDevice
+import com.studiowave.app.data.defaultDeviceParameters
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNotNull
@@ -157,6 +159,35 @@ class ProjectModelTest {
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("duplicate clip IDs"))
         }
+    }
+
+
+    @Test fun parametricEqEightDefaultsExposeFrequencyAndQForEveryBand() {
+        val parameters = defaultDeviceParameters("PARAM_EQ_8")
+        assertEquals(8, (1..8).count { parameters.containsKey("band$it") })
+        (1..8).forEach { band ->
+            assertTrue((parameters["band${band}FreqNorm"] ?: -1f) in 0f..1f)
+            assertTrue((parameters["band${band}Q"] ?: 0f) in 0.25f..8f)
+        }
+    }
+
+    @Test fun parametricEqEightFrequencyAndQParametersRoundTripThroughProjectJson() {
+        val project = StudioProject()
+        val track = project.tracks.first { it.kind == "midi" }
+        val parameters = defaultDeviceParameters("PARAM_EQ_8") + mapOf(
+            "band4" to 4.5f,
+            "band4FreqNorm" to 0.72f,
+            "band4Q" to 2.4f
+        )
+        val device = TrackDevice(type = "PARAM_EQ_8", name = "Parametric EQ Eight", parameters = parameters)
+        val edited = project.copy(tracks = project.tracks.map {
+            if (it.id == track.id) it.copy(devices = it.devices + device) else it
+        })
+        val restored = StudioProject.fromJson(JSONObject(edited.toJson().toString()))
+        val restoredDevice = restored.tracks.first { it.id == track.id }.devices.last()
+        assertEquals(4.5f, restoredDevice.parameters["band4"] ?: 0f, 0.001f)
+        assertEquals(0.72f, restoredDevice.parameters["band4FreqNorm"] ?: 0f, 0.001f)
+        assertEquals(2.4f, restoredDevice.parameters["band4Q"] ?: 0f, 0.001f)
     }
 
 }
