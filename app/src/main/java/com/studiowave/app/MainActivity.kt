@@ -2006,6 +2006,12 @@ private fun TrackHeader(
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
+        Column(
+            Modifier.weight(1f).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)
+        ) {
+            Text(track.name, fontSize = 9.sp, color = LocalStudioWavePalette.current.text, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
+        }
         Column(Modifier.weight(1f).combinedClickable(onClick = {}, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
             Text(track.name, fontSize = 9.sp, color = LocalStudioWavePalette.current.text, fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
