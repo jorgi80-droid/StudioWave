@@ -73,9 +73,15 @@ internal fun StudioWaveSettingsScreen(
     themeName: String, onThemeChange: (String) -> Unit, paletteTone: String, onPaletteToneChange: (String) -> Unit,
     highContrast: Boolean, onHighContrastChange: (Boolean) -> Unit, gridOpacity: Float, onGridOpacityChange: (Float) -> Unit,
     uiScale: Float, onUiScaleChange: (Float) -> Unit,
-    audioStatus: String, interfaceLog: List<String>
+    audioStatus: String, audioProfile: String, onAudioProfileChange: (String) -> Unit,
+    metronomeLevel: Float, onMetronomeLevelChange: (Float) -> Unit,
+    parallelPreparation: Boolean, onParallelPreparationChange: (Boolean) -> Unit,
+    audioDiagnostics: List<String>, appLog: List<String>,
+    onShareLogs: () -> Unit, onClearLogs: () -> Unit,
+    onNewProject: (String) -> Unit, onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     val p = LocalStudioWavePalette.current
+    var newProjectName by remember { mutableStateOf("Untitled Set") }
     Row(Modifier.fillMaxSize().background(p.room).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.width(164.dp).fillMaxHeight().background(p.panel, RoundedCornerShape(1.dp))
             .border(1.dp, p.border.copy(alpha = 0.9f), RoundedCornerShape(1.dp)).padding(7.dp),
@@ -86,8 +92,9 @@ internal fun StudioWaveSettingsScreen(
             }
             HorizontalDivider(color = p.border)
             SettingsNav("Interface", "Theme, controls, typography", section == "INTERFACE", p) { onSectionChange("INTERFACE") }
-            SettingsNav("Audio", "Output preferences", section == "AUDIO", p) { onSectionChange("AUDIO") }
-            SettingsNav("Interface Log", "Current UI and engine state", section == "LOG", p) { onSectionChange("LOG") }
+            SettingsNav("Audio", "Output profile and metronome", section == "AUDIO", p) { onSectionChange("AUDIO") }
+            SettingsNav("Diagnostics & Logs", "Audio debug and app log", section == "LOG", p) { onSectionChange("LOG") }
+            SettingsNav("Project", "New, open and save sets", section == "PROJECT", p) { onSectionChange("PROJECT") }
             Spacer(Modifier.weight(1f))
             Text("STUDIOWAVE • MOBILE DAW", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Button(onClick = onClose, modifier = Modifier.fillMaxWidth().height(34.dp), contentPadding = PaddingValues(0.dp),
@@ -100,9 +107,9 @@ internal fun StudioWaveSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(when (section) { "AUDIO" -> "Audio"; "LOG" -> "Interface Log"; else -> "Interface & Theme" },
+                    Text(when (section) { "AUDIO" -> "Audio"; "LOG" -> "Diagnostics & Logs"; "PROJECT" -> "Project Manager"; else -> "Interface & Theme" },
                         color = p.text, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                    Text(when (section) { "AUDIO" -> "Engine-aware information and saved output preferences"; "LOG" -> "Diagnostic snapshot for the current session"; else -> "Consistent Live-inspired color, control and text system" },
+                    Text(when (section) { "AUDIO" -> "Device-aware playback profile, metronome and render preparation"; "LOG" -> "Local live telemetry and exportable application events"; "PROJECT" -> "Create a clean set, or import/export a .sdaw project"; else -> "Consistent Live-inspired color, control and text system" },
                         color = p.muted, fontSize = 9.sp)
                 }
                 Button(onClick = onClose, modifier = Modifier.size(width = 40.dp, height = 32.dp), contentPadding = PaddingValues(0.dp),
@@ -111,27 +118,83 @@ internal fun StudioWaveSettingsScreen(
             HorizontalDivider(color = p.border)
             when (section) {
                 "AUDIO" -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SettingsSection("OUTPUT", "Read-only settings from the active playback implementation.", p)
-                    SettingsInfoCard(
-                        "ACTIVE FORMAT",
-                        "Stereo PCM16 · 44.1 kHz output · 256-frame mixer blocks. The Android AudioTrack buffer uses the device minimum or at least 4096 bytes.",
-                        p
+                    SettingsSection("OUTPUT PROFILE", "Choose a queue-depth target for your device. Engine format remains stereo PCM16 at 44.1 kHz.", p)
+                    SettingsChoiceRow(
+                        "Playback stability",
+                        "Low latency uses a shorter producer queue; Stable buffers more audio against scheduler jitter.",
+                        listOf("LOW_LATENCY" to "LOW LATENCY", "BALANCED" to "BALANCED", "STABLE" to "STABLE"),
+                        audioProfile, onAudioProfileChange, p
                     )
-                    SettingsInfoCard("ENGINE STATUS", audioStatus, p)
+                    SettingsInfoCard("ACTIVE OUTPUT", audioStatus, p)
                     SettingsInfoCard(
-                        "CONFIGURATION",
-                        "Sample rate, output mode and buffer size are not user-configurable in this engine version, so no inactive selection controls are shown.",
-                        p
+                        "PROFILE DETAILS",
+                        when (audioProfile) {
+                            "LOW_LATENCY" -> "Queue target: 512 frames (~11.6 ms at 44.1 kHz), lower buffering with less tolerance for heavy projects."
+                            "STABLE" -> "Queue target: 2048 frames (~46.4 ms at 44.1 kHz), more headroom for busy devices."
+                            else -> "Queue target: 1024 frames (~23.2 ms at 44.1 kHz), recommended starting point for most devices."
+                        }, p
                     )
+                    SettingsSection("METRONOME", "Click is mixed into the master output during playback.", p)
+                    SettingsSliderRow("Metronome level", "0% = silent; 100% = maximum click level.", metronomeLevel,
+                        "${(metronomeLevel * 100).toInt()}%", onMetronomeLevelChange, p)
+                    SettingsSection("PREPARATION & PROCESSING", "Multicore option parallelizes sample preparation only; realtime mixing remains a dedicated worker.", p)
+                    SettingsToggleRow("Parallel sample preparation", "Use multiple IO workers to decode independent audio sources before playback.", parallelPreparation, onParallelPreparationChange, p)
+                    SettingsInfoCard("REALTIME MIXER", "The current realtime mixer is single-worker. This switch does not falsely claim parallel DSP; it only parallelizes source preparation.", p)
                 }
-                "LOG" -> Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    SettingsInfoCard("SESSION DIAGNOSTICS", "Read-only snapshot. Values are not uploaded.", p)
-                    interfaceLog.forEachIndexed { index, line ->
-                        Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp)).padding(horizontal = 7.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text((index + 1).toString().padStart(2, '0'), color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.width(8.dp)); Text(line, color = p.text, fontSize = 9.sp, maxLines = 2)
+                "LOG" -> Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Button(onClick = onShareLogs, modifier = Modifier.weight(1f).height(34.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.room), shape = RoundedCornerShape(1.dp)) {
+                            Text("EXPORT / SHARE LOG", fontSize = 9.sp, fontWeight = FontWeight.Black)
+                        }
+                        OutlinedButton(onClick = onClearLogs, modifier = Modifier.height(34.dp), contentPadding = PaddingValues(horizontal = 9.dp, vertical = 0.dp),
+                            border = BorderStroke(1.dp, p.border), shape = RoundedCornerShape(1.dp)) {
+                            Text("CLEAR", color = p.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                         }
                     }
+                    SettingsSection("AUDIO DEBUG", "Live engine health, performance and memory estimates.", p)
+                    audioDiagnostics.forEach { SettingsInfoCard(it.substringBefore("::"), it.substringAfter("::", it), p) }
+                    SettingsSection("APPLICATION LOG", "${appLog.size} retained entries · newest entries at the bottom · local only.", p)
+                    appLog.forEachIndexed { index, line ->
+                        Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp))
+                            .border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
+                            .padding(horizontal = 7.dp, vertical = 5.dp), verticalAlignment = Alignment.Top) {
+                            Text((index + 1).toString().padStart(3, '0'), color = p.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(7.dp)); Text(line, color = p.text, fontSize = 8.sp)
+                        }
+                    }
+                    SettingsInfoCard("IMPORTANT", "This captures StudioWave-owned events and uncaught app exceptions. Android system Logcat is not accessible to ordinary apps; export this report and send it for analysis.", p)
+                }
+                "PROJECT" -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SettingsSection("PROJECT WORKFLOW", "Dedicated project actions, separate from track and clip editing.", p)
+                    SettingsInfoCard("CURRENT SET", "Project name: $newProjectName\nActive project: this session autosaves locally; use SAVE AS to create a shareable .sdaw file.", p)
+                    OutlinedTextField(
+                        value = newProjectName, onValueChange = { newProjectName = it.take(64) },
+                        modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        label = { Text("New project name", fontSize = 10.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
+                            focusedTextColor = p.text, unfocusedTextColor = p.text,
+                            focusedLabelColor = p.accent, unfocusedLabelColor = p.muted
+                        )
+                    )
+                    Button(onClick = { onNewProject(newProjectName.trim().ifBlank { "Untitled Set" }) },
+                        modifier = Modifier.fillMaxWidth().height(38.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.room),
+                        shape = RoundedCornerShape(1.dp)) {
+                        Text("NEW EMPTY PROJECT", fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = onOpenProject, modifier = Modifier.weight(1f).height(38.dp),
+                            border = BorderStroke(1.dp, p.border), shape = RoundedCornerShape(1.dp)) {
+                            Text("OPEN PROJECT", color = p.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(onClick = onSaveProject, modifier = Modifier.weight(1f).height(38.dp),
+                            border = BorderStroke(1.dp, p.accent), shape = RoundedCornerShape(1.dp)) {
+                            Text("SAVE AS .SDAW", color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    SettingsInfoCard("PROJECT FILE", "A .sdaw file contains the project structure, tracks, clips, MIDI notes and device parameters. External audio URIs remain references to files on your device.", p)
                 }
                 else -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsSection("THEME", "Inspired by Live's Theme & Colors settings.", p)
