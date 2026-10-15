@@ -97,4 +97,24 @@ class TimelineViewportTest {
         assertTrue(close <= far)
         assertTrue(far > 0L && close > 0L)
     }
+    
+    @Test fun arrangementPaneCoordinatesDoNotIncludeTrackHeader() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewport = arrangementPaneViewport(timebase, 148f, 3840.5, 720f)
+        val tick = 15360L
+        assertEquals(0f, viewport.safeTrackHeaderWidthPx, 0f)
+        assertEquals((tick - 3840.5) * viewport.pixelsPerTick, viewport.timeToViewportX(tick), 0.001f)
+        assertEquals(tick, viewport.viewportXToTime(viewport.timeToViewportX(tick)))
+    }
+
+    @Test fun arrangementPaneRepeatedZoomRestoresFractionalAnchor() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val initial = arrangementPaneViewport(timebase, 74f, 155555.25, 900f)
+        val x = 421.75f
+        val anchorTick = initial.effectiveScrollTimeTicks + x / initial.pixelsPerTick
+        val result = initial.zoomKeepingAnchor(296f, x).zoomKeepingAnchor(74f, x)
+        val resultingTick = result.effectiveScrollTimeTicks + x / result.pixelsPerTick
+        assertEquals(anchorTick, resultingTick, 1e-6)
+    }
+
 }
