@@ -3430,10 +3430,6 @@ private fun PianoRollWorkspace(
                 }
             }
         }
-                    }
-                }
-            }
-        }
         if (virtualKeyboardVisible) {
             val keyboardNotes = listOf(
                 "C" to 48, "D" to 50, "E" to 52, "F" to 53,
