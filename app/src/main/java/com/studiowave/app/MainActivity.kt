@@ -43,6 +43,8 @@ import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Add
+import android.content.Intent
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalConfiguration
@@ -381,6 +383,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
         preferAdaptiveHighRefreshRate()
+        StudioWaveDiagnostics.installCrashHandler()
+        StudioWaveDiagnostics.log("INFO", "LIFECYCLE", "MainActivity created")
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideDawSystemBars()
         window.navigationBarColor = android.graphics.Color.rgb(20, 21, 23)
@@ -483,6 +487,16 @@ private fun StudioWaveApp() {
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showSettings by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf("INTERFACE") }
+    var audioProfile by remember {
+        mutableStateOf(preferences.getString("audio_profile", "BALANCED")?.takeIf {
+            it in setOf("LOW_LATENCY", "BALANCED", "STABLE")
+        } ?: "BALANCED")
+    }
+    var metronomeEnabled by remember { mutableStateOf(preferences.getBoolean("metronome_enabled", false)) }
+    var metronomeLevel by remember { mutableFloatStateOf(preferences.getFloat("metronome_level", 0.25f).coerceIn(0f, 1f)) }
+    var parallelPreparation by remember { mutableStateOf(preferences.getBoolean("parallel_preparation", false)) }
+    var diagnosticLogLines by remember { mutableStateOf(StudioWaveDiagnostics.snapshot()) }
+    var audioDiagnosticsLines by remember { mutableStateOf(listOf("ENGINE STATUS::Collecting runtime diagnostics…")) }
     var themeName by remember {
         mutableStateOf(
             if (preferences.getBoolean("ui_theme_selected_manually", false)) {
@@ -533,6 +547,7 @@ private fun StudioWaveApp() {
             redoHistory = emptyList()
             project = next
             arrangementPlayback.updateMix(next)
+            StudioWaveDiagnostics.log("INFO", "PROJECT", "Project edit committed: '${next.name}', ${next.tracks.size} tracks, ${next.tracks.sumOf { it.clips.size }} clips")
         }
     }
     fun undoProject() {
@@ -556,6 +571,7 @@ private fun StudioWaveApp() {
         playbackJob?.cancel()
         playbackJob = null
         runCatching { arrangementPlayback.stop() }
+        StudioWaveDiagnostics.log("INFO", "TRANSPORT", "Playback stopped at tick $playheadTick")
         playing = false
         playbackLoading = false
         audioError = null
@@ -567,6 +583,7 @@ private fun StudioWaveApp() {
         playbackJob?.cancel()
         playbackJob = null
         val snapshot = projectSnapshot
+        StudioWaveDiagnostics.log("INFO", "TRANSPORT", "Playback preparation requested at tick $startTick for project '${snapshot.name}'")
         val gain = master.coerceIn(0f, 1f)
         val startTick = tick.coerceAtLeast(0L)
         playheadTick = startTick
@@ -593,6 +610,7 @@ private fun StudioWaveApp() {
                         }
                     },
                     onError = { message ->
+                        StudioWaveDiagnostics.log("ERROR", "AUDIO", "Playback failed: $message")
                         playbackScope.launch(Dispatchers.Main.immediate) {
                             if (session == playbackSession) {
                                 playing = false
@@ -606,7 +624,11 @@ private fun StudioWaveApp() {
                     onProgress = { positionTicks ->
                         // Conflate progress from the audio worker to avoid an unbounded main-thread backlog.
                         playbackProgress.trySend(session to positionTicks.coerceAtLeast(0L))
-                    }
+                    },
+                    parallelPreparation = parallelPreparation,
+                    metronomeEnabled = metronomeEnabled,
+                    metronomeLevel = metronomeLevel,
+                    queueTargetFrames = when (audioProfile) { "LOW_LATENCY" -> 512; "STABLE" -> 2048; else -> 1024 }
                 )
                 if (session == playbackSession) {
                     playing = true
@@ -756,11 +778,13 @@ private fun StudioWaveApp() {
                             ?: error("Tidak dapat membuka tujuan penyimpanan proyek")
                         output.use { StudioProjectFile.write(snapshot, it) }
                     }
+                    StudioWaveDiagnostics.log("INFO", "PROJECT", "Project '${snapshot.name}' exported successfully")
                     Toast.makeText(context, "Proyek .sdaw berhasil disimpan", Toast.LENGTH_SHORT).show()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
                     audioError = failure.message ?: "Ekspor proyek gagal"
+                    StudioWaveDiagnostics.log("ERROR", "PROJECT", "Project export failed: ${failure.message}")
                 }
             }
         }
@@ -791,13 +815,53 @@ private fun StudioWaveApp() {
                     editorClipId = null
                     selectedWorkspace = "ARRANGEMENT"
                     audioError = null
+                    StudioWaveDiagnostics.log("INFO", "PROJECT", "Opened project '${imported.name}' with ${imported.tracks.size} tracks")
                     Toast.makeText(context, "Proyek .sdaw berhasil dibuka", Toast.LENGTH_SHORT).show()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
                     audioError = failure.message ?: "Impor proyek gagal"
+                    StudioWaveDiagnostics.log("ERROR", "PROJECT", "Project import failed: ${failure.message}")
                 }
             }
+        }
+    }
+    LaunchedEffect(arrangementPlayback, showSettings, settingsSection) {
+        while (true) {
+            val output = arrangementPlayback.outputDiagnostics()
+            StudioWaveDiagnostics.recordUnderruns(output.underruns)
+            if (showSettings && settingsSection == "LOG") {
+                val runtime = StudioWaveDiagnostics.runtimeSnapshot()
+                val javaUsedMb = runtime.javaHeapUsedBytes / (1024.0 * 1024.0)
+                val javaMaxMb = runtime.javaHeapMaxBytes / (1024.0 * 1024.0)
+                val nativeMb = runtime.nativeHeapUsedBytes / (1024.0 * 1024.0)
+                val cpuLabel = runtime.cpuPercent?.let { "%.1f%%".format(java.util.Locale.US, it) } ?: "sampling…"
+                val fpsLabel = runtime.uiFps?.let { "%.1f fps".format(java.util.Locale.US, it) } ?: "sampling…"
+                val frameLabel = runtime.uiFrameIntervalMs?.let { "%.2f ms".format(java.util.Locale.US, it) } ?: "sampling…"
+                val queueTarget = when (audioProfile) { "LOW_LATENCY" -> 512; "STABLE" -> 2048; else -> 1024 }
+                audioDiagnosticsLines = listOf(
+                    "OUTPUT PROFILE::${audioProfile.replace('_', ' ')} · target producer queue $queueTarget frames",
+                    "ENGINE STATE::${if (playing) "PLAYING" else if (playbackLoading) "PREPARING" else "STOPPED"} · stereo PCM16 · ${ArrangementPlaybackEngine.OUTPUT_SAMPLE_RATE} Hz",
+                    "UNDERRUN MONITOR::${output.underruns} native underruns observed · ${StudioWaveDiagnostics.underrunEvents()} increases logged since session start",
+                    "OUTPUT QUEUE::${output.queuedFrames} frames queued · ${output.playedFrames} frames consumed",
+                    "PROCESS CPU::$cpuLabel · ${runtime.availableProcessors} logical processors reported by Android",
+                    "MEMORY::Java heap %.1f / %.1f MB · native heap %.1f MB".format(java.util.Locale.US, javaUsedMb, javaMaxMb, nativeMb),
+                    "RENDER PACING::${fpsLabel} estimated UI frame rate · ${frameLabel} mean smoothed frame interval",
+                    "PROJECT LOAD::${project.tracks.size} tracks · ${project.tracks.sumOf { it.clips.size }} clips · BPM ${project.bpm}",
+                    "MIXER CONFIG::256-frame render blocks · ${if (parallelPreparation) "parallel source preparation ON" else "sequential source preparation"} · realtime mix worker single-threaded",
+                    "METRONOME::${if (metronomeEnabled) "ON" else "OFF"} · level ${(metronomeLevel * 100).toInt()}%"
+                )
+                diagnosticLogLines = StudioWaveDiagnostics.snapshot()
+            }
+            delay(500)
+        }
+    }
+    LaunchedEffect(Unit) {
+        var lastFrame = 0L
+        while (true) {
+            val frame = withFrameNanos { it }
+            if (lastFrame != 0L) StudioWaveDiagnostics.recordUiFrameInterval(frame - lastFrame)
+            lastFrame = frame
         }
     }
     LaunchedEffect(arrangementPlayback) {
@@ -851,6 +915,10 @@ private fun StudioWaveApp() {
             .putBoolean("ui_high_contrast", highContrast)
             .putFloat("ui_grid_opacity", gridOpacity)
             .putFloat("ui_scale", uiScale)
+            .putString("audio_profile", audioProfile)
+            .putBoolean("metronome_enabled", metronomeEnabled)
+            .putFloat("metronome_level", metronomeLevel)
+            .putBoolean("parallel_preparation", parallelPreparation)
             .apply()
     }
     val studioColorScheme = if (themeName == "Live Light") {
@@ -893,16 +961,79 @@ private fun StudioWaveApp() {
                     highContrast = highContrast, onHighContrastChange = { highContrast = it },
                     gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
                     uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.6f, 1.2f) },
-                    audioStatus = "Android AudioTrack system output; custom routing and DSP device chains are not connected.",
-                    interfaceLog = listOf(
-                        "Theme: $themeName / $paletteTone",
-                        "UI scale: ${(uiScale * 100).toInt()}%",
-                        "Transport: ${if (playing) "PLAYING" else "STOPPED"}",
-                        "Audio output: stereo PCM16 at 44.1 kHz / 256-frame mixer blocks",
-                        "Peak: ${masterPeakDbfs.toInt()} dBFS; RMS: ${masterRmsDbfs.toInt()} dBFS",
-                        "Workspace: $selectedWorkspace",
-                        "Project autosave: enabled"
-                    )
+                    audioStatus = "Native Oboe/AAudio output path · stereo PCM16 at ${ArrangementPlaybackEngine.OUTPUT_SAMPLE_RATE} Hz · 256-frame mixer blocks. Actual device stream properties follow Android audio policy.",
+                    audioProfile = audioProfile,
+                    onAudioProfileChange = { value ->
+                        audioProfile = value
+                        preferences.edit().putString("audio_profile", value).apply()
+                        StudioWaveDiagnostics.log("INFO", "AUDIO_SETTINGS", "Output profile changed to $value")
+                    },
+                    metronomeEnabled = metronomeEnabled,
+                    onMetronomeEnabledChange = { value ->
+                        metronomeEnabled = value
+                        preferences.edit().putBoolean("metronome_enabled", value).apply()
+                        StudioWaveDiagnostics.log("INFO", "AUDIO_SETTINGS", "Metronome ${if (value) "enabled" else "disabled"}")
+                    },
+                    metronomeLevel = metronomeLevel,
+                    onMetronomeLevelChange = { value ->
+                        metronomeLevel = value.coerceIn(0f, 1f)
+                        preferences.edit().putFloat("metronome_level", metronomeLevel).apply()
+                    },
+                    parallelPreparation = parallelPreparation,
+                    onParallelPreparationChange = { value ->
+                        parallelPreparation = value
+                        preferences.edit().putBoolean("parallel_preparation", value).apply()
+                        StudioWaveDiagnostics.log("INFO", "AUDIO_SETTINGS", "Parallel sample preparation ${if (value) "enabled" else "disabled"}")
+                    },
+                    audioDiagnostics = audioDiagnosticsLines,
+                    appLog = diagnosticLogLines,
+                    onShareLogs = {
+                        val report = StudioWaveDiagnostics.formattedReport(audioDiagnosticsLines)
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "StudioWave diagnostics")
+                            putExtra(Intent.EXTRA_TEXT, report)
+                        }
+                        runCatching { context.startActivity(Intent.createChooser(send, "Share StudioWave diagnostics")) }
+                            .onFailure { StudioWaveDiagnostics.log("ERROR", "DIAGNOSTICS", "Could not open share sheet: ${it.message}") }
+                    },
+                    onClearLogs = {
+                        StudioWaveDiagnostics.clear()
+                        diagnosticLogLines = StudioWaveDiagnostics.snapshot()
+                    },
+                    onNewProject = { name ->
+                        stopPlayback()
+                        val fresh = StudioProject(name = name.take(64).ifBlank { "Untitled Set" },
+                            tracks = StudioProject.defaultTracks().map { it.copy(clips = emptyList()) })
+                        undoHistory = emptyList()
+                        redoHistory = emptyList()
+                        project = fresh
+                        bpm = fresh.bpm
+                        playheadTick = 0L
+                        scrollTicks = 0.0
+                        scrollTracks = 0f
+                        zoom = 1f
+                        verticalZoom = 1f
+                        editorTrackId = fresh.tracks.firstOrNull()?.id
+                        editorClipId = null
+                        selectedWorkspace = "ARRANGEMENT"
+                        arrangementPlayback.updateMix(fresh)
+                        StudioWaveDiagnostics.log("INFO", "PROJECT", "Created new empty project '${fresh.name}'")
+                        preferences.edit().putString("project_json", fresh.toJson().toString()).apply()
+                        showSettings = false
+                        Toast.makeText(context, "Proyek baru: ${fresh.name}", Toast.LENGTH_SHORT).show()
+                    },
+                    onSaveProject = {
+                        pendingExportProject = project
+                        showSettings = false
+                        StudioWaveDiagnostics.log("INFO", "PROJECT", "Save As requested for '${project.name}'")
+                        exportProjectLauncher.launch(suggestedSdawFileName(project.name))
+                    },
+                    onOpenProject = {
+                        showSettings = false
+                        StudioWaveDiagnostics.log("INFO", "PROJECT", "Open project picker requested")
+                        importProjectLauncher.launch(arrayOf("*/*"))
+                    }
                 )
             } else {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
@@ -923,6 +1054,7 @@ private fun StudioWaveApp() {
                     positionLabel = musicalPositionLabel(playheadTick, project.ppq, project.numerator, project.denominator),
                     timeSignatureLabel = "${project.numerator}/${project.denominator}",
                     onSettings = { settingsSection = "INTERFACE"; showSettings = true },
+                    onNewProject = { settingsSection = "PROJECT"; showSettings = true },
                     onBpm = { value ->
                         bpm = value.coerceIn(40, 240)
                         changeProject(project.copy(bpm = bpm))
@@ -947,7 +1079,10 @@ private fun StudioWaveApp() {
                 Row(Modifier.weight(1f).fillMaxWidth()) {
                     WorkspaceRail(
                         selected = selectedWorkspace,
-                        onSelect = { selectedWorkspace = it }
+                        onSelect = {
+                            selectedWorkspace = it
+                            StudioWaveDiagnostics.log("INFO", "WORKSPACE", "Workspace changed to $it")
+                        }
                     )
                     Spacer(Modifier.width(4.dp))
                     Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -1065,7 +1200,7 @@ private fun TransportBar(
     compact: Boolean = false,
     playing: Boolean, bpm: Int, master: Float,
     peakDbfs: Float, rmsDbfs: Float, momentaryLufs: Float, peakHistory: List<Float>,
-    positionLabel: String, timeSignatureLabel: String, onSettings: () -> Unit,
+    positionLabel: String, timeSignatureLabel: String, onSettings: () -> Unit, onNewProject: () -> Unit,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
     onUndo: () -> Unit, onRedo: () -> Unit,
     onSaveProject: () -> Unit, onOpenProject: () -> Unit
@@ -1128,6 +1263,7 @@ private fun TransportBar(
         Spacer(Modifier.weight(1f))
         SmallIconButton(Icons.Default.Undo, p.muted, onUndo)
         SmallIconButton(Icons.Default.Redo, p.muted, onRedo)
+        SmallIconButton(Icons.Default.Add, p.accent, onNewProject)
         SmallIconButton(Icons.Default.FolderOpen, p.muted, onOpenProject)
         SmallIconButton(Icons.Default.Save, p.muted, onSaveProject)
         Box(Modifier.width(1.dp).height(19.dp).background(p.border))
