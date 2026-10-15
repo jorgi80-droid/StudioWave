@@ -139,3 +139,12 @@
 - Follow-up precision fix [5a7b9f9b](https://github.com/jorgi80-droid/StudioWave/commit/5a7b9f9ba2a5b6c388b24027f5a4207dc9d2822d) removes the old 0.99 start cap and instead bounds the start to one tick before source end, so a trim near 100% can round-trip without jumping to 99%.
 - Additional regression assertions [5bf0579c](https://github.com/jorgi80-droid/StudioWave/commit/5bf0579c686a744a14e5bea9dc003d8e273fc3e0) cover near-end trim restoration and exact final-tick behavior.
 - Workflow lookup for the latest implementation/test commits returned no associated PR-triggered runs; latest-head build/test/APK upload remain unverified.
+
+
+## Playback trim audit — 2026-10-16
+- Audited `ArrangementPlaybackEngine` audio event construction and source-frame selection.
+- Fixed a playback defect: an extended audio clip previously wrapped over the entire decoded source, which could reintroduce audio outside the selected trim range. The loop now wraps only within the clip's selected source window, bounded by the remaining decoded asset frames.
+- Normalized source offset and window length to the decoded asset sample-rate domain before the mixer reads samples; this avoids mixing output-rate and source-rate frame coordinates.
+- Added pure helper `ArrangementTiming.sourceFrameWithinTrim` and unit regression coverage for window wrapping, end-of-source clamping, and invalid assets.
+- Commits: `4f054f0b`, `93e5bb71`, `dc3f0906`, `db4e36ff`, `95bac3c6`.
+- Validation: source review and test cases added; latest-head GitHub Actions workflow run and combined status returned no results. Gradle build, unit-test execution, APK upload, and physical Android playback validation remain unverified. Do not mark this batch green without a completed CI run.
