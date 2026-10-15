@@ -2205,59 +2205,6 @@ private fun AbletonKnob(
 }
 
 @Composable
-private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float) -> Unit) {
-    var pitch by remember { mutableFloatStateOf(0.3f) }
-    var cutoff by remember { mutableFloatStateOf(0.72f) }
-    var resonance by remember { mutableFloatStateOf(0.22f) }
-    var attack by remember { mutableFloatStateOf(0.05f) }
-    var decay by remember { mutableFloatStateOf(0.28f) }
-    var sustain by remember { mutableFloatStateOf(0.7f) }
-    var release by remember { mutableFloatStateOf(0.35f) }
-    Column(Modifier.fillMaxWidth().height(102.dp).background(Color(0xFF2D3034), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Box(Modifier.size(6.dp).background(Color(0xFFFFA52E), RoundedCornerShape(50.dp)))
-            Text("DIRECTWAVE", fontSize = 8.sp, fontWeight = FontWeight.Black, color = Color.White)
-            Text("TONE AUDITION / UI PREVIEW", fontSize = 6.sp, color = MutedText)
-            Spacer(Modifier.weight(1f))
-            Text(if (isPlaying) "PLAYING" else "READY", color = if (isPlaying) Green else MutedText, fontSize = 6.sp)
-            SmallAction("HIDE") { onToggle() }
-        }
-        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            DeviceSection("FILTER", Modifier.weight(1f)) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    AbletonKnob("CUTOFF", cutoff, { cutoff = it }, "7.2k", Modifier.weight(1f), dialSize = 23.dp)
-                    AbletonKnob("RES", resonance, { resonance = it }, "22%", Modifier.weight(1f), Color(0xFFFFB347), dialSize = 23.dp)
-                }
-            }
-            DeviceSection("AMP ENV", Modifier.weight(1.6f)) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    AbletonKnob("A", attack, { attack = it }, (attack * 1000).toInt().toString(), Modifier.weight(1f), dialSize = 22.dp)
-                    AbletonKnob("D", decay, { decay = it }, (decay * 2500).toInt().toString(), Modifier.weight(1f), dialSize = 22.dp)
-                    AbletonKnob("S", sustain, { sustain = it }, (sustain * 100).toInt().toString(), Modifier.weight(1f), dialSize = 22.dp)
-                    AbletonKnob("R", release, { release = it }, (release * 3000).toInt().toString(), Modifier.weight(1f), dialSize = 22.dp)
-                }
-            }
-            DeviceSection("TONE", Modifier.weight(0.9f)) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    AbletonKnob("PITCH", pitch, { pitch = it; onTone(110f + it * 880f) }, (110 + pitch * 880).toInt().toString(), Modifier.fillMaxWidth(), Color(0xFFFFB347), dialSize = 23.dp)
-                }
-            }
-            DeviceSection("FX CHAIN", Modifier.weight(1.2f)) {
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    listOf("EQ", "SAT", "REV").forEachIndexed { index, label ->
-                        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF24262A), RoundedCornerShape(3.dp)).padding(3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                            Box(Modifier.size(5.dp).background(if (index == 0) Color(0xFF75DCCC) else Color(0xFF646B75), RoundedCornerShape(50.dp)))
-                            Spacer(Modifier.height(2.dp))
-                            Text(label, color = Color(0xFFBFC3CB), fontSize = 6.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun FloatingTimelineControl(label: String, description: String, onClick: () -> Unit) {
     Surface(
         color = Color(0xFF353A42),
