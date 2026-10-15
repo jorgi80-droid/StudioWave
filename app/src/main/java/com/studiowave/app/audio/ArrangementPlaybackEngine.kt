@@ -587,14 +587,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val hitEnd = drum.startFrame + DRUM_DURATION_FRAMES
                     val from = max(position, drum.startFrame)
                     val to = min(blockEnd, hitEnd)
-                    val gain = channelMix.volume * liveMasterGain * 0.38f
+                    val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val channelGain = channelMix.volume * 0.38f
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     for (absolute in from until to) {
                         val t = (absolute - drum.startFrame).toDouble() / sampleRate
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
-                        val channelWave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * channelMix.volume * 0.38f
+                        val channelWave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * channelGain
                         val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
                         mix[outIndex] += wave * leftPan
