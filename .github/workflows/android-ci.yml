@@ -51,6 +51,21 @@ jobs:
           curl --fail --location --retry 3 "$base/03-soulful-vintage/kicks/vintage-kick-01.wav" -o "$target/vintage-kick-01.wav"
           test "$(find "$target" -maxdepth 1 -name '*.wav' | wc -l)" -eq 6
           for sample in "$target"/*.wav; do test "$(od -An -tx1 -N4 "$sample" | tr -d ' \n')" = "52494646"; done
+      - name: Download CC0 DirectWave factory samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="app/src/main/assets/samples"
+          mkdir -p "$target"
+          base="https://raw.githubusercontent.com/Boochi44/free-drum-samples/main/drum-samples"
+          curl --fail --location --retry 3 "$base/01-hard-trap/kicks/hard-kick-01.wav" -o "$target/hard-kick-01.wav"
+          curl --fail --location --retry 3 "$base/01-hard-trap/snares/hard-snare-01.wav" -o "$target/hard-snare-01.wav"
+          curl --fail --location --retry 3 "$base/01-hard-trap/hi-hats/hi-hat-closed-01.wav" -o "$target/hi-hat-closed-01.wav"
+          curl --fail --location --retry 3 "$base/01-hard-trap/808s/808-bass-sub.wav" -o "$target/808-bass-sub.wav"
+          curl --fail --location --retry 3 "$base/02-bounce/kicks/bounce-kick-01.wav" -o "$target/bounce-kick-01.wav"
+          curl --fail --location --retry 3 "$base/03-soulful-vintage/kicks/vintage-kick-01.wav" -o "$target/vintage-kick-01.wav"
+          test "$(find "$target" -maxdepth 1 -name '*.wav' | wc -l)" -eq 6
+          for sample in "$target"/*.wav; do test "$(od -An -tx1 -N4 "$sample" | tr -d ' \n')" = "52494646"; done
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
       - name: Run unit tests
