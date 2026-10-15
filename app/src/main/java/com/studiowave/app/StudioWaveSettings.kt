@@ -43,14 +43,14 @@ internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolea
             Color(0xFFC5C6C8), Color(0xFF202124), Color(0xFF55575A), Color(0xFF168F85), Color(0xFFB7654A),
             Color(0xFFB3B4B6), Color(0xFF8C8D90), Color(0xFF207C55), Color(0xFF8C6A27), Color(0xFFB11E37), Color(0xFF188D78), Color(0xFFB68B32), Color(0xFFBD334A))
         "Live Mid" -> StudioWavePalette(
-            Color(0xFF2A2C2F), Color(0xFF202225), Color(0xFF303338), Color(0xFF3B3E43),
-            Color(0xFF282A2E), Color(0xFFF0F1F2), Color(0xFFB2B6BC), Color(0xFFF2B457),
-            Color(0xFFFF9554), Color(0xFF3F4247), Color(0xFF555960), Color(0xFF6AD794),
-            Color(0xFFFFC857), Color(0xFFFF5D66), Color(0xFF65D6A0), Color(0xFFF2C45F), Color(0xFFFF5F75)
+            Color(0xFF323436), Color(0xFF232426), Color(0xFF36383B), Color(0xFF414347),
+            Color(0xFF2B2D30), Color(0xFFF0F1F2), Color(0xFFB7BABD), Color(0xFF6EDBD2),
+            Color(0xFFFF936F), Color(0xFF4D5054), Color(0xFF606368), Color(0xFF65D99B),
+            Color(0xFFFFCA66), Color(0xFFFF5F75), Color(0xFF5ED6A2), Color(0xFFF2C45F), Color(0xFFFF5F75)
         )
-        else -> StudioWavePalette(Color(0xFF17191C), Color(0xFF202225), Color(0xFF2A2D31), Color(0xFF373A3F),
-            Color(0xFF242629), Color(0xFFE7E8E9), Color(0xFFA6ABB2), Color(0xFFF0B14A), Color(0xFFFF8E49),
-            Color(0xFF3C4045), Color(0xFF4F545B), Color(0xFF6EE7A0), Color(0xFFFFC857), Color(0xFFFF5D66), Color(0xFF65D9A5), Color(0xFFF5C85C), Color(0xFFFF647C))
+        else -> StudioWavePalette(Color(0xFF1B1C1E), Color(0xFF232527), Color(0xFF303235), Color(0xFF3D3F42),
+            Color(0xFF292B2E), Color(0xFFE7E8E9), Color(0xFFAAADB1), Color(0xFF65D9D0), Color(0xFFFF9877),
+            Color(0xFF484B4F), Color(0xFF575A5E), Color(0xFF6EE7A0), Color(0xFFFFD36E), Color(0xFFFF647C), Color(0xFF65D9A5), Color(0xFFF5C85C), Color(0xFFFF647C))
     }
     val toned = when (tone) {
         "Warm" -> base.copy(accent = if (theme == "Live Light") Color(0xFF98602C) else Color(0xFFFFB15E), orange = Color(0xFFFF8B52))
