@@ -67,3 +67,12 @@
 
 ## Honest status
 Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug build, unit tests and artifact upload in CI run `38748749046`. The HTML audit documentation commit `1d433eb1271e0f66999599669665f0ea0d01bb88` was created afterward; its CI status must be checked separately. The DirectWave-scope regression was corrected and standalone FX insert controls were added. Full Analyzer, Multi FX, SuperSaw, MiniSynth, GMS, true DirectWave-to-MIDI render integration, visual parity and physical-device behavior are still incomplete.
+
+
+## Visual design continuation — 2026-10-16
+- Updated shared native palette in `StudioWaveSettings.kt` on commit `80e98ae94aa981a4414821cdee9efff5ebd3eb19`: graphite/near-black surfaces, thin dark borders, Ableton-inspired orange active accent, and distinct signal-state colors. The light and mid themes keep their own surface contrast while using an orange family accent.
+- Refined `TrackEffectDeviceCard` in `MainActivity.kt` on commit `7f9a5d759be0c49ac273553a27f977032788fec2`: raised device header, enabled-state orange strip, square compact panel geometry, and orange EQ slider active track. Existing parameter keys, callbacks, enable/remove actions, and DSP routing were preserved.
+- CI run for palette commit: https://github.com/jorgi80-droid/StudioWave/actions/runs/38780665798 (check final status before claiming pass).
+- The latest UI card commit was pushed after that run was queued; its own workflow must be checked separately.
+- Design implementation is now more consistently graphite/orange but is not claimed pixel-identical to Ableton Live. The user-provided HTML remains a visual reference; no proprietary Ableton source/assets were copied.
+- Next: verify CI for the latest head; continue the same coherent pass across Arrangement/ruler/track headers and Piano Roll, preserving the shared musical viewport, clip data, hit-testing, and 1,800-bar cap. Then compare the running APK on a landscape Android device.
