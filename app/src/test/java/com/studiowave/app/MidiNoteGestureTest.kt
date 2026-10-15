@@ -50,6 +50,45 @@ class MidiNoteGestureTest {
     }
 
     @Test
+    fun leadingEdgeResizeMovesStartAndKeepsOriginalEndFixed() {
+        val original = MidiNote(pitch = 64, startTick = 720L, durationTicks = 480L)
+        val extendedLeft = transformMidiNoteFromGesture(
+            note = original, clipLengthTicks = 2400L, stepTicks = 240L,
+            deltaSteps = -2, deltaPitch = 0, resize = false, resizeLeading = true
+        )
+        assertEquals(240L, extendedLeft.startTick)
+        assertEquals(960L, extendedLeft.durationTicks)
+        assertEquals(1200L, extendedLeft.startTick + extendedLeft.durationTicks)
+
+        val shortenedLeft = transformMidiNoteFromGesture(
+            note = original, clipLengthTicks = 2400L, stepTicks = 240L,
+            deltaSteps = 1, deltaPitch = 0, resize = false, resizeLeading = true
+        )
+        assertEquals(960L, shortenedLeft.startTick)
+        assertEquals(240L, shortenedLeft.durationTicks)
+        assertEquals(1200L, shortenedLeft.startTick + shortenedLeft.durationTicks)
+    }
+
+    @Test
+    fun leadingEdgeResizeCannotCrossClipStartOrCollapseBelowSnapStep() {
+        val original = MidiNote(pitch = 64, startTick = 240L, durationTicks = 240L)
+        val extendToStart = transformMidiNoteFromGesture(
+            note = original, clipLengthTicks = 960L, stepTicks = 240L,
+            deltaSteps = -20, deltaPitch = 0, resize = false, resizeLeading = true
+        )
+        assertEquals(0L, extendToStart.startTick)
+        assertEquals(480L, extendToStart.durationTicks)
+        assertEquals(480L, extendToStart.startTick + extendToStart.durationTicks)
+
+        val collapse = transformMidiNoteFromGesture(
+            note = original, clipLengthTicks = 960L, stepTicks = 240L,
+            deltaSteps = 20, deltaPitch = 0, resize = false, resizeLeading = true
+        )
+        assertEquals(240L, collapse.startTick)
+        assertEquals(240L, collapse.durationTicks)
+    }
+
+    @Test
     fun resizeHonorsMinimumGridAndClipEnd() {
         val original = MidiNote(pitch = 64, startTick = 720L, durationTicks = 480L)
         val grown = transformMidiNoteFromGesture(original, 2400L, 240L, 3, 0, true)
