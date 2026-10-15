@@ -887,7 +887,8 @@ private fun StudioWaveApp() {
                             selectedTrackId = editorTrackId,
                             onSelectTrack = { editorTrackId = it },
                             onProjectChange = { changeProject(it) },
-                            onToggle = { selectedWorkspace = "ARRANGEMENT"; showDock = false }
+                            onToggle = { selectedWorkspace = "ARRANGEMENT"; showDock = false },
+                            fullScreen = true
                         )
                         "MIXER" -> MixerWorkspace(
                             project,
@@ -3695,12 +3696,14 @@ private fun MixerWorkspace(
                             color = mixerPalette.panel,
                             shape = RoundedCornerShape(2.dp),
                             border = BorderStroke(1.dp, mixerPalette.border.copy(alpha = 0.65f)),
-                            modifier = Modifier.fillMaxWidth().weight(1f).clickable { onOpenDevices(track.id) }
+                            modifier = Modifier.fillMaxWidth().weight(1f).then(
+                                if (slot == 0) Modifier.clickable { onOpenDevices(track.id) } else Modifier
+                            )
                         ) {
                             Row(Modifier.padding(horizontal = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Box(Modifier.size(5.dp).background(mixerPalette.muted.copy(alpha = 0.75f), RoundedCornerShape(50)))
                                 Spacer(Modifier.width(5.dp))
-                                Text(if (slot == 0) "DEVICE CHAIN" else "OPEN DEVICE VIEW",
+                                Text(if (slot == 0) "OPEN DEVICE VIEW" else "NO EFFECTS INSERTED",
                                     color = mixerPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
                         }
@@ -4101,13 +4104,15 @@ private fun DeviceDock(
     selectedTrackId: String?,
     onSelectTrack: (String) -> Unit,
     onProjectChange: (StudioProject) -> Unit,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    fullScreen: Boolean = false
 ) {
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     val palette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
     Column(
-        Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp)
+        (if (fullScreen) Modifier.fillMaxWidth().fillMaxHeight()
+            else Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp))
             .background(palette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
