@@ -379,9 +379,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     "audio" -> {
                         val source = clip.sourceUri ?: return@clipLoop
                         val asset = assets[source] ?: return@clipLoop
-                        val sourceOffsetFrame = ticksToFrames(clip.sourceOffsetTicks.coerceAtLeast(0L))
-                        // The source loop window must follow the trimmed clip length, not the
-                        // whole file. Convert timeline duration to the asset's sample-rate domain.
+                        // Store both offset and window in the decoded asset's frame domain.
+                        val sourceOffsetFrame = (ticksToFrames(clip.sourceOffsetTicks.coerceAtLeast(0L))
+                            .toDouble() * asset.sampleRate.toDouble() / sampleRate.toDouble())
+                            .toLong().coerceAtLeast(0L)
                         val sourceWindowFrames = (clipLength.toDouble() *
                             asset.sampleRate.toDouble() / sampleRate.toDouble())
                             .toLong().coerceAtLeast(1L)
@@ -672,9 +673,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
                     for (absolute in from until to) {
                         val relative = absolute - event.startFrame
-                        val rawSourceFrame = (relative + event.sourceOffsetFrame).toDouble()
-                            .times(event.asset.sampleRate.toDouble() / sampleRate.toDouble()).toLong()
-                            .plus(scratchFrames)
+                        val relativeAssetFrame = (relative.toDouble() *
+                            event.asset.sampleRate.toDouble() / sampleRate.toDouble()).toLong()
+                        val rawSourceFrame = event.sourceOffsetFrame + relativeAssetFrame + scratchFrames
                         if (event.asset.frames <= 0) continue
                         // Loop only inside the clip's selected source window. Wrapping across
                         // the whole file would make playback leak into audio removed by trim.
