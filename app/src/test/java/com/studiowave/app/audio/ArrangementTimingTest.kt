@@ -68,4 +68,13 @@ class ArrangementTimingTest {
         assertEquals(Long.MAX_VALUE, ArrangementTiming.ticksToMicros(Long.MAX_VALUE, 40, 24))
     }
 
+    @Test fun sourceFrameWrappingStaysInsideTrimmedWindowForMalformedAndOverflowInputs() {
+        assertEquals(10L, ArrangementTiming.sourceFrameWithinTrim(10L, 10L, 4L, 100L))
+        assertEquals(10L, ArrangementTiming.sourceFrameWithinTrim(-1L, 10L, 4L, 100L))
+        assertEquals(13L, ArrangementTiming.sourceFrameWithinTrim(17L, 10L, 4L, 100L))
+        assertEquals(98L, ArrangementTiming.sourceFrameWithinTrim(Long.MAX_VALUE, 98L, 8L, 100L))
+        assertEquals(null, ArrangementTiming.sourceFrameWithinTrim(0L, 0L, 8L, 0L))
+        assertEquals(99L, ArrangementTiming.sourceFrameWithinTrim(Long.MIN_VALUE, Long.MAX_VALUE, 8L, 100L))
+    }
+
 }
