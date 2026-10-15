@@ -157,8 +157,8 @@ internal fun StudioWaveSettingsScreen(
                     }
                     SettingsSection("AUDIO DEBUG", "Live engine health, performance and memory estimates.", p)
                     audioDiagnostics.forEach { SettingsInfoCard(it.substringBefore("::"), it.substringAfter("::", it), p) }
-                    SettingsSection("APPLICATION LOG", "${appLog.size} retained entries · newest entries at the bottom · local only.", p)
-                    appLog.forEachIndexed { index, line ->
+                    SettingsSection("APPLICATION LOG", "Showing last ${appLog.size.coerceAtMost(250)} of ${appLog.size} retained entries · full retained report is exported.", p)
+                    appLog.takeLast(250).forEachIndexed { index, line ->
                         Row(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp))
                             .border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp))
                             .padding(horizontal = 7.dp, vertical = 5.dp), verticalAlignment = Alignment.Top) {
