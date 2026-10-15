@@ -104,10 +104,14 @@ internal object ArrangementTiming {
         val sourceStart = sourceOffsetFrame.coerceIn(0L, assetFrames - 1L)
         val windowFrames = requestedWindowFrames.coerceAtLeast(1L)
             .coerceAtMost(assetFrames - sourceStart)
-        val relative = if (rawSourceFrame >= sourceOffsetFrame) {
-            (rawSourceFrame - sourceOffsetFrame) % windowFrames
+
+        // Work only with normalized non-negative frame positions. Using the raw offset
+        // in the subtraction below can overflow for malformed negative input near Long.MIN_VALUE.
+        val rawFrame = rawSourceFrame.coerceAtLeast(0L)
+        val relative = if (rawFrame >= sourceStart) {
+            (rawFrame - sourceStart) % windowFrames
         } else {
-            val distance = (sourceOffsetFrame - rawSourceFrame) % windowFrames
+            val distance = (sourceStart - rawFrame) % windowFrames
             if (distance == 0L) 0L else windowFrames - distance
         }
         return sourceStart + relative
