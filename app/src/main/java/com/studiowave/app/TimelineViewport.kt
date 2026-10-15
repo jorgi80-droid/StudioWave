@@ -85,6 +85,17 @@ data class TimelineViewport(
         (if (pixelsPerBar.isFinite()) pixelsPerBar else MIN_PIXELS_PER_BAR)
             .coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
 
+    /** Normalize caller-provided scroll once, so malformed state cannot poison every mapping. */
+    val effectiveScrollTimeTicks: Double =
+        (if (scrollTimeTicks.isFinite()) scrollTimeTicks else 0.0)
+            .coerceIn(0.0, maxArrangementTick(timebase).toDouble())
+
+    val effectiveViewportWidthPx: Float =
+        (if (viewportWidthPx.isFinite()) viewportWidthPx else 0f).coerceAtLeast(0f)
+
+    val safeTrackHeaderWidthPx: Float =
+        (if (trackHeaderWidthPx.isFinite()) trackHeaderWidthPx else 0f).coerceAtLeast(0f)
+
     val pixelsPerTick: Double =
         (effectivePixelsPerBar.toDouble() / timebase.ticksPerBar.toDouble()).coerceAtLeast(0.000001)
 
@@ -107,34 +118,34 @@ data class TimelineViewport(
     /** Convert a musical tick to the arrangement-wide x coordinate (including track header). */
     fun timeToScreenX(tick: Long): Float {
         val boundedTick = tick.coerceIn(0L, maxArrangementTick(timebase))
-        val x = trackHeaderWidthPx.toDouble() + (boundedTick.toDouble() - scrollTimeTicks) * pixelsPerTick
+        val x = safeTrackHeaderWidthPx.toDouble() + (boundedTick.toDouble() - effectiveScrollTimeTicks) * pixelsPerTick
         return x.coerceIn(-Float.MAX_VALUE.toDouble(), Float.MAX_VALUE.toDouble()).toFloat()
     }
 
     /** Inverse of [timeToScreenX]; callers drawing in the timeline pane should use [viewportXToTime]. */
     fun screenXToTime(screenX: Float): Long =
-        (scrollTimeTicks + (screenX.toDouble() - trackHeaderWidthPx) / pixelsPerTick)
+        (effectiveScrollTimeTicks + (screenX.toDouble() - safeTrackHeaderWidthPx) / pixelsPerTick)
             .coerceIn(0.0, maxArrangementTick(timebase).toDouble()).roundToLong()
 
     /** Converts a musical tick into the local x coordinate of the timeline pane. */
-    fun timeToViewportX(tick: Long): Float = timeToScreenX(tick) - trackHeaderWidthPx
+    fun timeToViewportX(tick: Long): Float = timeToScreenX(tick) - safeTrackHeaderWidthPx
 
     /** Converts a timeline-pane local x coordinate into a musical tick. */
-    fun viewportXToTime(viewportX: Float): Long = screenXToTime(viewportX + trackHeaderWidthPx)
+    fun viewportXToTime(viewportX: Float): Long = screenXToTime(viewportX + safeTrackHeaderWidthPx)
 
 
     fun firstVisibleBar(marginBars: Int = 1): Long =
-        floor(scrollTimeTicks / timebase.ticksPerBar.toDouble()).toLong().minus(marginBars)
+        floor(effectiveScrollTimeTicks / timebase.ticksPerBar.toDouble()).toLong().minus(marginBars)
             .coerceIn(0L, MAX_ARRANGEMENT_BARS - 1L)
 
     fun lastVisibleBar(marginBars: Int = 2): Long =
-        floor((scrollTimeTicks + viewportWidthPx.coerceAtLeast(0f) / pixelsPerTick) /
+        floor((effectiveScrollTimeTicks + effectiveViewportWidthPx / pixelsPerTick) /
             timebase.ticksPerBar.toDouble()).toLong().plus(marginBars)
             .coerceIn(0L, MAX_ARRANGEMENT_BARS - 1L)
 
     /** Change scale without changing the musical tick under the screen anchor. */
     fun zoomKeepingAnchor(newPixelsPerBar: Float, anchorScreenX: Float): TimelineViewport {
-        val anchorTick = scrollTimeTicks +
+        val anchorTick = effectiveScrollTimeTicks +
             (anchorScreenX - trackHeaderWidthPx).toDouble() / pixelsPerTick
         val requestedScale = if (newPixelsPerBar.isFinite()) newPixelsPerBar else MAX_PIXELS_PER_BAR
         val clampedScale = requestedScale.coerceIn(MIN_PIXELS_PER_BAR, MAX_PIXELS_PER_BAR)
@@ -160,7 +171,7 @@ data class TimelineViewport(
     }
 
     fun panByScreenPixels(deltaX: Float): TimelineViewport =
-        copy(scrollTimeTicks = (scrollTimeTicks - deltaX.toDouble() / pixelsPerTick)
+        copy(scrollTimeTicks = (effectiveScrollTimeTicks - (if (deltaX.isFinite()) deltaX.toDouble() else 0.0) / pixelsPerTick)
             .coerceIn(0.0, maxScrollTicks()))
 
     /** Keep the transport playhead visible during playback without moving the view on every frame. */
@@ -169,8 +180,8 @@ data class TimelineViewport(
         followFraction: Float = 0.78f,
         targetFraction: Float = 0.68f
     ): TimelineViewport {
-        if (!viewportWidthPx.isFinite() || viewportWidthPx <= 0f || tick < 0L) return this
-        val width = viewportWidthPx
+        if (!effectiveViewportWidthPx.isFinite() || effectiveViewportWidthPx <= 0f || tick < 0L) return this
+        val width = effectiveViewportWidthPx
         val x = (tick.toDouble() - scrollTimeTicks) * pixelsPerTick
         val threshold = width * followFraction.coerceIn(0.2f, 0.95f)
         if (x >= 0.0 && x <= threshold.toDouble()) return this
@@ -180,7 +191,7 @@ data class TimelineViewport(
 
     private fun maxScrollTicks(): Double =
         (maxArrangementTick(timebase).toDouble() -
-            viewportWidthPx.coerceAtLeast(0f).toDouble() / pixelsPerTick).coerceAtLeast(0.0)
+            effectiveViewportWidthPx.toDouble() / pixelsPerTick).coerceAtLeast(0.0)
 
     fun snapTick(tick: Long, division: SnapDivision, enabled: Boolean = true): Long =
         if (enabled) timebase.snap(tick, division) else tick.coerceAtLeast(0L)
