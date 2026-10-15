@@ -3109,7 +3109,8 @@ private fun PianoRollWorkspace(
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
-                Column(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
+                BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
+                    Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().height(20.dp).background(pianoPalette.panel), verticalAlignment = Alignment.CenterVertically) {
                         Text("BAR", color = pianoPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(42.dp).padding(start = 3.dp))
                         Canvas(Modifier.weight(1f).fillMaxHeight()) {
@@ -3429,6 +3430,9 @@ private fun PianoRollWorkspace(
                 }
             }
         }
+                    }
+                }
+            }
         }
         if (virtualKeyboardVisible) {
             val keyboardNotes = listOf(
