@@ -51,4 +51,24 @@ internal object ArrangementTiming {
 
     fun trackIsAudible(trackMuted: Boolean, trackSolo: Boolean, anySoloActive: Boolean): Boolean =
         !trackMuted && (!anySoloActive || trackSolo)
+    /** Wrap a playback cursor inside the selected source window, never outside the trimmed range. */
+    fun sourceFrameWithinTrim(
+        rawSourceFrame: Long,
+        sourceOffsetFrame: Long,
+        requestedWindowFrames: Long,
+        assetFrames: Long
+    ): Long? {
+        if (assetFrames <= 0L) return null
+        val sourceStart = sourceOffsetFrame.coerceIn(0L, assetFrames - 1L)
+        val windowFrames = requestedWindowFrames.coerceAtLeast(1L)
+            .coerceAtMost(assetFrames - sourceStart)
+        val relative = if (rawSourceFrame >= sourceOffsetFrame) {
+            (rawSourceFrame - sourceOffsetFrame) % windowFrames
+        } else {
+            val distance = (sourceOffsetFrame - rawSourceFrame) % windowFrames
+            if (distance == 0L) 0L else windowFrames - distance
+        }
+        return sourceStart + relative
+    }
+
 }
