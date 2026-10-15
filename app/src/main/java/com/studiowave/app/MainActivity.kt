@@ -2095,6 +2095,7 @@ private fun AudioEditorWorkspace(
     var sourceDurationTicks by remember(clip?.id, clip?.sourceUri, project.bpm, project.ppq) {
         mutableLongStateOf(0L)
     }
+    var sourceDurationMicros by remember(clip?.id, clip?.sourceUri) { mutableLongStateOf(0L) }
     var startFraction by remember(clip?.id) { mutableFloatStateOf(0f) }
     var endFraction by remember(clip?.id) { mutableFloatStateOf(1f) }
 
@@ -2103,6 +2104,7 @@ private fun AudioEditorWorkspace(
     LaunchedEffect(clip?.id, clip?.sourceUri, project.bpm, project.ppq) {
         val source = clip?.sourceUri
         sourceDurationTicks = 0L
+        sourceDurationMicros = 0L
         if (source.isNullOrBlank()) {
             startFraction = 0f
             endFraction = 1f
@@ -2119,6 +2121,8 @@ private fun AudioEditorWorkspace(
                     runCatching { retriever.release() }
                 }
             }
+            sourceDurationMicros = if (durationMs > 0L && durationMs <= Long.MAX_VALUE / 1000L)
+                (durationMs * 1000L).coerceAtLeast(0L) else 0L
             val durationTicks = if (durationMs > 0L) {
                 kotlin.math.ceil(durationMs.toDouble() * project.bpm.coerceAtLeast(1) *
                     project.ppq.coerceAtLeast(1) / 60_000.0).toLong().coerceAtLeast(1L)
@@ -2139,6 +2143,7 @@ private fun AudioEditorWorkspace(
             }
         } catch (_: Exception) {
             sourceDurationTicks = 0L
+            sourceDurationMicros = 0L
         }
     }
 
@@ -2160,8 +2165,13 @@ private fun AudioEditorWorkspace(
                     // Keep legacy tick fields for old readers, but persist source trim in absolute time.
                     sourceOffsetTicks = startTicks,
                     lengthTicks = nextLength,
-                    sourceOffsetMicros = ArrangementTiming.ticksToMicros(startTicks, project.bpm, project.ppq),
-                    sourceLengthMicros = ArrangementTiming.ticksToMicros(nextLength, project.bpm, project.ppq).coerceAtLeast(1L)
+                    sourceOffsetMicros = audioTrimMicrosRangeFromFractions(
+                        startFractionValue, endFractionValue, sourceDurationMicros
+                    )?.startMicros ?: ArrangementTiming.ticksToMicros(startTicks, project.bpm, project.ppq),
+                    sourceLengthMicros = audioTrimMicrosRangeFromFractions(
+                        startFractionValue, endFractionValue, sourceDurationMicros
+                    )?.let { (it.endMicrosExclusive - it.startMicros).coerceAtLeast(1L) }
+                        ?: ArrangementTiming.ticksToMicros(nextLength, project.bpm, project.ppq).coerceAtLeast(1L)
                 ) else current
             })
         }))
@@ -5863,6 +5873,25 @@ private fun readAudioSourceDurationSeconds(context: android.content.Context, uri
     } finally {
         extractor.release()
     }
+}
+
+internal data class AudioTrimMicrosRange(val startMicros: Long, val endMicrosExclusive: Long)
+
+/** Convert editor fractions directly against source duration, without BPM/PPQ quantization. */
+internal fun audioTrimMicrosRangeFromFractions(
+    startFraction: Float,
+    endFraction: Float,
+    sourceDurationMicros: Long
+): AudioTrimMicrosRange? {
+    if (sourceDurationMicros < 2L) return null
+    val maximumStartFraction = (1.0 - 1.0 / sourceDurationMicros.toDouble()).coerceAtLeast(0.0)
+    val start = if (startFraction.isFinite()) startFraction.toDouble().coerceIn(0.0, maximumStartFraction) else 0.0
+    val minimumEnd = (start + 1.0 / sourceDurationMicros.toDouble()).coerceAtMost(1.0)
+    val end = if (endFraction.isFinite()) endFraction.toDouble().coerceIn(minimumEnd, 1.0) else 1.0
+    val startMicros = (sourceDurationMicros.toDouble() * start).toLong().coerceIn(0L, sourceDurationMicros - 1L)
+    val endMicros = (sourceDurationMicros.toDouble() * end).toLong()
+        .coerceIn(startMicros + 1L, sourceDurationMicros)
+    return AudioTrimMicrosRange(startMicros, endMicros)
 }
 
 internal data class AudioTrimTickRange(val startTicks: Long, val endTicksExclusive: Long)
