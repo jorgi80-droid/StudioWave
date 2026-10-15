@@ -7,7 +7,9 @@ import android.os.SystemClock
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.io.File
 import java.util.concurrent.ConcurrentLinkedDeque
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -17,7 +19,12 @@ import java.util.concurrent.atomic.AtomicLong
  */
 internal object StudioWaveDiagnostics {
     private const val MAX_ENTRIES = 3000
+    private const val MAX_FILE_BYTES = 2 * 1024 * 1024
     private val entries = ConcurrentLinkedDeque<String>()
+    private val diskWriter = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "StudioWave-LogWriter").apply { isDaemon = true }
+    }
+    @Volatile private var logFile: File? = null
     private val lastCpuMs = AtomicLong(-1L)
     private val lastWallMs = AtomicLong(-1L)
     @Volatile private var frameIntervalNanos = 0L
@@ -39,11 +46,44 @@ internal object StudioWaveDiagnostics {
     )
 
     @Synchronized
+    fun initialize(context: android.content.Context) {
+        if (logFile != null) return
+        val file = File(context.applicationContext.filesDir, "studiowave-app.log")
+        runCatching {
+            if (file.exists()) {
+                if (file.length() > MAX_FILE_BYTES) {
+                    val tail = file.readLines().takeLast(MAX_ENTRIES)
+                    file.writeText(tail.joinToString(separator = "\\n", postfix = if (tail.isEmpty()) "" else "\\n"))
+                }
+                file.readLines().takeLast(MAX_ENTRIES).forEach { line ->
+                    if (entries.size >= MAX_ENTRIES) entries.pollFirst()
+                    entries.addLast(line)
+                }
+            }
+        }.onFailure { /* Diagnostics should never prevent application startup. */ }
+        logFile = file
+    }
+
+    @Synchronized
     fun log(level: String = "INFO", tag: String = "APP", message: String) {
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
         val line = "$timestamp [${level.uppercase(Locale.US)}] [$tag] $message"
         entries.addLast(line)
         while (entries.size > MAX_ENTRIES) entries.pollFirst()
+        val target = logFile
+        if (target != null) {
+            diskWriter.execute {
+                runCatching {
+                    synchronized(target) {
+                        if (target.exists() && target.length() > MAX_FILE_BYTES) {
+                            val tail = target.readLines().takeLast(MAX_ENTRIES / 2)
+                            target.writeText(tail.joinToString(separator = "\\n", postfix = if (tail.isEmpty()) "" else "\\n"))
+                        }
+                        target.appendText(line + "\\n")
+                    }
+                }
+            }
+        }
     }
 
     fun snapshot(limit: Int = 3000): List<String> =
