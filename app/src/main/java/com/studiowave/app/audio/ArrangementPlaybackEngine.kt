@@ -11,6 +11,8 @@ import android.os.Process
 import com.studiowave.app.data.MidiNote
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioTrack
+import com.studiowave.app.data.TrackDevice
+import com.studiowave.app.data.EFFECT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -212,7 +214,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val volume: Float,
         val pan: Float,
         val muted: Boolean,
-        val solo: Boolean
+        val solo: Boolean,
+        val devices: List<TrackDevice>
     )
 
     private data class MixSnapshot(
@@ -585,6 +588,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
         val perTrackMix = HashMap<String, FloatArray>()
+        val deviceDsp = HashMap<String, TrackDeviceDsp>()
+        val perTrackMix = HashMap<String, FloatArray>()
         val sampleRate = plan.sampleRate
         val scheduledAudio = plan.audio
         val scheduledNotes = plan.notes
@@ -771,6 +776,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
+                // Apply enabled track inserts in chain order to the per-track bus.
+                perTrackMix.forEach { (trackId, channel) ->
+                    val trackState = mixState.tracks[trackId] ?: return@forEach
+                    if (trackState.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
+                        deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
+                            .process(channel, mix, sampleCount, liveMasterGain, trackState.devices)
+                    }
+                }
                 // Per-channel meters are calculated from each track's summed pre-master stereo bus.
                 // Buffers are reused across blocks; only one meter snapshot is published per track/block.
                 var blockPeak = 0f
@@ -843,7 +856,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 volume = track.volume.coerceIn(0f, 1.5f),
                 pan = track.pan.coerceIn(-1f, 1f),
                 muted = track.muted,
-                solo = track.solo
+                solo = track.solo,
+                devices = track.devices
             )
         }
         liveMix = MixSnapshot(
