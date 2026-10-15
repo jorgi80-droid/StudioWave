@@ -2625,27 +2625,127 @@ private fun DeviceDock(
     }
 }
 
+@Composable
+private fun DeviceCatalogRow(title: String, detail: String, palette: StudioWavePalette, onClick: () -> Unit) {
+    Surface(color = palette.control, shape = RoundedCornerShape(2.dp), border = BorderStroke(1.dp, palette.border), modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                Text(detail, color = palette.muted, fontSize = 7.sp)
+            }
+            Text("+", color = palette.orange, fontSize = 17.sp, fontWeight = FontWeight.Light)
+        }
+    }
+}
 
 @Composable
-private fun DeviceModuleCard(
-    title: String,
-    subtitle: String,
-    palette: StudioWavePalette,
-    body: String
-) {
-    Column(
-        Modifier.width(320.dp).height(160.dp)
-            .background(palette.panel, RoundedCornerShape(2.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(2.dp))
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.size(8.dp).background(palette.orange, RoundedCornerShape(1.dp)))
-            Text(title, color = palette.text, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
+private fun BasicSynthDevicePanel(track: StudioTrack, device: TrackDevice, palette: StudioWavePalette, onUpdate: (TrackDevice) -> Unit) {
+    val params = device.parameters
+    Column(Modifier.width(242.dp).fillMaxHeight().background(palette.panel, RoundedCornerShape(2.dp)).border(1.dp, palette.border, RoundedCornerShape(2.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(device.name.uppercase(), color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+            DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) { onUpdate(device.copy(enabled = !device.enabled)) }
         }
-        Text(subtitle, color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
-        Text(body, color = palette.muted, fontSize = 9.sp, lineHeight = 13.sp)
+        Text("BASIC SYNTH / ${track.name.uppercase()}", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        DeviceParameterSlider("LEVEL", params["level"] ?: 0.8f, 0f..1f, palette) { onUpdate(device.copy(parameters = params + ("level" to it))) }
+        DeviceParameterSlider("ATTACK", params["attackMs"] ?: 8f, 0f..1000f, palette, " ms") { onUpdate(device.copy(parameters = params + ("attackMs" to it))) }
+        DeviceParameterSlider("RELEASE", params["releaseMs"] ?: 90f, 0f..1500f, palette, " ms") { onUpdate(device.copy(parameters = params + ("releaseMs" to it))) }
+        Spacer(Modifier.weight(1f))
+        Text("Polyphonic · audio engine", color = palette.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun TrackEffectDeviceCard(device: TrackDevice, palette: StudioWavePalette, onUpdate: (TrackDevice) -> Unit, onRemove: () -> Unit) {
+    val p = device.parameters
+    Column(Modifier.width(238.dp).fillMaxHeight().background(palette.canvas, RoundedCornerShape(2.dp)).border(1.dp, palette.border, RoundedCornerShape(2.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Box(Modifier.size(6.dp).background(if (device.enabled) palette.orange else palette.muted, RoundedCornerShape(1.dp)))
+            Text(device.name.uppercase(), color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
+            DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) { onUpdate(device.copy(enabled = !device.enabled)) }
+            DirectWaveStateButton("×", false, palette) { onRemove() }
+        }
+        HorizontalDivider(color = palette.border)
+        when (device.type) {
+            "EQ" -> {
+                DeviceParameterSlider("LOW", p["lowDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("lowDb" to it))) }
+                DeviceParameterSlider("MID", p["midDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("midDb" to it))) }
+                DeviceParameterSlider("HIGH", p["highDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("highDb" to it))) }
+            }
+            "PARAM_EQ_8" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.dp), verticalAlignment = Alignment.Bottom) {
+                (1..8).forEach { band ->
+                    val key = "band$band"
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(listOf("60","120","250","500","1k","2k","5k","10k")[band-1], color = palette.muted, fontSize = 5.sp)
+                        Slider(value = p[key] ?: 0f, onValueChange = { onUpdate(device.copy(parameters = p + (key to it))) }, valueRange = -12f..12f, modifier = Modifier.height(112.dp).graphicsLayer { rotationZ = 180f },
+                            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent, inactiveTrackColor = palette.control, activeTickColor = palette.accent))
+                    }
+                }
+            }
+            "FILTER" -> {
+                DeviceParameterSlider("CUTOFF", p["cutoffHz"] ?: 16000f, 20f..20000f, palette, " Hz") { onUpdate(device.copy(parameters = p + ("cutoffHz" to it))) }
+                DeviceParameterSlider("RESONANCE", p["resonance"] ?: 0.15f, 0f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("resonance" to it))) }
+                val mode = (p["mode"] ?: 0f).toInt().coerceIn(0,2)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("MODE", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    listOf("LP","HP","BP").forEachIndexed { index, label -> DirectWaveStateButton(label, mode == index, palette) { onUpdate(device.copy(parameters = p + ("mode" to index.toFloat()))) } }
+                }
+            }
+            "DELAY" -> {
+                DeviceParameterSlider("TIME", p["timeMs"] ?: 320f, 10f..900f, palette, " ms") { onUpdate(device.copy(parameters = p + ("timeMs" to it))) }
+                DeviceParameterSlider("FEEDBACK", p["feedback"] ?: 0.32f, 0f..0.85f, palette) { onUpdate(device.copy(parameters = p + ("feedback" to it))) }
+                DeviceParameterSlider("WET", p["wet"] ?: 0.2f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
+            }
+            "REVERB" -> {
+                DeviceParameterSlider("ROOM", p["room"] ?: 0.45f, 0.05f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("room" to it))) }
+                DeviceParameterSlider("DECAY", p["decay"] ?: 1.6f, 0.2f..6f, palette, " s") { onUpdate(device.copy(parameters = p + ("decay" to it))) }
+                DeviceParameterSlider("WET", p["wet"] ?: 0.22f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
+            }
+            "COMPRESSOR" -> {
+                DeviceParameterSlider("THRESHOLD", p["thresholdDb"] ?: -18f, -60f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("thresholdDb" to it))) }
+                DeviceParameterSlider("RATIO", p["ratio"] ?: 3f, 1f..20f, palette, ":1") { onUpdate(device.copy(parameters = p + ("ratio" to it))) }
+                DeviceParameterSlider("ATTACK", p["attackMs"] ?: 10f, 0.1f..250f, palette, " ms") { onUpdate(device.copy(parameters = p + ("attackMs" to it))) }
+                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 120f, 1f..1500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
+                DeviceParameterSlider("MAKEUP", p["makeupDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("makeupDb" to it))) }
+            }
+            "SATURATOR" -> {
+                DeviceParameterSlider("DRIVE", p["drive"] ?: 2.5f, 0.2f..12f, palette) { onUpdate(device.copy(parameters = p + ("drive" to it))) }
+                DeviceParameterSlider("WET", p["wet"] ?: 0.35f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
+                DeviceParameterSlider("OUTPUT", p["outputDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("outputDb" to it))) }
+            }
+            "LIMITER" -> {
+                DeviceParameterSlider("CEILING", p["ceilingDb"] ?: -1f, -12f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("ceilingDb" to it))) }
+                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 80f, 10f..500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Text(when (device.type) {
+            "PARAM_EQ_8" -> "8-band parametric EQ"
+            "EQ" -> "3-band tone control"
+            "FILTER" -> "Low / high / band-pass"
+            "DELAY" -> "Feedback delay"
+            "REVERB" -> "Multi-tap room reverb"
+            "COMPRESSOR" -> "Dynamics / gain reduction"
+            "SATURATOR" -> "Soft-clipping saturation"
+            else -> "Peak output protection"
+        }, color = palette.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun DeviceParameterSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, palette: StudioWavePalette, unit: String = "", onChange: (Float) -> Unit) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            val shown = when {
+                value.absoluteValue >= 1000f -> "%.1fk".format(value / 1000f)
+                value.absoluteValue >= 10f -> "%.1f".format(value)
+                else -> "%.2f".format(value)
+            }
+            Text(shown + unit, color = palette.text, fontSize = 6.sp, fontWeight = FontWeight.Bold)
+        }
+        Slider(value = value.coerceIn(range.start, range.endInclusive), onValueChange = onChange, valueRange = range, modifier = Modifier.fillMaxWidth().height(20.dp),
+            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent, inactiveTrackColor = palette.control, activeTickColor = palette.accent))
     }
 }
 
@@ -2962,25 +3062,6 @@ private data class BuiltInStudioSample(
     val description: String
 )
 
-
-@Composable
-private fun DeviceParameterSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, palette: StudioWavePalette, unit: String = "", onChange: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            val shown = when {
-                value.absoluteValue >= 1000f -> "%.1fk".format(value / 1000f)
-                value.absoluteValue >= 10f -> "%.1f".format(value)
-                else -> "%.2f".format(value)
-            }
-            Text(shown + unit, color = palette.text, fontSize = 6.sp, fontWeight = FontWeight.Bold)
-        }
-        Slider(value = value.coerceIn(range.start, range.endInclusive), onValueChange = onChange, valueRange = range, modifier = Modifier.fillMaxWidth().height(20.dp),
-            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent, inactiveTrackColor = palette.control, activeTickColor = palette.accent))
-    }
-}
-
-
 @Composable
 private fun DirectWaveStateButton(
     label: String,
@@ -3000,117 +3081,6 @@ private fun DirectWaveStateButton(
         }
     }
 }
-
-
-@Composable
-private fun TrackEffectDeviceCard(device: TrackDevice, palette: StudioWavePalette, onUpdate: (TrackDevice) -> Unit, onRemove: () -> Unit) {
-    val p = device.parameters
-    Column(Modifier.width(238.dp).fillMaxHeight().background(palette.canvas, RoundedCornerShape(2.dp)).border(1.dp, palette.border, RoundedCornerShape(2.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Box(Modifier.size(6.dp).background(if (device.enabled) palette.orange else palette.muted, RoundedCornerShape(1.dp)))
-            Text(device.name.uppercase(), color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1, modifier = Modifier.weight(1f))
-            DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) { onUpdate(device.copy(enabled = !device.enabled)) }
-            DirectWaveStateButton("×", false, palette) { onRemove() }
-        }
-        HorizontalDivider(color = palette.border)
-        when (device.type) {
-            "EQ" -> {
-                DeviceParameterSlider("LOW", p["lowDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("lowDb" to it))) }
-                DeviceParameterSlider("MID", p["midDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("midDb" to it))) }
-                DeviceParameterSlider("HIGH", p["highDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("highDb" to it))) }
-            }
-            "PARAM_EQ_8" -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(1.dp), verticalAlignment = Alignment.Bottom) {
-                (1..8).forEach { band ->
-                    val key = "band$band"
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(listOf("60","120","250","500","1k","2k","5k","10k")[band-1], color = palette.muted, fontSize = 5.sp)
-                        Slider(value = p[key] ?: 0f, onValueChange = { onUpdate(device.copy(parameters = p + (key to it))) }, valueRange = -12f..12f, modifier = Modifier.height(112.dp).graphicsLayer { rotationZ = 180f },
-                            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent, inactiveTrackColor = palette.control, activeTickColor = palette.accent))
-                    }
-                }
-            }
-            "FILTER" -> {
-                DeviceParameterSlider("CUTOFF", p["cutoffHz"] ?: 16000f, 20f..20000f, palette, " Hz") { onUpdate(device.copy(parameters = p + ("cutoffHz" to it))) }
-                DeviceParameterSlider("RESONANCE", p["resonance"] ?: 0.15f, 0f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("resonance" to it))) }
-                val mode = (p["mode"] ?: 0f).toInt().coerceIn(0,2)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("MODE", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                    listOf("LP","HP","BP").forEachIndexed { index, label -> DirectWaveStateButton(label, mode == index, palette) { onUpdate(device.copy(parameters = p + ("mode" to index.toFloat()))) } }
-                }
-            }
-            "DELAY" -> {
-                DeviceParameterSlider("TIME", p["timeMs"] ?: 320f, 10f..900f, palette, " ms") { onUpdate(device.copy(parameters = p + ("timeMs" to it))) }
-                DeviceParameterSlider("FEEDBACK", p["feedback"] ?: 0.32f, 0f..0.85f, palette) { onUpdate(device.copy(parameters = p + ("feedback" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.2f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
-            }
-            "REVERB" -> {
-                DeviceParameterSlider("ROOM", p["room"] ?: 0.45f, 0.05f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("room" to it))) }
-                DeviceParameterSlider("DECAY", p["decay"] ?: 1.6f, 0.2f..6f, palette, " s") { onUpdate(device.copy(parameters = p + ("decay" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.22f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
-            }
-            "COMPRESSOR" -> {
-                DeviceParameterSlider("THRESHOLD", p["thresholdDb"] ?: -18f, -60f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("thresholdDb" to it))) }
-                DeviceParameterSlider("RATIO", p["ratio"] ?: 3f, 1f..20f, palette, ":1") { onUpdate(device.copy(parameters = p + ("ratio" to it))) }
-                DeviceParameterSlider("ATTACK", p["attackMs"] ?: 10f, 0.1f..250f, palette, " ms") { onUpdate(device.copy(parameters = p + ("attackMs" to it))) }
-                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 120f, 1f..1500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
-                DeviceParameterSlider("MAKEUP", p["makeupDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("makeupDb" to it))) }
-            }
-            "SATURATOR" -> {
-                DeviceParameterSlider("DRIVE", p["drive"] ?: 2.5f, 0.2f..12f, palette) { onUpdate(device.copy(parameters = p + ("drive" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.35f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
-                DeviceParameterSlider("OUTPUT", p["outputDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("outputDb" to it))) }
-            }
-            "LIMITER" -> {
-                DeviceParameterSlider("CEILING", p["ceilingDb"] ?: -1f, -12f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("ceilingDb" to it))) }
-                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 80f, 10f..500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Text(when (device.type) {
-            "PARAM_EQ_8" -> "8-band parametric EQ"
-            "EQ" -> "3-band tone control"
-            "FILTER" -> "Low / high / band-pass"
-            "DELAY" -> "Feedback delay"
-            "REVERB" -> "Multi-tap room reverb"
-            "COMPRESSOR" -> "Dynamics / gain reduction"
-            "SATURATOR" -> "Soft-clipping saturation"
-            else -> "Peak output protection"
-        }, color = palette.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-
-@Composable
-private fun BasicSynthDevicePanel(track: StudioTrack, device: TrackDevice, palette: StudioWavePalette, onUpdate: (TrackDevice) -> Unit) {
-    val params = device.parameters
-    Column(Modifier.width(242.dp).fillMaxHeight().background(palette.panel, RoundedCornerShape(2.dp)).border(1.dp, palette.border, RoundedCornerShape(2.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(device.name.uppercase(), color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-            DirectWaveStateButton(if (device.enabled) "ON" else "OFF", device.enabled, palette) { onUpdate(device.copy(enabled = !device.enabled)) }
-        }
-        Text("BASIC SYNTH / ${track.name.uppercase()}", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        DeviceParameterSlider("LEVEL", params["level"] ?: 0.8f, 0f..1f, palette) { onUpdate(device.copy(parameters = params + ("level" to it))) }
-        DeviceParameterSlider("ATTACK", params["attackMs"] ?: 8f, 0f..1000f, palette, " ms") { onUpdate(device.copy(parameters = params + ("attackMs" to it))) }
-        DeviceParameterSlider("RELEASE", params["releaseMs"] ?: 90f, 0f..1500f, palette, " ms") { onUpdate(device.copy(parameters = params + ("releaseMs" to it))) }
-        Spacer(Modifier.weight(1f))
-        Text("Polyphonic · audio engine", color = palette.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-    }
-}
-
-
-@Composable
-private fun DeviceCatalogRow(title: String, detail: String, palette: StudioWavePalette, onClick: () -> Unit) {
-    Surface(color = palette.control, shape = RoundedCornerShape(2.dp), border = BorderStroke(1.dp, palette.border), modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                Text(detail, color = palette.muted, fontSize = 7.sp)
-            }
-            Text("+", color = palette.orange, fontSize = 17.sp, fontWeight = FontWeight.Light)
-        }
-    }
-}
-
 
 @Composable
 private fun DirectWaveKnob(
@@ -3184,8 +3154,6 @@ private fun DirectWaveKnob(
         Text(valueLabel, color = palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
-
-
 
 @Composable
 private fun DirectWaveDeviceWaveform(
