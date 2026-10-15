@@ -22,6 +22,17 @@ internal object ArrangementTiming {
         else frames.toLong().coerceAtLeast(0L)
     }
 
+    /** End tick of an arrangement whose visible musical extent is limited to [bars] bars. */
+    fun maxArrangementTick(numerator: Int, denominator: Int, ppq: Int, bars: Int): Long {
+        val safePpq = ppq.coerceIn(24, 3840)
+        val safeNumerator = numerator.coerceIn(1, 32)
+        val safeDenominator = denominator.coerceIn(1, 32)
+        val safeBars = bars.coerceIn(1, 1800)
+        val ticksPerBar = (safePpq.toLong() * 4L / safeDenominator).coerceAtLeast(1L) * safeNumerator
+        return if (ticksPerBar > Long.MAX_VALUE / safeBars) Long.MAX_VALUE
+        else ticksPerBar * safeBars
+    }
+
     fun framesToTicks(
         frames: Long,
         bpm: Int,
