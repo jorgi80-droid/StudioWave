@@ -39,7 +39,14 @@ internal val EFFECT_DEVICE_TYPES = setOf("EQ", "PARAM_EQ_8", "REVERB", "DELAY", 
 internal val INSTRUMENT_DEVICE_TYPES = setOf("DIRECTWAVE", "SYNTH_SINE", "SYNTH_SAW", "SYNTH_SQUARE", "SYNTH_TRIANGLE", "FM_SYNTH", "DRUM_RACK")
 internal fun defaultDeviceParameters(type: String): Map<String, Float> = when (type) {
     "EQ" -> mapOf("lowDb" to 0f, "midDb" to 0f, "highDb" to 0f)
-    "PARAM_EQ_8" -> (1..8).associate { "band$it" to 0f }
+    "PARAM_EQ_8" -> buildMap {
+        val frequencyNorms = listOf(0.159f, 0.259f, 0.366f, 0.466f, 0.566f, 0.681f, 0.799f, 0.900f)
+        (1..8).forEach { band ->
+            put("band$band", 0f)
+            put("band${band}FreqNorm", frequencyNorms[band - 1])
+            put("band${band}Q", 1.1f)
+        }
+    }
     "REVERB" -> mapOf("room" to 0.45f, "decay" to 1.6f, "wet" to 0.22f)
     "DELAY" -> mapOf("timeMs" to 320f, "feedback" to 0.32f, "wet" to 0.2f)
     "COMPRESSOR" -> mapOf("thresholdDb" to -18f, "ratio" to 3f, "attackMs" to 10f, "releaseMs" to 120f, "makeupDb" to 0f)
