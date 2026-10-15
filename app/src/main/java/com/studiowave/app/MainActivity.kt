@@ -1050,8 +1050,7 @@ private fun WorkspaceRail(
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
         RailButton("MIX", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
-        // Device View and Browser now open from the selected track or the unified bottom action dock.
-        RailButton("FILES", selected == "BROWSER", Icons.Default.LibraryMusic) { onSelect("BROWSER") }
+        // Browser is intentionally available from the unified bottom action dock instead of a permanent rail slot.
     }
 }
 
