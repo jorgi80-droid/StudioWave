@@ -4364,7 +4364,21 @@ private fun DirectWaveDevicePanel(
         }
     }
     fun loadBundledOneShot() {
-        val uri = Uri.parse("android.resource://${context.packageName}/${R.raw.one_shot}")
+        // Generate the built-in one-shot locally so this sample works offline and
+        // doesn't rely on an optional binary resource being packaged by CI.
+        val presetIndex = com.studiowave.app.audio.FactorySampleLibrary.presets.indexOfFirst {
+            it.fileName.substringBeforeLast('.') == "one_shot"
+        }.takeIf { it >= 0 } ?: 0
+        val target = java.io.File(context.cacheDir, "studiowave_one_shot.wav")
+        runCatching {
+            target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex))
+        }.onFailure {
+            sampleUri = null
+            sampleReady = false
+            Toast.makeText(context, "Gagal membuat sample bawaan", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val uri = Uri.fromFile(target)
         sampleUri = uri.toString()
         sampleLabel = "One Shoot.wav"
         sampleReady = false
