@@ -4341,7 +4341,7 @@ private fun DirectWaveDevicePanel(
     var showSamples by remember(trackId) { mutableStateOf(false) }
     val samples = remember {
         listOf(
-            BuiltInStudioSample("SAMPLES", "One Shot.wav", "one_shot", "Bundled starter one-shot · offline")
+            BuiltInStudioSample("SAMPLES", "One Shoot.wav", "one_shot", "StudioWave original one-shot · bundled offline")
         ) + com.studiowave.app.audio.FactorySampleLibrary.presets.map { preset ->
             BuiltInStudioSample(
                 preset.category.uppercase(),
@@ -4354,10 +4354,10 @@ private fun DirectWaveDevicePanel(
     fun loadBundledOneShot() {
         val uri = Uri.parse("android.resource://${context.packageName}/${R.raw.one_shot}")
         sampleUri = uri.toString()
-        sampleLabel = "One Shot.wav"
+        sampleLabel = "One Shoot.wav"
         sampleReady = false
         preferences.edit().putString("sample.$trackId", uri.toString())
-            .putString("sampleName.$trackId", "One Shot.wav").apply()
+            .putString("sampleName.$trackId", "One Shoot.wav").apply()
         sampler.load(uri) { ready -> sampleReady = ready }
     }
     fun loadFactoryPreset(sample: BuiltInStudioSample) {
@@ -4444,7 +4444,7 @@ private fun DirectWaveDevicePanel(
     }
 
     Column(
-        Modifier.width(if (fullHeight) 650.dp else 610.dp)
+        Modifier.width(if (fullHeight) 860.dp else 610.dp)
             .height(if (fullHeight) panelHeight else 287.dp)
             .background(palette.canvas, RoundedCornerShape(4.dp))
             .border(1.dp, palette.border, RoundedCornerShape(4.dp))
