@@ -2150,7 +2150,7 @@ private fun TrackHeader(
                     .border(1.dp, p.border, RoundedCornerShape(1.dp))
                     .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
-                Text(track.name.uppercase(), fontSize = 8.sp, color = p.text, fontWeight = FontWeight.Black, maxLines = 1)
+                Text("${(index + 1).toString().padStart(2, '0')}  ${track.name.uppercase()}", fontSize = 8.sp, color = p.text, fontWeight = FontWeight.Black, maxLines = 1)
             }
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
