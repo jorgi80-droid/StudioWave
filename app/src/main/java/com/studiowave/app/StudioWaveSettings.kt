@@ -27,11 +27,14 @@ internal data class StudioWavePalette(
 )
 
 internal val LocalStudioWavePalette = compositionLocalOf {
-    // Shared Live-inspired neutral workstation palette: graphite room, raised mixer strips,
-    // soft aqua focus, warm orange selection, and clear green/red transport feedback.
-    StudioWavePalette(Color(0xFF1B1B1B), Color(0xFF212121), Color(0xFF282828), Color(0xFF303030),
-        Color(0xFF222222), Color(0xFFB2B2B2), Color(0xFF707070), Color(0xFFFF8000), Color(0xFFFF8000),
-        Color(0xFF2F2F2F), Color(0xFF141414), Color(0xFF00D66B), Color(0xFFFFC247), Color(0xFFFF4141))
+    // Ableton Live-inspired graphite workstation defaults. Keep selection/transport accents
+    // vivid while the room, device panels, controls and arrangement canvas remain distinct.
+    StudioWavePalette(
+        Color(0xFF202020), Color(0xFF1E1E1E), Color(0xFF2B2B2B), Color(0xFF353535),
+        Color(0xFF252525), Color(0xFFE0E0E0), Color(0xFF929292), Color(0xFFFF9D00),
+        Color(0xFFFF9D00), Color(0xFF383838), Color(0xFF151515), Color(0xFFA5D631),
+        Color(0xFFFFC857), Color(0xFFFF4D4D), Color(0xFFA5D631), Color(0xFFFFC857), Color(0xFFFF4D4D)
+    )
 }
 
 internal val LocalStudioWaveGridOpacity = compositionLocalOf { 0.72f }
@@ -43,10 +46,10 @@ internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolea
             Color(0xFFC5C6C8), Color(0xFF202124), Color(0xFF55575A), Color(0xFFB85A00), Color(0xFFB85A00),
             Color(0xFFB3B4B6), Color(0xFF8C8D90), Color(0xFF207C55), Color(0xFF8C6A27), Color(0xFFB11E37), Color(0xFF188D78), Color(0xFFB68B32), Color(0xFFBD334A))
         "Live Mid" -> StudioWavePalette(
-            Color(0xFF212121), Color(0xFF1B1B1B), Color(0xFF282828), Color(0xFF303030),
-            Color(0xFF222222), Color(0xFFB2B2B2), Color(0xFF858585), Color(0xFFFF8000),
-            Color(0xFFFF8000), Color(0xFF2F2F2F), Color(0xFF141414), Color(0xFF00D66B),
-            Color(0xFFFFCA66), Color(0xFFFF5F75), Color(0xFF5ED6A2), Color(0xFFF2C45F), Color(0xFFFF5F75)
+            Color(0xFF202020), Color(0xFF1E1E1E), Color(0xFF2B2B2B), Color(0xFF353535),
+            Color(0xFF252525), Color(0xFFE0E0E0), Color(0xFF929292), Color(0xFFFF9D00),
+            Color(0xFFFF9D00), Color(0xFF383838), Color(0xFF151515), Color(0xFFA5D631),
+            Color(0xFFFFC857), Color(0xFFFF4D4D), Color(0xFFA5D631), Color(0xFFFFC857), Color(0xFFFF4D4D)
         )
         else -> StudioWavePalette(Color(0xFF1B1B1B), Color(0xFF212121), Color(0xFF282828), Color(0xFF303030),
             Color(0xFF222222), Color(0xFFB2B2B2), Color(0xFF707070), Color(0xFFFF8000), Color(0xFFFF8000),
