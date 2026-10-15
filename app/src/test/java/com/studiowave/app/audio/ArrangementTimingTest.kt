@@ -36,6 +36,13 @@ class ArrangementTimingTest {
         assertTrue(ArrangementTiming.framesToTicks(Long.MAX_VALUE, 40, 3840) > 0L)
     }
 
+    @Test fun tickAdditionSaturatesInsteadOfOverflowing() {
+        assertEquals(0L, ArrangementTiming.addTicksSaturated(-10L, -2L))
+        assertEquals(15L, ArrangementTiming.addTicksSaturated(10L, 5L))
+        assertEquals(Long.MAX_VALUE, ArrangementTiming.addTicksSaturated(Long.MAX_VALUE - 2L, 10L))
+        assertEquals(Long.MAX_VALUE, ArrangementTiming.addTicksSaturated(Long.MAX_VALUE, 1L))
+    }
+
     @Test fun soloAndMuteRulesAreDeterministic() {
         assertTrue(ArrangementTiming.trackIsAudible(false, false, false))
         assertFalse(ArrangementTiming.trackIsAudible(true, true, false))
