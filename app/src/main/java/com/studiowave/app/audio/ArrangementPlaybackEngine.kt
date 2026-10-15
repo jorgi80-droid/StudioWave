@@ -11,9 +11,6 @@ import android.os.Process
 import com.studiowave.app.data.MidiNote
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioTrack
-import com.studiowave.app.data.TrackDevice
-import com.studiowave.app.data.EFFECT_DEVICE_TYPES
-import com.studiowave.app.data.INSTRUMENT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -187,10 +184,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     )
 
     private data class NoteEvent(
-        val startFrame: Long, val endFrame: Long, val pitch: Int, val velocity: Int, val pan: Float,
-        val track: StudioTrack, val instrument: SamplerInstrument? = null,
-        val synthType: String = "SYNTH_SINE", val synthLevel: Float = 0.8f,
-        val synthAttackMs: Float = 8f, val synthReleaseMs: Float = 90f
+        val startFrame: Long,
+        val endFrame: Long,
+        val pitch: Int,
+        val velocity: Int,
+        val pan: Float,
+        val track: StudioTrack,
+        val instrument: SamplerInstrument? = null
     )
 
     private data class DrumEvent(
@@ -209,8 +209,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     )
 
     private data class TrackMix(
-        val volume: Float, val pan: Float, val muted: Boolean, val solo: Boolean,
-        val devices: List<TrackDevice>
+        val volume: Float,
+        val pan: Float,
+        val muted: Boolean,
+        val solo: Boolean
     )
 
     private data class MixSnapshot(
@@ -384,17 +386,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val noteDuration = ticksToFrames(note.durationTicks.coerceAtLeast(1L))
                         val noteEnd = min(clipEnd, if (noteStart > Long.MAX_VALUE - noteDuration) Long.MAX_VALUE else noteStart + noteDuration)
                         if (noteEnd > noteStart) {
-                            val instrumentDevice = track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
-                            val instrumentType = instrumentDevice?.type ?: "DIRECTWAVE"
-                            val params = instrumentDevice?.parameters.orEmpty()
-                            val samplerInstrument = if (instrumentDevice == null || instrumentType == "DIRECTWAVE") instrumentsByTrack[track.id] else null
-                            val synthType = if (instrumentType in setOf("SYNTH_SINE","SYNTH_SAW","SYNTH_SQUARE","SYNTH_TRIANGLE","FM_SYNTH")) instrumentType else "SYNTH_SINE"
                             notes.add(NoteEvent(
-                                noteStart, noteEnd, note.pitch.coerceIn(0,127), note.velocity.coerceIn(1,127),
-                                note.pan.coerceIn(-1f,1f), track, samplerInstrument, synthType,
-                                params["level"]?.coerceIn(0f,1f) ?: 0.8f,
-                                params["attackMs"]?.coerceIn(0f,5000f) ?: 8f,
-                                params["releaseMs"]?.coerceIn(0f,5000f) ?: 90f
+                                noteStart, noteEnd, note.pitch.coerceIn(0, 127),
+                                note.velocity.coerceIn(1, 127), note.pan.coerceIn(-1f, 1f), track,
+                                instrumentsByTrack[track.id]
                             ))
                         }
                     }
@@ -590,7 +585,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
         val perTrackMix = HashMap<String, FloatArray>()
-        val deviceDsp = HashMap<String, TrackDeviceDsp>()
         val sampleRate = plan.sampleRate
         val scheduledAudio = plan.audio
         val scheduledNotes = plan.notes
@@ -735,25 +729,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             channelBuffer[outIndex] += sourceLeft
                             channelBuffer[outIndex + 1] += sourceRight
                         } else {
-                            val attackFrames = (note.synthAttackMs.coerceIn(0f,5000f) * sampleRate / 1000f).toLong()
-                            val releaseFrames = (note.synthReleaseMs.coerceIn(0f,5000f) * sampleRate / 1000f).toLong()
-                            val attack = if (attackFrames <= 0L) 1f else (elapsed.toDouble() / attackFrames).toFloat().coerceIn(0f,1f)
-                            val release = if (releaseFrames <= 0L) 1f else ((noteLength-elapsed).toDouble()/releaseFrames).toFloat().coerceIn(0f,1f)
-                            val envelope = min(attack,release)
-                            val phase = (frequency * elapsed / sampleRate) % 1.0
-                            val oscillator = when(note.synthType) {
-                                "SYNTH_SAW" -> (2.0*phase-1.0).toFloat()
-                                "SYNTH_SQUARE" -> if(phase<0.5) 0.85f else -0.85f
-                                "SYNTH_TRIANGLE" -> (1.0-4.0*abs(phase-0.5)).toFloat()
-                                "FM_SYNTH" -> sin(2.0*PI*phase+2.6*sin(2.0*PI*phase*2.0)).toFloat()
-                                else -> sin(2.0*PI*phase).toFloat()
-                            }
-                            val channelWave = oscillator * channelGain * note.synthLevel.coerceIn(0f,1f) * envelope
+                            val attack = min(1f, elapsed.toFloat() / (sampleRate * 0.008f))
+                            val release = min(1f, (noteLength - elapsed).toFloat() / (sampleRate * 0.035f))
+                            val envelope = min(attack, release)
+                            val channelWave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * channelGain * envelope
                             val wave = channelWave * liveMasterGain
+                            val sourceLeft = channelWave * leftPan
+                            val sourceRight = channelWave * rightPan
                             mix[outIndex] += wave * leftPan
-                            mix[outIndex+1] += wave * rightPan
-                            channelBuffer[outIndex] += channelWave * leftPan
-                            channelBuffer[outIndex+1] += channelWave * rightPan
+                            mix[outIndex + 1] += wave * rightPan
+                            channelBuffer[outIndex] += sourceLeft
+                            channelBuffer[outIndex + 1] += sourceRight
                         }
                     }
                 }
@@ -782,15 +768,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         mix[outIndex + 1] += wave * rightPan
                         channelBuffer[outIndex] += sourceLeft
                         channelBuffer[outIndex + 1] += sourceRight
-                    }
-                }
-
-                // Apply each persisted track-insert chain in order; patch its processed-minus-dry delta to master.
-                perTrackMix.forEach { (trackId, channel) ->
-                    val trackMix = mixState.tracks[trackId] ?: return@forEach
-                    if (trackMix.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
-                        deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
-                            .process(channel, mix, sampleCount, liveMasterGain, trackMix.devices)
                     }
                 }
 
@@ -863,8 +840,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     fun updateMix(project: StudioProject) {
         val trackValues = project.tracks.map { track ->
             TrackMix(
-                volume=track.volume.coerceIn(0f,1.5f), pan=track.pan.coerceIn(-1f,1f),
-                muted=track.muted, solo=track.solo, devices=track.devices
+                volume = track.volume.coerceIn(0f, 1.5f),
+                pan = track.pan.coerceIn(-1f, 1f),
+                muted = track.muted,
+                solo = track.solo
             )
         }
         liveMix = MixSnapshot(
