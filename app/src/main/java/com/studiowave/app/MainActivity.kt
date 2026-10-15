@@ -3761,7 +3761,6 @@ private fun PianoRollWorkspace(
                             for (barIndex in 0..(currentStepsOnScreen / stepsPerBar + 1)) {
                                 val barStartStep = barIndex * stepsPerBar
                                 if (barIndex % 2 == 1) {
-                                    val x = (barStartStep - (pageStartStep % stepsPerBar) - (pageStartStep / stepsPerBar) * stepsPerBar + pageStartStep - pageStartStep).toFloat() * localColWidth
                                     val visibleStart = (barStartStep + (pageStartStep / stepsPerBar) * stepsPerBar - pageStartStep).toFloat() * localColWidth
                                     val width = stepsPerBar * localColWidth
                                     if (visibleStart < size.width && visibleStart + width > 0f) {
