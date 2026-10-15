@@ -132,4 +132,45 @@ class MidiNoteGestureTest {
         assertEquals(91, pianoRollVisibleSteps(16, 0.35f))
         assertEquals(4, pianoRollVisibleSteps(0, 8f))
     }
+
+    @Test
+    fun extremelyShortClipStillProducesValidNoteBounds() {
+        val note = MidiNote(pitch = 60, startTick = Long.MAX_VALUE, durationTicks = Long.MAX_VALUE)
+        val resized = transformMidiNoteFromGesture(
+            note = note, clipLengthTicks = 1L, stepTicks = 240L,
+            deltaSteps = Int.MAX_VALUE, deltaPitch = 0, resize = true
+        )
+        assertEquals(0L, resized.startTick)
+        assertEquals(1L, resized.durationTicks)
+
+        val moved = transformMidiNoteFromGesture(
+            note = note, clipLengthTicks = 1L, stepTicks = 240L,
+            deltaSteps = Int.MIN_VALUE, deltaPitch = 0, resize = false
+        )
+        assertEquals(0L, moved.startTick)
+        assertEquals(1L, moved.durationTicks)
+        assertEquals(1L, moved.startTick + moved.durationTicks)
+    }
+
+    @Test
+    fun gestureArithmeticCannotOverflowNearLongMax() {
+        val note = MidiNote(pitch = 64, startTick = Long.MAX_VALUE - 100L, durationTicks = 80L)
+        val result = transformMidiNoteFromGesture(
+            note = note, clipLengthTicks = Long.MAX_VALUE, stepTicks = Long.MAX_VALUE / 3L,
+            deltaSteps = Int.MAX_VALUE, deltaPitch = 0, resize = true
+        )
+        assertTrue(result.startTick >= 0L)
+        assertTrue(result.durationTicks >= 1L)
+        assertTrue(result.startTick <= Long.MAX_VALUE - result.durationTicks)
+
+        val moved = transformMidiNoteFromGesture(
+            note = note, clipLengthTicks = Long.MAX_VALUE, stepTicks = Long.MAX_VALUE / 3L,
+            deltaSteps = Int.MAX_VALUE, deltaPitch = 0, resize = false
+        )
+        assertTrue(moved.startTick >= 0L)
+        assertTrue(moved.durationTicks >= 1L)
+        assertTrue(moved.startTick <= Long.MAX_VALUE - moved.durationTicks)
+    }
+
+
 }
