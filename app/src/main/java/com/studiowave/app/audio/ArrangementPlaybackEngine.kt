@@ -560,7 +560,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
-                    val gain = channelMix.volume * liveMasterGain * (note.velocity / 127f) * 0.19f
+                    val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val leftPan = if (pan > 0f) 1f - pan else 1f
@@ -571,10 +571,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val attack = min(1f, elapsed.toFloat() / (sampleRate * 0.008f))
                         val release = min(1f, (noteLength - elapsed).toFloat() / (sampleRate * 0.035f))
                         val envelope = min(attack, release)
-                        val wave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * gain * envelope
+                        val channelWave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * channelGain * envelope
+                        val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
+                        channelBuffer[outIndex] += channelWave * leftPan
+                        channelBuffer[outIndex + 1] += channelWave * rightPan
                     }
                 }
 
@@ -591,7 +594,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     for (absolute in from until to) {
                         val t = (absolute - drum.startFrame).toDouble() / sampleRate
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
-                        val wave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * gain
+                        val channelWave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * channelMix.volume * 0.38f
+                        val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
@@ -607,6 +611,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
                             .process(channel, mix, sampleCount, liveMasterGain, trackMix.devices)
                     }
+                }
+
+                // Publish each track's measured pre-master level from the real mixed channel buffer.
+                perTrackMix.forEach { (id, channel) ->
+                    val levels = measureStereoMeterLevels(channel, sampleCount)
+                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight)
+                }
+                mixState.tracks.keys.forEach { id ->
+                    if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f)
                 }
 
                 var blockPeak = 0f
