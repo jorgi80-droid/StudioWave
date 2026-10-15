@@ -3779,7 +3779,7 @@ private fun MixerWorkspace(
 ) {
     val mixerPalette = LocalStudioWavePalette.current
     BoxWithConstraints(
-        Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(7.dp)).padding(4.dp)
+        Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(1.dp)).border(1.dp, mixerPalette.border.copy(alpha = 0.85f), RoundedCornerShape(1.dp)).padding(4.dp)
     ) {
         // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
         val channelWidth = 164.dp
@@ -3790,14 +3790,14 @@ private fun MixerWorkspace(
         project.tracks.forEach { track ->
             Column(
                 Modifier.width(channelWidth).fillMaxHeight()
-                    .background(mixerPalette.panel, RoundedCornerShape(2.dp))
-                    .border(1.dp, mixerPalette.border.copy(alpha = 0.9f), RoundedCornerShape(2.dp))
+                    .background(mixerPalette.panel, RoundedCornerShape(1.dp))
+                    .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp))
                     .padding(horizontal = 7.dp, vertical = 5.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
                     Modifier.fillMaxWidth().height(26.dp)
-                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.96f), RoundedCornerShape(2.dp))
+                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.96f), RoundedCornerShape(1.dp))
                         .padding(horizontal = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -4409,8 +4409,8 @@ private fun DeviceModuleCard(
 ) {
     Column(
         Modifier.width(320.dp).height(160.dp)
-            .background(palette.panel, RoundedCornerShape(4.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(4.dp))
+            .background(palette.panel, RoundedCornerShape(1.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -5149,7 +5149,8 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
     Surface(
         color = LocalStudioWavePalette.current.control,
         contentColor = LocalStudioWavePalette.current.text,
-        shape = RoundedCornerShape(3.dp),
+        shape = RoundedCornerShape(1.dp),
+        border = BorderStroke(1.dp, LocalStudioWavePalette.current.border.copy(alpha = 0.9f)),
         modifier = Modifier.height(34.dp).defaultMinSize(minWidth = 42.dp)
             .clickable(onClickLabel = description, onClick = onClick)
     ) {
@@ -5164,7 +5165,8 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
 private fun SmallAction(label: String, onClick: () -> Unit) {
     val p = LocalStudioWavePalette.current
     Button(onClick = onClick, modifier = Modifier.height(25.dp), contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
-        shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text)) {
+        shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border.copy(alpha = 0.9f)),
+        colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text)) {
         Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }
 }
@@ -5181,7 +5183,8 @@ private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVecto
     }
     val p = LocalStudioWavePalette.current
     Button(onClick = onClick, modifier = Modifier.size(26.dp), contentPadding = PaddingValues(0.dp),
-        shape = RoundedCornerShape(5.dp), colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = tint)) {
+        shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border.copy(alpha = 0.9f)),
+        colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = tint)) {
         Icon(icon, contentDescription = description, modifier = Modifier.size(14.dp))
     }
 }
@@ -5572,8 +5575,8 @@ private fun MixerStateButton(
     Surface(
         color = if (active) palette.accent.copy(alpha = 0.2f) else palette.control,
         contentColor = if (active) palette.accent else palette.muted,
-        shape = RoundedCornerShape(4.dp),
-        border = BorderStroke(1.dp, if (active) palette.accent.copy(alpha = 0.8f) else palette.border.copy(alpha = 0.7f)),
+        shape = RoundedCornerShape(1.dp),
+        border = BorderStroke(1.dp, if (active) palette.orange.copy(alpha = 0.95f) else palette.border.copy(alpha = 0.9f)),
         modifier = Modifier.size(width = 29.dp, height = 23.dp).clickable(onClick = onClick)
     ) {
         Box(contentAlignment = Alignment.Center) {
