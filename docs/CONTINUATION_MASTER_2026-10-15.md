@@ -144,3 +144,14 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 ## Continuation update — 2026-10-16 (landscape-responsive device dock)
 - Commit `701ca2a5ba6c218fcd06405cb65b62db2785aae0` sizes DirectWave's device panel against the current Android screen width and height instead of forcing fixed 610/860 dp widths and a 410 dp tall full-screen panel. The panel keeps bounded minimum/maximum dimensions to preserve usable touch controls while reducing unnecessary horizontal clipping on landscape phones.
 - Validate this sizing on real landscape devices at different resolutions; emulator/CI success alone cannot guarantee all touch targets fit.
+
+
+## Continuation update — Parametric EQ Eight control and DSP integration (2026-10-16)
+
+- Added per-band frequency and Q defaults for all eight Parametric EQ bands while retaining the existing gain keys for compatibility with older project files.
+- Updated the audio DSP to include each band's gain, log-normalized frequency (20 Hz–20 kHz), and Q in its tuning signature. Coefficients are retuned once per processing block when a parameter changes, not inside the per-sample loop.
+- Reworked the EQ Eight device UI into an Ableton-inspired compact device: eight band-select buttons, a gain-shape display, and FREQ / Q / GAIN rotary controls for the selected band.
+- Added project model tests for defaults and JSON persistence, plus a DSP regression test that checks frequency/Q changes alter output while keeping samples finite.
+- Commits: `9e092235`, `103620dc`, `19f23b0f`, `df8e52d9`, `ab859a9b`.
+- Validation: GitHub Actions is running for the latest test commit. Do not mark the batch green until `assembleDebug`, `testDebugUnitTest`, and APK artifact upload complete successfully.
+- Scope note: the displayed EQ shape is a compact gain overview, not a measured FFT spectrum. EQ DSP is an original native implementation, not Ableton's proprietary code.
