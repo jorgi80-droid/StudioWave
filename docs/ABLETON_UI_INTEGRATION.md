@@ -100,3 +100,26 @@ The visual target is **Ableton Live 12-inspired at the control-surface level**, 
 6. Validate every visual increment with CI build and unit tests; verify on a physical Android device before claiming accurate touch feel, latency or frame pacing.
 
 Do not describe the UI as “100% Ableton” until a screenshot-by-screenshot audit and device test have actually passed. This file is the persistent design contract for future StudioWave work.
+
+
+## P0–P3 integrated pass — 2026-10-15
+
+### P0 — shared geometry and display primitives
+- The meter palette now has separate low, mid and peak tokens for Live Light, Live Mid and dark schemes. Mixer segments consume these tokens instead of independently borrowing the warning/danger colors.
+- Arrangement, Piano Roll and audio clip thumbnails remain driven by project ticks/source metadata, not decorative static clip art.
+- Remaining acceptance task: capture the same projects in Arrangement, Clip View, MIDI editor, Device View and Mixer at identical viewport dimensions; compare component bounds, spacing, type sizes and clipping against the owner-provided reference screenshots. CI cannot perform this pixel comparison.
+
+### P1 — direct-touch editing and mixer control response
+- Channel and master faders now use a logarithmic gain taper over the audible range with true zero at the bottom. The fader cap is drawn from the inverse mapping of the same gain value, and the displayed dB remains derived from linear gain.
+- MixerFaderScaleTest covers zero/full-scale, unity-gain placement, gain-position round trips and invalid input bounds.
+- Remaining acceptance task: verify edge drags, repeated taps, horizontal channel scrolling and simultaneous playback on physical Android hardware; a CI unit test cannot measure perceived touch latency or audio glitches.
+
+### P2 — persisted instrument/device integration
+- Instrument controls currently work against DirectWaveSampler, and per-track sampler settings are saved in app SharedPreferences. They are not currently serialized into .sdaw; moving a project to another device does not guarantee its sampler setup will travel with it.
+- Device and FX chains, macro maps, processor order, bypass/wet-dry, automation, and genuine audio warp/time-stretch still need a versioned persistent model and matching engine/DSP implementation. Keep these features visibly unavailable until those data and processing layers exist.
+- Recording, recovery/versioned backups, embedded project media bundles, and WAV mixdown remain separately tracked product gaps.
+
+### P3 — verification and release discipline
+- Every change must be verified on its exact PR head by both assembleDebug and testDebugUnitTest; the APK artifact must exist before it is shared.
+- The physical-device checklist remains mandatory: orientation and system bars, touch target reachability, clip edge resize, MIDI note resize, pinch anchor stability, 120-pitch range, source URI permissions, playback-follow, fader response during playback, sustained audio and lifecycle cleanup.
+- No percentage of visual fidelity should be claimed until matched-resolution screenshots and the actual Android device checklist have been reviewed.
