@@ -212,9 +212,13 @@ class TimelineViewportTest {
         assertEquals(1000L, full.endTicksExclusive)
 
         val nearEnd = audioTrimRangeFromFractions(0.9999f, Float.NaN, 1000L)!!
-        assertTrue(nearEnd.startTicks >= 0L)
+        assertEquals(999L, nearEnd.startTicks)
         assertTrue(nearEnd.endTicksExclusive <= 1000L)
         assertTrue(nearEnd.endTicksExclusive > nearEnd.startTicks)
+
+        val restoredNearEnd = audioTrimFractionsFromTicks(999L, 1L, 1000L)
+        assertEquals(0.999f, restoredNearEnd.first, 0.0001f)
+        assertEquals(1f, restoredNearEnd.second, 0.0001f)
 
         assertEquals(null, audioTrimRangeFromFractions(0f, 1f, 1L))
         assertEquals(null, audioTrimRangeFromFractions(Float.NaN, Float.POSITIVE_INFINITY, 0L))
