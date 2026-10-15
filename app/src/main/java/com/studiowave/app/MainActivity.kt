@@ -2125,9 +2125,13 @@ private fun MixerWorkspace(
     val panel = Color(0xFF292B2F)
     val panelHeader = Color(0xFF36383D)
     val textPrimary = Color(0xFFE4E5E7)
+    val latestProject by rememberUpdatedState(project)
+    val latestOnProjectChange by rememberUpdatedState(onProjectChange)
     Row(Modifier.fillMaxSize().background(Color(0xFF202124)).padding(5.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         project.tracks.forEachIndexed { index, track ->
             val accent = Color(track.colorArgb.toInt())
+            var faderValue by remember(track.id) { mutableFloatStateOf(track.volume.coerceIn(0f, 1.5f)) }
+            LaunchedEffect(track.id, track.volume) { faderValue = track.volume.coerceIn(0f, 1.5f) }
             Column(Modifier.weight(1f).fillMaxHeight().background(panel).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.fillMaxWidth().height(24.dp).background(accent.copy(alpha = 0.92f), RoundedCornerShape(2.dp)).padding(horizontal = 5.dp), contentAlignment = Alignment.CenterStart) {
                     Text(track.name.uppercase(), color = Color(0xFF202124), fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
@@ -2166,10 +2170,24 @@ private fun MixerWorkspace(
                         }
                     }
                     Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                        Canvas(Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
+                        Canvas(Modifier.fillMaxSize().padding(horizontal = 4.dp).pointerInput(track.id) {
+                            var currentValue = faderValue
+                            detectDragGestures(
+                                onDragStart = { currentValue = faderValue },
+                                onDrag = { change, drag ->
+                                    change.consume()
+                                    currentValue = (currentValue - drag.y / size.height.coerceAtLeast(1f) * 1.5f).coerceIn(0f, 1.5f)
+                                    faderValue = currentValue
+                                    val latest = latestProject
+                                    latestOnProjectChange(latest.copy(tracks = latest.tracks.map {
+                                        if (it.id == track.id) it.copy(volume = currentValue) else it
+                                    }))
+                                }
+                            )
+                        }) {
                             val railX = size.width / 2f
                             drawRoundRect(Color(0xFF151619), Offset(railX - 5.dp.toPx(), 0f), Size(10.dp.toPx(), size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()))
-                            val value = track.volume.coerceIn(0f, 1.5f) / 1.5f
+                            val value = faderValue.coerceIn(0f, 1.5f) / 1.5f
                             val y = (1f - value) * (size.height - 12.dp.toPx())
                             drawRoundRect(Color(0xFFBFC2C6), Offset(railX - 12.dp.toPx(), y), Size(24.dp.toPx(), 12.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
                             drawLine(accent, Offset(railX - 8.dp.toPx(), y + 6.dp.toPx()), Offset(railX + 8.dp.toPx(), y + 6.dp.toPx()), 1.dp.toPx())
