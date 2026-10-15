@@ -1,50 +1,54 @@
 # StudioWave Continuation Master — 2026-10-15
 
-## Active work
-- Repo: https://github.com/jorgi80-droid/StudioWave
-- Active branch: `ui/ableton-batch-viewport`
-- Consolidation PR: https://github.com/jorgi80-droid/StudioWave/pull/15 (draft; do not merge while CI fails).
-- User-uploaded APK baseline SHA-256: `3a396f0f8dd4d26669527f816e0dd8b84d38d8040c3addf5cf2ed90d310b4919`. This is a runtime/reference baseline, not original source.
-- Latest UI blob checked: `MainActivity.kt` `905398c13c7e3a88ed064dbbbedd767ce988bed5`.
-- Latest audio-engine blob checked: `ArrangementPlaybackEngine.kt` `248b8ab1a646625f5a08819b05272045e39e9ccd`.
-- Project/device data: `ProjectModel.kt` `79cfa53a9b627cb60d481273afac91c1ba9eb606`.
-- Track DSP: `TrackDeviceDsp.kt` `1c8db6204cc4ce02a1d2b6bbdfab205847bec919`.
-- Pane-local viewport: `TimelineViewport.kt` `339ecd9899d5e33341a4514e705c4e7da614d132`; includes `arrangementPaneViewport` and the 1800-bar bound.
-- Test blobs: `TimelineViewportTest.kt` `b806ca2b56af93c5482aa758444ad1bc8fa17aba`; `TrackDeviceDspTest.kt` `0b7213fb619e4201f8d24524a51495507f03cd9e`; `TrackDeviceProjectTest.kt` `6e8dc24029c0d2d72bd5b74f4a58a7f7a91995d3`.
-- CI workflow blob: `c02978240db3fe1c13dc4856c14a7706d0b31d9f`, triggers on `main`, `fix/**`, `ui/**`, and `perf/**`.
+## Active project
+- Repository: https://github.com/jorgi80-droid/StudioWave
+- Working branch: `ui/ableton-batch-viewport`
+- Draft integration PR: https://github.com/jorgi80-droid/StudioWave/pull/15. Keep draft; do not merge while CI is not green.
+- User-uploaded APK baseline is a visual/runtime reference, not source.
+- Current checkpoint commit before this document update: `140d430eeba3b435e58ce26167e8552117b68383`.
+- Current tracked key files:
+  - `MainActivity.kt`: `905398c13c7e3a88ed064dbbbedd767ce988bed5`
+  - `ArrangementPlaybackEngine.kt`: `c10548572bdb35ba9cda068a3b031f50f8cf0bcd`
+  - `ProjectModel.kt`: `79cfa53a9b627cb60d481273afac91c1ba9eb606`
+  - `TrackDeviceDsp.kt`: `1c8db6204cc4ce02a1d2b6bbdfab205847bec919`
+  - `TimelineViewport.kt`: `339ecd9899d5e33341a4514e705c4e7da614d132`
+  - viewport tests: `3e1f284d9c0fedffcff7c62269b2b9a5dcce3b1e`
+  - DSP tests: `0b7213fb619e4201f8d24524a51495507f03cd9e`
+  - project persistence tests: `6e8dc24029c0d2d72bd5b74f4a58a7f7a91995d3`
 
-## User’s design and functional requirements
-- Make a native, landscape-first, mobile-friendly DAW whose visual language is strongly Ableton Live-inspired (graphite surfaces, dense but legible lane grid, clip content previews, device chain, mixer strips/meters, useful knobs/encoders and labels), while retaining FL Studio Mobile’s fast touch workflow.
-- Workspaces must remain coherent: Arrangement, Piano Roll, Drum/Step Sequencer, Mixer, Device View/DirectWave, audio clip editor, Browser and Settings.
-- Device controls must not be decorative. Required FX: EQ, Parametric EQ Eight, Reverb, Delay, Limiter, Saturator, Compressor, Filter, Full Analyzer, Multi FX. Required instruments: DirectWave, SuperSaw, MiniSynth, GMS.
-- Use original Ableton-inspired components, not copied proprietary assets or a claim of pixel-identical product clone.
-- User is Android-only/beginner; after work, give direct links and concise install/testing steps.
+## User's design direction
+Adopt Ableton Live's design language as the clear visual reference: dark graphite panels, clip colors, compact parameter strips, device-chain blocks, knobs/dials, EQ/analyzer graphs, meter strips and clear typography. Keep FL Studio Mobile's practical mobile workflow: touch-first arrangement editing, accessible piano roll/drum sequencing, clear browser, pinch zoom and compact navigation. Treat screenshots and linked manuals as specifications to implement against, not just reading material. Do not claim literal 1:1 parity; implement an original and legally distinct UI inspired by the reference.
+Core views: Arrangement, MIDI/Piano Roll, Drum Sequencer, Audio Clip View, Mixer, Device View, Browser, Settings. Controls exposed as active must have actual backing behavior; unimplemented devices should be labeled unavailable/inactive rather than presented as working.
+Requested effects: Equalizer, 8-band Parametric EQ, Reverb, Delay, Limiter, Saturator, Compressor, Filter, Full Analyzer, Multi FX.
+Requested instruments: DirectWave, SuperSaw, MiniSynth, GMS.
+Project is Android-only for the user (AndroidIDE), beginner friendly. Provide direct APK/artifact link only after CI confirms the artifact exists.
 
-## What currently exists in the branch
-- `MainActivity.kt` has the integrated Live-inspired workspace and DeviceDock. DirectWave panel uses `DirectWaveSampler`/SoundPool, factory library and user sample import, with pitch/fine-tune/ADSR/loop/output controls.
-- `StudioWaveSettings.kt` defines `StudioWavePalette` and `LocalStudioWavePalette`.
-- `ProjectModel.kt` persists `TrackDevice` records (id/type/name/enabled/parameters) per track; known effect types are EQ, PARAM_EQ_8, REVERB, DELAY, COMPRESSOR, SATURATOR, FILTER, LIMITER. Known synth types currently include DIRECTWAVE, basic oscillator shapes, FM_SYNTH, DRUM_RACK.
-- `TrackDeviceDsp.kt` has basic stateful algorithms for the effects listed above except Full Analyzer and Multi FX. Don’t expose those as active until implemented.
-- The arrangement engine now accumulates per-track buses for audio, notes and drums and runs enabled devices in chain order through `TrackDeviceDsp`, adding wet/dry delta into master. Needs CI verification and DSP regression test expansion.
-- `DirectWaveSampler.kt` integrated. Factory sample generation can produce WAV into cache so runtime is offline.
-- Timeline fixes: shared `TimelineViewport` mapping, pane-local factory, anchor zoom test, max 1800 bars.
+## Existing implementation checked
+- `StudioWaveSettings.kt` supplies shared palette and theme controls.
+- `MainActivity.kt` has a large Live-inspired workspace, transport, arrangement/piano-roll/drum/audio/mixer/browser/settings navigation, a DeviceDock and a DirectWave sampler UI using `DirectWaveSampler` and generated factory samples.
+- The current device panel is not yet a full device rack with functional per-track effect cards. Source audit found `TrackEffectDeviceCard` is absent in the active MainActivity, despite the data model/DSP processor existing separately.
+- `ProjectModel.kt` persists per-track `TrackDevice(type,name,enabled,parameters)` through JSON and validates known device types.
+- `TrackDeviceDsp.kt` contains basic DSP for EQ, PARAM_EQ_8, FILTER, SATURATOR, COMPRESSOR, DELAY/REVERB, LIMITER.
+- `ArrangementPlaybackEngine.kt` snapshots track device lists, creates per-track audio buses for audio/MIDI/drums, and runs enabled insert DSP in chain order, adding the wet/dry delta into master output.
+- `DirectWaveSampler.kt` and `FactorySampleLibrary.kt` support offline sample generation/load. Main UI now generates its built-in one-shot in app cache instead of relying on missing `R.raw.one_shot`.
+- `TimelineViewport.kt` has shared time mapping, pane-local viewport conversion, zoom anchor preservation, and the 1800-bar extent.
+- Existing tests: 12 viewport tests, 5 DSP tests, 5 device persistence tests (check current exact counts if changed).
 
-## Latest CI status and known compile failures
-- Latest corrected viewport test commit: `d980bd7729a9a92cc975c5cb6b328673c0cc22f5`; outdated `visibleSubdivisionTicks()` calls were replaced with `gridSubdivisionTicks(beatPixels)`.
-- Track FX render integration commit: `0e034fc56a8ca1ba8e2a7ce01802eabe7b65848d`; duplicate buffer declaration was removed at `4d2ac86d77b416d81634b13aced3bf17f2aeb32b`. Latest visible engine blob SHA is `c10548572bdb35ba9cda068a3b031f50f8cf0bcd`.
-- Last polled CI runs: viewport test run `38741454039` and DSP integration run `38741469140`. Both were still running; build steps had not produced a final result at checkpoint time.
-- Prior CI run `38735345435` had successful APK compilation but unit tests failed due to the obsolete viewport API; the source test was since fixed.
-- Historical build failures also included an absent `R.raw.one_shot`; latest MainActivity generates the sample via the offline factory pack.
-- A successful historical baseline existed at `8b9ec03b23d734d3c7d379f5b2a058351a0577ce`, run `38678231952`, job `116236609946`.
-- Do not call current branch green until the newest build AND unit tests pass. Do not provide an APK link unless a successful workflow artifact exists and its exact path is verified.
+## CI checkpoint
+- CI on commit `7b0a2471c90790ff02bb1ac3dac2af3717c3481e` completed successfully, including build, unit tests, and APK artifact upload: https://github.com/jorgi80-droid/StudioWave/actions/runs/38741833854
+- Artifact from that successful run: `StudioWave-debug-apk`, artifact ID `11976422706`, 17,478,001 bytes, not expired at last check. This artifact predates the last viewport assertion fix and checkpoint-doc-only changes, so prefer waiting for the latest run before sharing an APK as current.
+- Latest code/test commit at checkpoint: `140d430eeba3b435e58ce26167e8552117b68383`. Run `38742059249` was queued/in progress when last polled; poll it and confirm both `Build debug APK` and `Run unit tests`.
+- Historical known errors have been addressed: missing `R.raw.one_shot`, stale `visibleSubdivisionTicks()`, wrong numeric assertion in viewport tests, duplicate per-track buffer declaration.
 
-## Next actions (resume here)
-1. Poll run `38742059249`; the previous CI failure was a test-only numeric assertion error. Confirm both APK build and unit tests pass.
-2. If unit tests fail, inspect DSP assertions after viewport tests pass; ensure enabled insert effects really modify the per-track signal in chain order and do not make master double-count the dry signal.
-3. Ensure Full Analyzer/Multi FX/SuperSaw/MiniSynth/GMS are not shown as working until there are engine-backed implementations and tests.
-4. Continue visual pass against the submitted Ableton Live screenshots: arrangement clip detail/waveforms, device chain/effect graphs and knobs, mixer channel strips/meters, responsive horizontal navigation.
-5. Keep PR #15 draft until CI is green, update this checkpoint after each stable batch, and report only verified artifacts.
-6. Physical Android touch/audio test is still required after CI.
+## Next actions (start here in a new chat)
+1. Poll workflow run `38742059249`: https://github.com/jorgi80-droid/StudioWave/actions/runs/38742059249. Inspect exact logs if it fails. Do not rely on old result without checking.
+2. If CI passes, download and share only the artifact for the current green run; then request physical Android checks for launch, landscape, sample note output, insert effects audible response, timeline gestures and saved-project reopening.
+3. Implement the actual DeviceRack UI connected to `project.tracks[selectedTrackId].devices`. Provide Add/Remove/Enable/Reorder; device parameter changes must update model and be audible through `ArrangementPlaybackEngine`. Make UI visual language closer to screenshots: narrow device headers, knobs, graph/curve surfaces, compact chain blocks and audio levels.
+4. Add real implementations/tests before adding active controls for Full Analyzer (windowed FFT/bins), Multi FX (serial chain composition), SuperSaw, MiniSynth, and GMS. Keep unavailable/inactive states honest until then.
+5. Fix instrument audio routing: `DirectWaveSampler` UI currently previews samples via a separate SoundPool; ensure actual MIDI clips route notes into track sampler voices or document the limitation and integrate it next.
+6. Add regression tests for EQ frequency response, compressor gain reduction, limiter ceiling, DSP order, no duplicate dry signal/master gain, persistence of each parameter, and test a full track through actual render path.
+7. Refine Ableton-inspired Arrangement/ClipView/Piano Roll/Mixer and validate phone-sized landscape touch targets. Never change unrelated audio-engine sections without tests.
+8. Keep this master updated after stable batches. PR #15 stays draft until all CI checks are green.
 
 ## Honest status
-As of this checkpoint, the integration is not yet build-verified on the latest commit. Do not merge PR #15, do not claim 1:1 Ableton parity, and do not claim all requested devices work.
+The latest historical CI run is green, but code commit `140d430eeba3b435e58ce26167e8552117b68383` still needs its own verification. This is not yet a fully implemented Ableton/FL Studio Mobile competitor. FX routing exists underneath, but the full device UI and requested synth/analyzer/multi-FX features are still incomplete. Real device audio and touch behavior still require on-device validation.
