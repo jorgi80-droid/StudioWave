@@ -2081,7 +2081,7 @@ private fun PianoRollWorkspace(
                     val nearest = notes.minByOrNull { note -> kotlin.math.abs((note.startTick - horizontalScroll) * pxPerTick - point.x) } ?: return@detectTapGestures
                     val noteX = (nearest.startTick - horizontalScroll) * pxPerTick
                     if (kotlin.math.abs(noteX - point.x) > 22.dp.toPx()) return@detectTapGestures
-                    val velocityValue = ((1f - point.y / size.height.coerceAtLeast(1f)) * 127f).toInt().coerceIn(1, 127)
+                    val velocityValue = ((1f - point.y / size.height.coerceAtLeast(1)) * 127f).toInt().coerceIn(1, 127)
                     selectedNoteId = nearest.id
                     commitNotes(notes.map { if (it.id == nearest.id) it.copy(velocity = velocityValue) else it })
                 }
@@ -2178,7 +2178,7 @@ private fun MixerWorkspace(
                                 onDragStart = { currentValue = faderValue },
                                 onDrag = { change, drag ->
                                     change.consume()
-                                    currentValue = (currentValue - drag.y / size.height.coerceAtLeast(1f) * 1.5f).coerceIn(0f, 1.5f)
+                                    currentValue = (currentValue - drag.y / size.height.coerceAtLeast(1) * 1.5f).coerceIn(0f, 1.5f)
                                     faderValue = currentValue
                                     val latest = latestProject
                                     latestOnProjectChange(latest.copy(tracks = latest.tracks.map {
