@@ -173,3 +173,5 @@
 - Next validation gate: inspect the branch current HEAD and PR #15, run Android CI on the latest source, fix any compile/test failures, then validate a saved/reopened trimmed clip at multiple BPM values on a landscape Android device. Keep PR #15 in Draft.
 
 - Follow-up [5195cc55](https://github.com/jorgi80-droid/StudioWave/commit/5195cc55de4d2b55852e88b9b72b490147bd77a6) preserves the exact absolute source offset during a right-edge resize instead of round-tripping it through ticks. This prevents small trim-position drift from repeated edits.
+
+- Follow-ups [4b3546d4](https://github.com/jorgi80-droid/StudioWave/commit/4b3546d4cdb42066aaaaeb6240416315ecaccdfa) and [0d699c87](https://github.com/jorgi80-droid/StudioWave/commit/0d699c87201c006a59962656ae40c209b9e922b6) calculate trim slider positions directly in source microseconds rather than quantizing the saved source range through musical ticks. A regression test covers exact fractional conversion and invalid slider values.
