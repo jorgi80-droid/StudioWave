@@ -4056,12 +4056,12 @@ private fun BrowserWorkspace(
                     track.name.lowercase().contains(normalizedQuery) ||
                     clip.sourceUri?.substringAfterLast('/')?.lowercase()?.contains(normalizedQuery) == true)
         }
-    Column(Modifier.fillMaxSize().background(p.room).padding(5.dp)) {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxSize().background(p.room).border(1.dp, p.border.copy(alpha = 0.8f)).padding(4.dp)) {
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Column(
                 Modifier.width(150.dp).fillMaxHeight()
-                    .background(p.canvas, RoundedCornerShape(2.dp))
-                    .border(1.dp, p.border, RoundedCornerShape(2.dp)).padding(6.dp),
+                    .background(p.canvas, RoundedCornerShape(1.dp))
+                    .border(1.dp, p.border, RoundedCornerShape(1.dp)).padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -4076,7 +4076,7 @@ private fun BrowserWorkspace(
                     val active = category == item
                     Surface(
                         color = if (active) p.accent.copy(alpha = 0.16f) else Color.Transparent,
-                        shape = RoundedCornerShape(2.dp),
+                        shape = RoundedCornerShape(1.dp),
                         border = BorderStroke(1.dp, if (active) p.accent.copy(alpha = 0.65f) else Color.Transparent),
                         modifier = Modifier.fillMaxWidth().height(34.dp).clickable { category = item }
                     ) {
@@ -4104,7 +4104,7 @@ private fun BrowserWorkspace(
                 Text("PLACES", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black,
                     modifier = Modifier.padding(start = 4.dp))
                 Row(Modifier.fillMaxWidth().height(29.dp)
-                    .background(p.panel, RoundedCornerShape(2.dp)).padding(horizontal = 7.dp),
+                    .background(p.panel, RoundedCornerShape(1.dp)).padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("▣", color = p.accent, fontSize = 11.sp)
@@ -4143,11 +4143,13 @@ private fun BrowserWorkspace(
                 OutlinedTextField(
                     value = query, onValueChange = { query = it },
                     modifier = Modifier.fillMaxWidth().height(45.dp), singleLine = true,
-                    placeholder = { Text("Search library…", fontSize = 10.sp) },
+                    shape = RoundedCornerShape(1.dp),
+                    placeholder = { Text("Search library…", fontSize = 10.sp, color = p.muted) },
                     leadingIcon = { Icon(Icons.Default.LibraryMusic, contentDescription = "Search library", modifier = Modifier.size(15.dp)) },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = p.accent, unfocusedBorderColor = p.border,
-                        focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent
+                        focusedTextColor = p.text, unfocusedTextColor = p.text, cursorColor = p.accent,
+                        focusedContainerColor = p.control, unfocusedContainerColor = p.control
                     )
                 )
                 if (category == "ALL" || category == "SAMPLES" || category == "CLIPS") {
@@ -4156,7 +4158,7 @@ private fun BrowserWorkspace(
                             onClick = onImportAudio, modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = p.accent.copy(alpha = 0.18f), contentColor = p.accent),
-                            shape = RoundedCornerShape(2.dp)
+                            shape = RoundedCornerShape(1.dp)
                         ) {
                             Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(13.dp))
                             Spacer(Modifier.width(5.dp)); Text("IMPORT AUDIO", fontSize = 8.sp, fontWeight = FontWeight.Black)
@@ -4166,7 +4168,7 @@ private fun BrowserWorkspace(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
-                            shape = RoundedCornerShape(2.dp)
+                            shape = RoundedCornerShape(1.dp)
                         ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Black) }
                     }
                 }
@@ -4183,8 +4185,8 @@ private fun BrowserWorkspace(
                             val selected = track.id == selectedTrackId
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .background(if (selected) p.raised else p.panel, RoundedCornerShape(2.dp))
-                                    .border(1.dp, if (selected) p.accent else p.border.copy(alpha = 0.55f), RoundedCornerShape(2.dp))
+                                    .background(if (selected) p.raised else p.panel, RoundedCornerShape(1.dp))
+                                    .border(1.dp, if (selected) p.accent else p.border.copy(alpha = 0.55f), RoundedCornerShape(1.dp))
                                     .clickable { onSelectTrack(track.id) }
                                     .padding(horizontal = 7.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -4221,7 +4223,8 @@ private fun BrowserWorkspace(
                             val (track, clip) = entry
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .background(if (index % 2 == 0) p.panel else p.control.copy(alpha = 0.55f), RoundedCornerShape(2.dp))
+                                    .background(if (index % 2 == 0) p.panel else p.control.copy(alpha = 0.55f), RoundedCornerShape(1.dp))
+                                    .border(1.dp, p.border.copy(alpha = 0.42f), RoundedCornerShape(1.dp))
                                     .clickable { onSelectTrack(track.id) }
                                     .padding(horizontal = 7.dp, vertical = 5.dp),
                                 verticalAlignment = Alignment.CenterVertically,
