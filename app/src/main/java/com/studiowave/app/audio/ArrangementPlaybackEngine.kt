@@ -600,8 +600,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val outIndex = ((absolute - position) * 2).toInt()
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
-                        channelBuffer[outIndex] += channelWave * leftPan
-                        channelBuffer[outIndex + 1] += channelWave * rightPan
+                        val preMasterWave = if (liveMasterGain > 0f) wave / liveMasterGain else 0f
+                        channelBuffer[outIndex] += preMasterWave * leftPan
+                        channelBuffer[outIndex + 1] += preMasterWave * rightPan
                     }
                 }
 
