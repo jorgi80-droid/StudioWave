@@ -1805,6 +1805,7 @@ private fun PianoRollWorkspace(
     var horizontalScroll by remember(clip?.id) { mutableFloatStateOf(0f) }
     var verticalScroll by remember(clip?.id) { mutableIntStateOf(48) }
     var selectedNoteId by remember(clip?.id) { mutableStateOf<String?>(null) }
+    var dragOrigin by remember { mutableStateOf<Triple<String, Long, Int>?>(null) }
     var snapTicks by remember { mutableLongStateOf((timebase.ticksPerBeat / 4L).coerceAtLeast(1L)) }
     val pianoWhite = Color(0xFFD8D9DB)
     val pianoBlack = Color(0xFF383A3F)
@@ -1927,20 +1928,24 @@ private fun PianoRollWorkspace(
                             val pxPerTick = size.width / viewTicks.toFloat()
                             val tick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
                             selectedNoteId = notes.firstOrNull { it.pitch == pitch && tick >= it.startTick && tick <= it.startTick + it.durationTicks }?.id
+                            val selected = notes.firstOrNull { it.id == selectedNoteId }
+                            dragOrigin = selected?.let { Triple(it.id, it.startTick, it.pitch) }
                         },
                         onDrag = { change, drag ->
                             change.consume()
-                            val id = selectedNoteId ?: return@detectDragGestures
-                            val original = notes.firstOrNull { it.id == id } ?: return@detectDragGestures
+                            val origin = dragOrigin ?: return@detectDragGestures
+                            val original = notes.firstOrNull { it.id == origin.first } ?: return@detectDragGestures
                             val deltaTicks = (drag.x / size.width * viewTicks).toLong()
                             val deltaPitch = (-drag.y / (size.height / 48f).coerceAtLeast(1f)).toInt()
                             val step = snapTicks.coerceAtLeast(1L)
                             val moved = original.copy(
-                                startTick = (original.startTick + deltaTicks).coerceAtLeast(0L) / step * step,
-                                pitch = (original.pitch + deltaPitch).coerceIn(0, 127)
+                                startTick = (origin.second + deltaTicks).coerceAtLeast(0L) / step * step,
+                                pitch = (origin.third + deltaPitch).coerceIn(0, 127)
                             )
-                            commitNotes(notes.map { if (it.id == id) moved else it })
-                        }
+                            commitNotes(notes.map { if (it.id == origin.first) moved else it })
+                        },
+                        onDragEnd = { dragOrigin = null },
+                        onDragCancel = { dragOrigin = null }
                     )
                 }) {
                     val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
