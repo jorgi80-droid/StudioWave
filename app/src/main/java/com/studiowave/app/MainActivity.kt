@@ -188,7 +188,7 @@ internal fun calculatePinchZoomFrame(
 internal fun pianoRollVisibleSteps(stepsPerBar: Int, zoomX: Float): Int {
     val safeBarSteps = stepsPerBar.coerceAtLeast(1)
     val safeZoom = zoomX.coerceIn(0.35f, 8f)
-    return (safeBarSteps.toFloat() * 2f / safeZoom).roundToInt().coerceIn(4, 96)
+    return (safeBarSteps.toFloat() * 2f / safeZoom).roundToInt().coerceIn(4, 4096)
 }
 
 /**
@@ -276,8 +276,9 @@ internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Lo
         val noteStart = note.startTick.coerceAtLeast(0L)
         val noteEnd = if (noteStart > Long.MAX_VALUE - note.durationTicks.coerceAtLeast(1L)) Long.MAX_VALUE
             else noteStart + note.durationTicks.coerceAtLeast(1L)
+        val windowEnd = if (offset > Long.MAX_VALUE - windowLength) Long.MAX_VALUE else offset + windowLength
         val from = noteStart.coerceAtLeast(offset)
-        val to = noteEnd.coerceAtMost(offset + windowLength)
+        val to = noteEnd.coerceAtMost(windowEnd)
         if (to <= from) null else note.copy(
             // Keep IDs for notes that remain wholly in one piece; only a note
             // crossing the split boundary needs a new ID for its right-hand segment.

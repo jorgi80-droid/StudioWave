@@ -31,4 +31,17 @@ class PianoRollPitchRangeTest {
             assertEquals(127 - minTopPitch, pianoRollPitchScrollIndex(minTopPitch))
         }
     }
+
+    @Test
+    fun zoomOutCanShowLongClipsEvenAtFineSnapDivisions() {
+        // 1/32 notes in 4/4 means 32 steps per bar. The viewport must not cap
+        // at 96 steps (three bars), otherwise long clips cannot be overviewed.
+        assertEquals(183, pianoRollVisibleSteps(32, 0.35f))
+        assertEquals(91, pianoRollVisibleSteps(16, 0.35f))
+    }
+
+    @Test
+    fun pianoRollZoomInKeepsMinimumUsableStepWindow() {
+        assertEquals(4, pianoRollVisibleSteps(16, 8f))
+    }
 }
