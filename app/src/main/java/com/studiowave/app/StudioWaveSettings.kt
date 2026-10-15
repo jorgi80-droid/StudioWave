@@ -106,7 +106,7 @@ internal fun StudioWaveSettingsScreen(
                         color = p.muted, fontSize = 9.sp)
                 }
                 Button(onClick = onClose, modifier = Modifier.size(width = 40.dp, height = 32.dp), contentPadding = PaddingValues(0.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text), shape = RoundedCornerShape(5.dp)) { Text("✕", fontWeight = FontWeight.Bold) }
+                    colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text), shape = RoundedCornerShape(1.dp)) { Text("✕", fontWeight = FontWeight.Bold) }
             }
             HorizontalDivider(color = p.border)
             when (section) {
@@ -143,8 +143,8 @@ internal fun StudioWaveSettingsScreen(
                     SettingsSection("CONTROL SURFACE", "Shared palette for knobs, faders and buttons.", p)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border, RoundedCornerShape(1.dp)).padding(8.dp)) { Text("KNOB", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); StudioWaveKnobPreview(p) }
-                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(6.dp)).padding(8.dp)) { Text("FADER", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); StudioWaveFaderPreview(p) }
-                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(6.dp)).padding(8.dp)) { Text("BUTTON", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); Surface(color = p.control, shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border)) { Text("ACTIVE", color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) } }
+                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border, RoundedCornerShape(1.dp)).padding(8.dp)) { Text("FADER", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); StudioWaveFaderPreview(p) }
+                        Column(Modifier.weight(1f).background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border, RoundedCornerShape(1.dp)).padding(8.dp)) { Text("BUTTON", color = p.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold); Surface(color = p.control, shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border)) { Text("ACTIVE", color = p.accent, fontSize = 9.sp, fontWeight = FontWeight.Black, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) } }
                     }
                 }
             }
@@ -170,13 +170,13 @@ internal fun StudioWaveSettingsScreen(
 }
 
 @Composable internal fun SettingsInfoCard(title: String, body: String, p: StudioWavePalette) {
-    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(title, color = p.accent, fontSize = 8.sp, fontWeight = FontWeight.Black); Text(body, color = p.text, fontSize = 9.sp)
     }
 }
 
 @Composable internal fun SettingsChoiceRow(title: String, subtitle: String, choices: List<Pair<String, String>>, selected: String, onSelected: (String) -> Unit, p: StudioWavePalette) {
-    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(5.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+    Column(Modifier.fillMaxWidth().background(p.panel, RoundedCornerShape(1.dp)).border(1.dp, p.border.copy(alpha = 0.8f), RoundedCornerShape(1.dp)).padding(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(title, color = p.text, fontSize = 10.sp, fontWeight = FontWeight.Bold); Text(subtitle, color = p.muted, fontSize = 8.sp)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             choices.forEach { (value, label) ->
