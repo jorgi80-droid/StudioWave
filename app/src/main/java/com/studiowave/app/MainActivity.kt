@@ -76,6 +76,7 @@ private val CanvasSurface = Color(0xFF1E2024)
 private val Raised = Color(0xFF282B30)
 private val MutedText = Color(0xFFA4A8B0)
 private val Mint = Color(0xFF00D2B4)
+private val LiveOrange = Color(0xFFFFA65A)
 private val Green = Color(0xFF22C55E)
 private val Red = Color(0xFFEF4444)
 
@@ -430,14 +431,14 @@ private fun StudioWaveApp() {
     }
 
     MaterialTheme(colorScheme = darkColorScheme(
-        primary = Mint, secondary = Color(0xFFFF7644), background = Room,
+        primary = LiveOrange, secondary = Mint, background = Room,
         surface = Raised, onPrimary = Room, onBackground = Color(0xFFF8FAFC),
         onSurface = Color(0xFFF8FAFC)
     )) {
         Surface(Modifier.fillMaxSize(), color = Room) {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
                 if (audioError != null) {
-                    Surface(color = Color(0xFF4B2424), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
+                    Surface(color = Color(0xFF4B2424), shape = RoundedCornerShape(2.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
                         Text(audioError!!, color = Color(0xFFFFD4D4), fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), maxLines = 2)
                     }
                 }
@@ -522,7 +523,7 @@ private fun TransportBar(
     val buttonPanel = Color(0xFF414449)
     val textPrimary = Color(0xFFE6E7E8)
     Row(
-        Modifier.fillMaxWidth().height(45.dp).background(Color(0xFF292B2F), RoundedCornerShape(4.dp))
+        Modifier.fillMaxWidth().height(45.dp).background(Color(0xFF292B2F), RoundedCornerShape(2.dp))
             .padding(horizontal = 5.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -531,34 +532,34 @@ private fun TransportBar(
         Text("LIVE", color = Color(0xFFB5B8BD), fontSize = 7.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.width(3.dp))
         SmallAction("−") { onBpm(bpm - 1) }
-        Surface(color = livePanel, shape = RoundedCornerShape(3.dp), modifier = Modifier.width(44.dp).height(30.dp)) {
+        Surface(color = livePanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.width(44.dp).height(30.dp)) {
             Box(contentAlignment = Alignment.Center) { Text(bpm.toString(), color = textPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
         }
         SmallAction("+") { onBpm(bpm + 1) }
-        Surface(color = livePanel, shape = RoundedCornerShape(3.dp), modifier = Modifier.height(30.dp)) {
+        Surface(color = livePanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.height(30.dp)) {
             Box(Modifier.padding(horizontal = 7.dp), contentAlignment = Alignment.Center) { Text(timeSignatureLabel, color = textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
         }
         Spacer(Modifier.width(5.dp))
-        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onOpenProject)) {
+        Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(30.dp).clickable(onClick = onOpenProject)) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.FolderOpen, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
         }
-        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onSaveProject)) {
+        Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(30.dp).clickable(onClick = onSaveProject)) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Save, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
         }
-        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onUndo)) {
+        Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(30.dp).clickable(onClick = onUndo)) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Undo, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
         }
-        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(30.dp).clickable(onClick = onRedo)) {
+        Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(30.dp).clickable(onClick = onRedo)) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Redo, null, tint = textPrimary, modifier = Modifier.size(16.dp)) }
         }
         Spacer(Modifier.weight(1f))
-        Surface(color = buttonPanel, shape = RoundedCornerShape(4.dp), modifier = Modifier.size(32.dp).clickable(onClick = onStop)) {
+        Surface(color = buttonPanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(32.dp).clickable(onClick = onStop)) {
             Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Stop, null, tint = Color(0xFFD8DADD), modifier = Modifier.size(17.dp)) }
         }
-        Surface(color = if (playing) Color(0xFFFFA65A) else Color(0xFF3C4145), shape = RoundedCornerShape(4.dp), modifier = Modifier.size(width = 38.dp, height = 32.dp).clickable(onClick = onPlay)) {
+        Surface(color = if (playing) Color(0xFFFFA65A) else Color(0xFF3C4145), shape = RoundedCornerShape(2.dp), modifier = Modifier.size(width = 38.dp, height = 32.dp).clickable(onClick = onPlay)) {
             Box(contentAlignment = Alignment.Center) { Icon(if (playing) Icons.Default.Pause else Icons.Default.PlayArrow, null, tint = if (playing) Color(0xFF282A2D) else Color(0xFFE6E7E8), modifier = Modifier.size(20.dp)) }
         }
-        Surface(color = livePanel, shape = RoundedCornerShape(3.dp), modifier = Modifier.height(30.dp)) {
+        Surface(color = livePanel, shape = RoundedCornerShape(2.dp), modifier = Modifier.height(30.dp)) {
             Box(Modifier.padding(horizontal = 8.dp), contentAlignment = Alignment.Center) { Text(positionLabel, color = textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
         }
         Text("M", color = Color(0xFFB8BBC0), fontSize = 7.sp, fontWeight = FontWeight.Bold)
@@ -583,7 +584,7 @@ private fun TransportBar(
 @Composable
 private fun WorkspaceRail(selected: String, onSelect: (String) -> Unit) {
     Column(
-        Modifier.width(46.dp).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(4.dp)).padding(3.dp),
+        Modifier.width(46.dp).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(2.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
@@ -601,7 +602,7 @@ private fun RailButton(label: String, selected: Boolean, icon: androidx.compose.
     Surface(
         color = body,
         contentColor = if (selected) accent else Color(0xFFBABDC2),
-        shape = RoundedCornerShape(3.dp),
+        shape = RoundedCornerShape(2.dp),
         modifier = Modifier.fillMaxWidth().height(48.dp).clickable(onClick = onClick)
     ) {
         Box(Modifier.fillMaxSize()) {
@@ -788,7 +789,7 @@ private fun ArrangementWorkspace(
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
                 .toFloat().coerceIn(0.1f, 4f)
         }
-        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
+        Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(2.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(104.dp)) {
@@ -850,7 +851,7 @@ private fun ArrangementWorkspace(
                     if (showBottomAddTrack) {
                         Surface(
                             color = Mint,
-                            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomStart = 18.dp, bottomEnd = 6.dp),
+                            shape = RoundedCornerShape(2.dp),
                             shadowElevation = 5.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
                                 .offset(y = (addAnchorY + 8f).coerceAtLeast(0f).dp)
@@ -865,7 +866,7 @@ private fun ArrangementWorkspace(
                     if (showBottomAddTrack && addTrackMenu) {
                         Surface(
                             color = Raised,
-                            shape = RoundedCornerShape(10.dp),
+                            shape = RoundedCornerShape(2.dp),
                             shadowElevation = 8.dp,
                             modifier = Modifier.align(Alignment.TopEnd)
                                 .offset(y = (addAnchorY - 174f).coerceAtLeast(0f).dp)
@@ -1023,7 +1024,7 @@ private fun ArrangementWorkspace(
                 if (isError) {
                     Surface(
                         color = Color(0xFF3D2929).copy(alpha = 0.94f),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(2.dp),
                         modifier = Modifier.padding(4.dp).clickable { statusMessage = null }
                     ) {
                         Text(feedback, color = Color(0xFFFFD4D4), fontSize = 9.sp,
@@ -1031,7 +1032,7 @@ private fun ArrangementWorkspace(
                     }
                 }
             }
-            if (showTimelineMenu) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showTimelineMenu) Surface(color = Raised, shape = RoundedCornerShape(2.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(150.dp).padding(5.dp)) {
                     Text("TIMELINE", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     Text("Add track", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { showAddTrack = true; showTimelineMenu = false }.padding(9.dp))
@@ -1039,7 +1040,7 @@ private fun ArrangementWorkspace(
                     Text("Import audio", color = Color.White, fontSize = 11.sp, modifier = Modifier.fillMaxWidth().clickable { onOpenEditor("BROWSER", null); showTimelineMenu = false }.padding(9.dp))
                 }
             }
-            if (showAddTrack) Surface(color = Raised, shape = RoundedCornerShape(12.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
+            if (showAddTrack) Surface(color = Raised, shape = RoundedCornerShape(2.dp), shadowElevation = 8.dp, modifier = Modifier.padding(6.dp)) {
                 Column(Modifier.width(155.dp).padding(5.dp)) {
                     Text("ADD TRACK", color = Mint, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(7.dp))
                     listOf("Virtual instrument / MIDI" to "midi", "Audio track" to "audio", "Drum Step Sequencer" to "drum").forEach { pair ->
@@ -1097,7 +1098,7 @@ private fun DrumSequencerWorkspace(track: StudioTrack?, onProjectChange: (Studio
             (0..15).forEach { step ->
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.fillMaxWidth().height(70.dp)
-                        .background(if (steps[step]) Mint else if (step % 4 == 0) Color(0xFF343A43) else Raised, RoundedCornerShape(4.dp))
+                        .background(if (steps[step]) Mint else if (step % 4 == 0) Color(0xFF343A43) else Raised, RoundedCornerShape(2.dp))
                         .clickable {
                             if (track != null && clip != null) {
                                 val updated = steps.toMutableList().also { it[step] = !it[step] }
@@ -1151,12 +1152,12 @@ private fun AudioEditorWorkspace(track: StudioTrack?, onBack: () -> Unit) {
         Row(Modifier.fillMaxWidth().height(30.dp), verticalAlignment = Alignment.CenterVertically) {
             Text((track?.name ?: "AUDIO").uppercase() + " • AUDIO EDITOR", color = Color.White, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            Surface(color = Raised, shape = RoundedCornerShape(6.dp), modifier = Modifier.size(28.dp).clickable { onBack() }) {
+            Surface(color = Raised, shape = RoundedCornerShape(2.dp), modifier = Modifier.size(28.dp).clickable { onBack() }) {
                 Box(contentAlignment = Alignment.Center) { Text("×", color = Color.White, fontSize = 20.sp) }
             }
         }
         Spacer(Modifier.height(12.dp))
-        Box(Modifier.fillMaxWidth().weight(1f).background(Raised, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().weight(1f).background(Raised, RoundedCornerShape(2.dp)), contentAlignment = Alignment.Center) {
             if (waveform.isNotEmpty()) {
                 Canvas(Modifier.fillMaxSize().padding(12.dp)) {
                     val mid = size.height / 2f
@@ -1199,10 +1200,10 @@ private fun TrackHeader(
     Row(
         Modifier.fillMaxWidth().offset(y = ((rowTopDp - scrollTracks) * verticalZoom).dp)
             .height((rowHeightDp * verticalZoom).dp).padding(bottom = 2.dp)
-            .background(Color(0xFF26282D), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp),
+            .background(Color(0xFF26282D), RoundedCornerShape(2.dp)).padding(horizontal = 5.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(3.dp)).clickable { onColorTap() })
+        Box(Modifier.width(6.dp).height(45.dp).background(accent, RoundedCornerShape(2.dp)).clickable { onColorTap() })
         Column(Modifier.weight(1f).combinedClickable(onClick = onDoubleTap, onDoubleClick = onDoubleTap, onLongClick = onDoubleTap)) {
             Text(track.name, fontSize = 9.sp, color = Color(0xFFF8FAFC), fontWeight = FontWeight.Bold, maxLines = 1)
             Text(track.kind.uppercase(), fontSize = 7.sp, color = MutedText)
@@ -1212,7 +1213,7 @@ private fun TrackHeader(
                 if (track.kind == "audio") {
                     Box(
                         Modifier.size(width = 24.dp, height = 19.dp)
-                            .background(Color(0xFF17443D), RoundedCornerShape(5.dp))
+                            .background(Color(0xFF17443D), RoundedCornerShape(2.dp))
                             .pointerInput(track.id) {
                                 detectHorizontalDragGestures(
                                     onDragStart = { scratchDelta = 0f },
@@ -1231,7 +1232,7 @@ private fun TrackHeader(
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Box(
                 Modifier.size(width = 23.dp, height = 18.dp)
-                    .background(Color.White.copy(alpha = 0.10f), RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.10f), RoundedCornerShape(2.dp))
                     .pointerInput(track.id, rowTopDp, rowHeightDp) {
                         detectDragGestures(
                             onDragStart = { reorderDelta = 0f },
@@ -1244,7 +1245,7 @@ private fun TrackHeader(
             ) { Text("⠿", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
             Box(
                 Modifier.size(width = 23.dp, height = 18.dp)
-                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+                    .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(2.dp))
                     .pointerInput(track.id, verticalZoom, rowHeightDp) {
                         detectDragGestures(
                             onDragStart = { resizeDelta = 0f },
@@ -1572,8 +1573,8 @@ private fun TimelineGrid(
                                 .padding(top = 7.dp, bottom = 7.dp)
                                 .width(clipWidthDp.dp)
                                 .fillMaxHeight()
-                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.94f else 0.76f), RoundedCornerShape(3.dp))
-                                .then(if (selectedClip == clip.id) Modifier.border(1.5.dp, Color(0xFFFFE8CB), RoundedCornerShape(3.dp)) else Modifier)
+                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.94f else 0.76f), RoundedCornerShape(2.dp))
+                                .then(if (selectedClip == clip.id) Modifier.border(1.5.dp, Color(0xFFFFE8CB), RoundedCornerShape(2.dp)) else Modifier)
                                 .pointerInput(clip.id, trackIndex, zoom, trackHeightPx) {
                                     // The trailing grip owns resize gestures. Do not let the clip-body
                                     // drag handler consume those pointer changes first.
@@ -1786,7 +1787,7 @@ private fun TimelineGrid(
             Column(
                 Modifier.offset(x = x, y = y)
                     .width(menuWidth)
-                    .background(Color(0xFF30343A), RoundedCornerShape(12.dp))
+                    .background(Color(0xFF30343A), RoundedCornerShape(2.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -1800,7 +1801,7 @@ private fun TimelineGrid(
                             val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
                             Surface(
                                 color = if (action == "Open editor") Mint.copy(alpha = 0.18f) else Color(0xFF23262B),
-                                shape = RoundedCornerShape(8.dp),
+                                shape = RoundedCornerShape(2.dp),
                                 modifier = Modifier.weight(1f).height(29.dp).clickable {
                                     if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
                                 }
@@ -1835,7 +1836,7 @@ private fun PianoRollWorkspace(
     }
     var horizontalZoom by remember(clip?.id) { mutableFloatStateOf(1f) }
     var horizontalScroll by remember(clip?.id) { mutableFloatStateOf(0f) }
-    var verticalScroll by remember(clip?.id) { mutableIntStateOf(24) }
+    var verticalScroll by remember(clip?.id) { mutableIntStateOf(48) }
     var selectedNoteId by remember(clip?.id) { mutableStateOf<String?>(null) }
     var dragOrigin by remember { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
     var dragPreview by remember { mutableStateOf<com.studiowave.app.data.MidiNote?>(null) }
@@ -1847,14 +1848,18 @@ private fun PianoRollWorkspace(
     val pianoBlack = Color(0xFF383A3F)
     val accent = Color(0xFFFFA65A)
     val ticksPerBar = timebase.ticksPerBar.coerceAtLeast(1L)
+    val visiblePitchRows = PIANO_VISIBLE_PITCH_ROWS
+    val maximumTick = maxArrangementTick(timebase)
     val visibleBars = (2.0 / horizontalZoom.coerceAtLeast(0.25f)).coerceAtLeast(0.5)
     val clipEnd = clip?.lengthTicks?.coerceAtLeast(ticksPerBar) ?: ticksPerBar * 8L
     val viewTicks = (ticksPerBar * visibleBars).toLong().coerceAtLeast(1L)
     fun commitNotes(updated: List<com.studiowave.app.data.MidiNote>) {
         if (track == null || clip == null) return
+        val safeNotes = normalizeMidiNotes(updated, maximumTick, StudioProject.MAX_NOTES_PER_CLIP)
+        val nextClipLength = clipLengthForNotes(clip.lengthTicks, safeNotes, ticksPerBar, maximumTick)
         onProjectChange(project.copy(tracks = project.tracks.map { item ->
             if (item.id == track.id) item.copy(clips = item.clips.map { c ->
-                if (c.id == clip.id) c.copy(midiNotes = updated) else c
+                if (c.id == clip.id) c.copy(midiNotes = safeNotes, lengthTicks = nextClipLength) else c
             }) else item
         }))
     }
@@ -1875,7 +1880,7 @@ private fun PianoRollWorkspace(
                 val step = (timebase.ticksPerBeat / divisor).coerceAtLeast(1L)
                 Surface(
                     color = if (snapTicks == step) accent.copy(alpha = 0.24f) else Color(0xFF42454A),
-                    shape = RoundedCornerShape(3.dp),
+                    shape = RoundedCornerShape(2.dp),
                     modifier = Modifier.height(19.dp).clickable { snapTicks = step }
                 ) {
                     Box(Modifier.padding(horizontal = 5.dp), contentAlignment = Alignment.Center) {
@@ -1896,13 +1901,13 @@ private fun PianoRollWorkspace(
                 Canvas(Modifier.fillMaxSize().pointerInput(verticalScroll) {
                     detectDragGestures { change, drag ->
                         change.consume()
-                        verticalScroll = (verticalScroll - (drag.y / (size.height / 48f).coerceAtLeast(1f)).toInt()).coerceIn(0, 80)
+                        verticalScroll = (verticalScroll - (drag.y / (size.height / visiblePitchRows.toFloat()).coerceAtLeast(1f)).toInt()).coerceIn(0, 128 - visiblePitchRows)
                     }
                 }) {
-                    val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
+                    val rowHeight = (size.height / visiblePitchRows.toFloat()).coerceAtLeast(1f)
                     val names = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
-                    for (row in 0 until 48) {
-                        val pitch = (verticalScroll + 47 - row).coerceIn(0, 127)
+                    for (row in 0 until visiblePitchRows) {
+                        val pitch = (verticalScroll + visiblePitchRows - 1 - row).coerceIn(0, 127)
                         val black = pitch % 12 in setOf(1, 3, 6, 8, 10)
                         val y = row * rowHeight
                         drawRect(if (black) pianoBlack else pianoWhite, Offset(0f, y), Size(size.width, rowHeight))
@@ -1939,28 +1944,47 @@ private fun PianoRollWorkspace(
                     }
                 }
                 Canvas(Modifier.fillMaxSize().pointerInput(track?.id, clip?.id, notes, horizontalZoom, horizontalScroll, verticalScroll, snapTicks) {
-                    detectTapGestures { point ->
-                        if (track == null || clip == null) return@detectTapGestures
-                        val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
-                        val pitch = (verticalScroll + 47 - (point.y / rowHeight).toInt()).coerceIn(0, 127)
-                        val pxPerTick = size.width / viewTicks.toFloat()
-                        val rawTick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
-                        val startTick = ((rawTick + snapTicks / 2L) / snapTicks * snapTicks).coerceAtLeast(0L)
-                        val existing = notes.firstOrNull { it.pitch == pitch && startTick >= it.startTick && startTick < it.startTick + it.durationTicks }
-                        if (existing != null) {
-                            selectedNoteId = existing.id
-                            commitNotes(notes.filterNot { it.id == existing.id })
-                        } else {
-                            val note = com.studiowave.app.data.MidiNote(pitch = pitch, startTick = startTick, durationTicks = snapTicks.coerceAtLeast(1L))
-                            selectedNoteId = note.id
-                            commitNotes(notes + note)
+                    detectTapGestures(
+                        onTap = { point ->
+                            if (track == null || clip == null) return@detectTapGestures
+                            val rowHeight = (size.height / visiblePitchRows.toFloat()).coerceAtLeast(1f)
+                            val pitch = pianoPitchForRow(verticalScroll, (point.y / rowHeight).toInt(), visiblePitchRows)
+                            val pxPerTick = size.width / viewTicks.toFloat()
+                            val rawTick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
+                            val step = snapTicks.coerceAtLeast(1L)
+                            val startTick = snapMidiStartTick(rawTick, step, maximumTick)
+                            val existing = notes.firstOrNull { note ->
+                                note.pitch == pitch && startTick >= note.startTick && startTick < midiNoteEndTick(note)
+                            }
+                            if (existing != null) {
+                                // Tapping selects; it must not silently destroy an existing note.
+                                selectedNoteId = existing.id
+                            } else {
+                                val note = com.studiowave.app.data.MidiNote(pitch = pitch, startTick = startTick, durationTicks = step)
+                                selectedNoteId = note.id
+                                commitNotes(notes + note)
+                            }
+                        },
+                        onLongPress = { point ->
+                            if (track == null || clip == null) return@detectTapGestures
+                            val rowHeight = (size.height / visiblePitchRows.toFloat()).coerceAtLeast(1f)
+                            val pitch = pianoPitchForRow(verticalScroll, (point.y / rowHeight).toInt(), visiblePitchRows)
+                            val pxPerTick = size.width / viewTicks.toFloat()
+                            val rawTick = (horizontalScroll + point.x / pxPerTick).toLong().coerceAtLeast(0L)
+                            val existing = notes.firstOrNull { note ->
+                                note.pitch == pitch && rawTick >= note.startTick && rawTick < midiNoteEndTick(note)
+                            }
+                            if (existing != null) {
+                                selectedNoteId = null
+                                commitNotes(notes.filterNot { it.id == existing.id })
+                            }
                         }
-                    }
+                    )
                 }.pointerInput(track?.id, clip?.id, horizontalZoom, horizontalScroll, verticalScroll, snapTicks) {
                     detectDragGestures(
                         onDragStart = { point ->
-                            val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
-                            val pitch = (verticalScroll + 47 - (point.y / rowHeight).toInt()).coerceIn(0, 127)
+                            val rowHeight = (size.height / visiblePitchRows.toFloat()).coerceAtLeast(1f)
+                            val pitch = (verticalScroll + visiblePitchRows - 1 - (point.y / rowHeight).toInt()).coerceIn(0, 127)
                             val pxPerTick = size.width / viewTicks.toFloat()
                             val handleTolerance = 12.dp.toPx()
                             val selected = notes.firstOrNull { note ->
@@ -1988,27 +2012,13 @@ private fun PianoRollWorkspace(
                             dragTotalX += drag.x
                             dragTotalY += drag.y
                             val deltaTicks = (dragTotalX / size.width * viewTicks).toLong()
-                            val deltaPitch = (-dragTotalY / (size.height / 48f).coerceAtLeast(1f)).toInt()
-                            val step = snapTicks.coerceAtLeast(1L)
-                            val updated = when (dragMode) {
-                                "RIGHT" -> {
-                                    val rawLength = (origin.durationTicks + deltaTicks).coerceAtLeast(step)
-                                    val snappedLength = (((rawLength + step / 2L) / step) * step).coerceAtLeast(step)
-                                    origin.copy(durationTicks = snappedLength)
-                                }
-                                "LEFT" -> {
-                                    val fixedEnd = origin.startTick + origin.durationTicks
-                                    val latestStart = (fixedEnd - step).coerceAtLeast(0L)
-                                    val rawStart = (origin.startTick + deltaTicks).coerceIn(0L, latestStart)
-                                    val snappedStart = ((rawStart + step / 2L) / step * step).coerceIn(0L, latestStart)
-                                    origin.copy(startTick = snappedStart, durationTicks = (fixedEnd - snappedStart).coerceAtLeast(step))
-                                }
-                                else -> origin.copy(
-                                    startTick = (origin.startTick + deltaTicks).coerceAtLeast(0L) / step * step,
-                                    pitch = (origin.pitch + deltaPitch).coerceIn(0, 127)
-                                )
+                            val deltaPitch = (-dragTotalY / (size.height / visiblePitchRows.toFloat()).coerceAtLeast(1f)).toInt()
+                            val mode = when (dragMode) {
+                                "LEFT" -> MidiNoteDragMode.RESIZE_LEFT
+                                "RIGHT" -> MidiNoteDragMode.RESIZE_RIGHT
+                                else -> MidiNoteDragMode.MOVE
                             }
-                            dragPreview = updated
+                            dragPreview = updateMidiNoteFromDrag(origin, mode, deltaTicks, deltaPitch, snapTicks, maximumTick)
                         },
                         onDragEnd = {
                             val preview = dragPreview
@@ -2027,13 +2037,13 @@ private fun PianoRollWorkspace(
                         }
                     )
                 }) {
-                    val rowHeight = (size.height / 48f).coerceAtLeast(8.dp.toPx())
+                    val rowHeight = (size.height / visiblePitchRows.toFloat()).coerceAtLeast(1f)
                     val pxPerTick = size.width / viewTicks.toFloat()
                     val firstBar = (horizontalScroll / ticksPerBar).toInt().coerceAtLeast(0)
                     val lastBar = firstBar + kotlin.math.ceil(viewTicks.toDouble() / ticksPerBar).toInt() + 1
-                    for (row in 0..48) {
+                    for (row in 0..visiblePitchRows) {
                         val y = row * rowHeight
-                        val pitch = verticalScroll + 47 - row
+                        val pitch = verticalScroll + visiblePitchRows - 1 - row
                         drawLine(if (pitch % 12 == 0) Color(0xFF65686E) else Color(0xFF3B3D42), Offset(0f, y), Offset(size.width, y), if (pitch % 12 == 0) 1.15f else 0.45f)
                     }
                     for (bar in firstBar..lastBar) {
@@ -2058,13 +2068,17 @@ private fun PianoRollWorkspace(
                     notes.forEach { storedNote ->
                         val note = if (dragPreview?.id == storedNote.id) dragPreview!! else storedNote
                         val x = (note.startTick - horizontalScroll) * pxPerTick
-                        val y = (verticalScroll + 47 - note.pitch) * rowHeight
+                        val y = (verticalScroll + visiblePitchRows - 1 - note.pitch) * rowHeight
                         val width = note.durationTicks * pxPerTick
                         if (x + width >= 0f && x <= size.width && y >= -rowHeight && y <= size.height) {
                             val selected = selectedNoteId == note.id
-                            drawRoundRect(if (selected) Color(0xFFFFBB7D) else accent, Offset(x, y + 1f), Size(width.coerceAtLeast(3f), rowHeight - 2f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                            drawRoundRect(if (selected) Color(0xFFFFBB7D) else accent, Offset(x, y + 1f), Size(width.coerceAtLeast(3f), (rowHeight - 2f).coerceAtLeast(1f)), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
                             drawLine(Color(0xFFFFE0C4), Offset(x + 2f, y + 2f), Offset((x + width - 2f).coerceAtLeast(x + 2f), y + 2f), 1f)
-                            if (width > 14f) drawLine(Color(0xFF7B4A2A), Offset(x + width - 4f, y + 2f), Offset(x + width - 4f, y + rowHeight - 2f), 2f)
+                            if (selected && width >= 7f) {
+                                val gripWidth = 2.5f
+                                drawRect(Color(0xFF6E472C), Offset(x + 1f, y + 2f), Size(gripWidth, (rowHeight - 4f).coerceAtLeast(1f)))
+                                drawRect(Color(0xFF6E472C), Offset((x + width - gripWidth - 1f).coerceAtLeast(x + 1f), y + 2f), Size(gripWidth, (rowHeight - 4f).coerceAtLeast(1f)))
+                            }
                         }
                     }
                 }
@@ -2139,10 +2153,10 @@ private fun MixerWorkspace(
                     Text(track.name.uppercase(), color = Color(0xFF202124), fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 5.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Surface(color = if (track.muted) Color(0xFFE85D5D) else panelHeader, shape = RoundedCornerShape(3.dp), modifier = Modifier.weight(1f).height(23.dp).clickable { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) }) {
+                    Surface(color = if (track.muted) Color(0xFFE85D5D) else panelHeader, shape = RoundedCornerShape(2.dp), modifier = Modifier.weight(1f).height(23.dp).clickable { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(muted = !it.muted) else it })) }) {
                         Box(contentAlignment = Alignment.Center) { Text("M", color = if (track.muted) Color.White else textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
                     }
-                    Surface(color = if (track.solo) Color(0xFFFFB347) else panelHeader, shape = RoundedCornerShape(3.dp), modifier = Modifier.weight(1f).height(23.dp).clickable { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) }) {
+                    Surface(color = if (track.solo) Color(0xFFFFB347) else panelHeader, shape = RoundedCornerShape(2.dp), modifier = Modifier.weight(1f).height(23.dp).clickable { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) }) {
                         Box(contentAlignment = Alignment.Center) { Text("S", color = if (track.solo) Color(0xFF202124) else textPrimary, fontSize = 8.sp, fontWeight = FontWeight.Bold) }
                     }
                 }
@@ -2245,8 +2259,8 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
         selectedPlace != "User Library" &&
             (query.isBlank() || entry.first.contains(query, ignoreCase = true) || entry.second.contains(query, ignoreCase = true))
     }
-    Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(4.dp)).padding(6.dp)) {
-        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2D3034), RoundedCornerShape(3.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(2.dp)).padding(6.dp)) {
+        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2D3034), RoundedCornerShape(2.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("BROWSER", color = Color(0xFFE8E9EB), fontWeight = FontWeight.Black, fontSize = 10.sp)
             Spacer(Modifier.width(8.dp))
             Box(Modifier.width(3.dp).height(13.dp).background(Color(0xFFFFA65A), RoundedCornerShape(1.dp)))
@@ -2254,14 +2268,14 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
             Spacer(Modifier.weight(1f))
             Text("CC0 / OFFLINE ASSETS", color = Color(0xFF75DCCC), fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.width(7.dp))
-            Button(onClick = onImportAudio, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 0.dp), modifier = Modifier.height(25.dp), shape = RoundedCornerShape(3.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF44484E))) {
+            Button(onClick = onImportAudio, contentPadding = PaddingValues(horizontal = 9.dp, vertical = 0.dp), modifier = Modifier.height(25.dp), shape = RoundedCornerShape(2.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF44484E))) {
                 Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color(0xFFFFA65A), modifier = Modifier.size(12.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("IMPORT AUDIO", fontSize = 7.sp, color = Color.White)
             }
         }
         Spacer(Modifier.height(5.dp))
-        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF191B1E), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(3.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF191B1E), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(2.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.LibraryMusic, contentDescription = null, tint = Color(0xFF9EA4AC), modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(7.dp))
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -2273,7 +2287,7 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
         }
         Spacer(Modifier.height(5.dp))
         Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Column(Modifier.width(142.dp).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF41454B), RoundedCornerShape(3.dp)).padding(5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(Modifier.width(142.dp).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF41454B), RoundedCornerShape(2.dp)).padding(5.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("PLACES", color = Color(0xFF9EA4AC), fontSize = 7.sp, fontWeight = FontWeight.Black)
                 listOf("Factory", "DirectWave", "Drums", "User Library").forEach { label ->
                     val active = selectedPlace == label
@@ -2294,7 +2308,7 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
                 Text("STUDIOWAVE", color = Color(0xFFFFA65A), fontSize = 7.sp, fontWeight = FontWeight.Black)
                 Text("LOCAL PROJECT", color = Color(0xFF818791), fontSize = 6.sp)
             }
-            Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF41454B), RoundedCornerShape(3.dp)).padding(6.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF292B2F), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF41454B), RoundedCornerShape(2.dp)).padding(6.dp)) {
                 Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${selectedPlace.uppercase()} / FACTORY ONE-SHOTS", color = Color(0xFFE7E9EC), fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
                     Spacer(Modifier.weight(1f))
@@ -2354,8 +2368,8 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
         Triple("BOUNCE KICK 01", "bounce-kick-01.wav", "KICK / BOUNCE"),
         Triple("VINTAGE KICK 01", "vintage-kick-01.wav", "KICK / VINTAGE")
     )
-    Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(4.dp)).border(1.dp, Color(0xFF45494F), RoundedCornerShape(4.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2A2D31), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF44484E), RoundedCornerShape(3.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxSize().background(Color(0xFF202225), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF45494F), RoundedCornerShape(2.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth().height(30.dp).background(Color(0xFF2A2D31), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF44484E), RoundedCornerShape(2.dp)).padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.size(8.dp).background(Color(0xFFFFA52E), RoundedCornerShape(50.dp)))
             Text("DIRECTWAVE", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
             Text("SAMPLER  /  INSTRUMENT DEVICE", color = Color(0xFFB8BDC5), fontSize = 8.sp)
@@ -2366,10 +2380,10 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
             SmallAction("BACK") { onBack() }
         }
         Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Column(Modifier.width(176.dp).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(3.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(Modifier.width(176.dp).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(2.dp)).padding(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("FACTORY SAMPLES", color = Color(0xFFC0C5CC), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 samples.forEachIndexed { index, sample ->
-                    Row(Modifier.fillMaxWidth().height(34.dp).background(if (selectedSample == index) Color(0xFF4A3B31) else Color(0xFF25272B), RoundedCornerShape(3.dp)).then(if (selectedSample == index) Modifier.border(1.dp, Color(0xFF765239), RoundedCornerShape(3.dp)) else Modifier).clickable { selectedSample = index }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().height(34.dp).background(if (selectedSample == index) Color(0xFF4A3B31) else Color(0xFF25272B), RoundedCornerShape(2.dp)).then(if (selectedSample == index) Modifier.border(1.dp, Color(0xFF765239), RoundedCornerShape(2.dp)) else Modifier).clickable { selectedSample = index }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.width(3.dp).height(21.dp).background(if (selectedSample == index) Color(0xFFFFB347) else Color(0xFF5F6670), RoundedCornerShape(2.dp)))
                         Spacer(Modifier.width(6.dp))
                         Column(Modifier.weight(1f)) {
@@ -2387,13 +2401,13 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
                 }
                 Text("CC0 source recorded with assets", color = Color(0xFF89919B), fontSize = 6.sp)
             }
-            Column(Modifier.weight(1.05f).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(3.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.weight(1.05f).fillMaxHeight().background(Color(0xFF2D3034), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF464A50), RoundedCornerShape(2.dp)).padding(7.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("SAMPLE VIEW", color = Color(0xFFC0C5CC), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                     Text("START 0%    END 100%", color = Color(0xFF9299A3), fontSize = 7.sp)
                 }
-                Canvas(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF1B1D20), RoundedCornerShape(3.dp)).border(1.dp, Color(0xFF41464D), RoundedCornerShape(3.dp)).padding(8.dp)) {
+                Canvas(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF1B1D20), RoundedCornerShape(2.dp)).border(1.dp, Color(0xFF41464D), RoundedCornerShape(2.dp)).padding(8.dp)) {
                     val center = size.height / 2f
                     val count = 172
                     val profile = when (selectedSample) { 0 -> 0.96f; 1 -> 0.74f; 2 -> 0.32f; 3 -> 0.82f; 4 -> 0.54f; else -> 0.42f }
@@ -2441,7 +2455,7 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
                 DeviceSection("DEVICE CHAIN", Modifier.weight(0.73f)) {
                     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         listOf("EQ EIGHT", "SATURATOR", "REVERB").forEachIndexed { index, name ->
-                            Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF24262A), RoundedCornerShape(3.dp)).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                            Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF24262A), RoundedCornerShape(2.dp)).padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                                 Box(Modifier.size(6.dp).background(if (index == 0) Color(0xFFFFB347) else Color(0xFF747B85), RoundedCornerShape(50.dp)))
                                 Spacer(Modifier.height(3.dp))
                                 Text(name, color = Color(0xFFBFC3CB), fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -2460,8 +2474,8 @@ private fun DirectWaveWorkspace(onOpenBrowser: () -> Unit, onBack: () -> Unit) {
 private fun DeviceSection(title: String, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier.fillMaxHeight()
-            .background(Color(0xFF303338), RoundedCornerShape(3.dp))
-            .border(1.dp, Color(0xFF484C52), RoundedCornerShape(3.dp))
+            .background(Color(0xFF303338), RoundedCornerShape(2.dp))
+            .border(1.dp, Color(0xFF484C52), RoundedCornerShape(2.dp))
             .padding(5.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -2525,7 +2539,7 @@ private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float)
     var decay by remember { mutableFloatStateOf(0.28f) }
     var sustain by remember { mutableFloatStateOf(0.7f) }
     var release by remember { mutableFloatStateOf(0.35f) }
-    Column(Modifier.fillMaxWidth().height(102.dp).background(Color(0xFF2D3034), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+    Column(Modifier.fillMaxWidth().height(102.dp).background(Color(0xFF2D3034), RoundedCornerShape(2.dp)).padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Box(Modifier.size(6.dp).background(Color(0xFFFFA52E), RoundedCornerShape(50.dp)))
             Text("DIRECTWAVE", fontSize = 8.sp, fontWeight = FontWeight.Black, color = Color.White)
@@ -2557,7 +2571,7 @@ private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float)
             DeviceSection("FX CHAIN", Modifier.weight(1.2f)) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     listOf("EQ", "SAT", "REV").forEachIndexed { index, label ->
-                        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF24262A), RoundedCornerShape(3.dp)).padding(3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+                        Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF24262A), RoundedCornerShape(2.dp)).padding(3.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Box(Modifier.size(5.dp).background(if (index == 0) Color(0xFF75DCCC) else Color(0xFF646B75), RoundedCornerShape(50.dp)))
                             Spacer(Modifier.height(2.dp))
                             Text(label, color = Color(0xFFBFC3CB), fontSize = 6.sp, fontWeight = FontWeight.Bold)
@@ -2589,7 +2603,7 @@ private fun FloatingTimelineControl(label: String, description: String, onClick:
 @Composable
 private fun SmallAction(label: String, onClick: () -> Unit) {
     Button(onClick = onClick, modifier = Modifier.height(25.dp), contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
-        shape = RoundedCornerShape(4.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34383F), contentColor = Color(0xFFE4E8EF))) {
+        shape = RoundedCornerShape(2.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF34383F), contentColor = Color(0xFFE4E8EF))) {
         Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold)
     }
 }
@@ -2597,7 +2611,7 @@ private fun SmallAction(label: String, onClick: () -> Unit) {
 @Composable
 private fun SmallIconButton(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, onClick: () -> Unit) {
     Button(onClick = onClick, modifier = Modifier.size(29.dp), contentPadding = PaddingValues(0.dp),
-        shape = RoundedCornerShape(5.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF353940), contentColor = tint)) {
+        shape = RoundedCornerShape(2.dp), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF353940), contentColor = tint)) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
     }
 }

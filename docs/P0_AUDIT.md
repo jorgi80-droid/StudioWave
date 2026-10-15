@@ -3,6 +3,7 @@
 ## Implemented in the current Android-native source
 - Kotlin/Jetpack Compose landscape workspaces and the Arrangement timeline.
 - Shared musical timebase/viewport helpers for PPQ, meter, snap divisions, coordinate mapping and zoom anchors. The viewport caps the Arrangement at 1800 bars, clamps pan/seek/anchor placement to the visible musical extent, and keeps ruler/clip transforms on a shared fractional-tick scale.
+- Piano Roll edits use tested pure geometry for note move/resize/snapping and note-data bounds; tapping selects, long-press removes, selected notes expose left/right grips, visible pitch rows fit the canvas, and longer notes extend the MIDI pattern clip to the required bar.
 - Bounded snap arithmetic, compatible-type clip moves/pastes, and robust drag/resize coordinate conversions.
 - JSON project model with entity limits, autosave to app-private storage, and bounded .sdaw UTF-8 JSON import/export.
 - Arrangement playback path that decodes source-linked audio off the real-time thread and schedules audio clips, synthesized MIDI notes and drum steps.
