@@ -65,6 +65,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlin.math.roundToInt
+import kotlin.math.pow
 import kotlin.math.absoluteValue
 import kotlin.math.roundToLong
 import org.json.JSONObject
@@ -125,6 +126,33 @@ internal fun choosePreferredRefreshRate(supportedRates: Iterable<Float>): Float?
     supportedRates.asSequence()
         .filter { it.isFinite() && it >= 90f && it <= 120f }
         .maxOrNull()
+
+
+/**
+ * Convert a normalized vertical fader position to a linear gain using an audio-style
+ * logarithmic taper. A zero fraction is a true mute; the top of each fader is that
+ * control's supported maximum. The dB domain below the maximum is -60 dB.
+ */
+internal fun mixerFaderGainAtFraction(fraction: Float, maximumGain: Float): Float {
+    val maxGain = maximumGain.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val normalized = fraction.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+    if (normalized <= 0f) return 0f
+    val maxDb = 20.0 * kotlin.math.log10(maxGain.toDouble())
+    val minDb = minOf(-60.0, maxDb - 60.0)
+    val db = minDb + (maxDb - minDb) * normalized.toDouble()
+    return (10.0.pow(db / 20.0)).toFloat().coerceIn(0f, maxGain)
+}
+
+/** Inverse of [mixerFaderGainAtFraction], used to render the fader cap at its real gain. */
+internal fun mixerFaderFractionForGain(gain: Float, maximumGain: Float): Float {
+    val maxGain = maximumGain.takeIf { it.isFinite() && it > 0f } ?: 1f
+    val value = gain.takeIf { it.isFinite() }?.coerceIn(0f, maxGain) ?: 0f
+    if (value <= 0f) return 0f
+    val maxDb = 20.0 * kotlin.math.log10(maxGain.toDouble())
+    val minDb = minOf(-60.0, maxDb - 60.0)
+    val valueDb = 20.0 * kotlin.math.log10(value.toDouble())
+    return ((valueDb - minDb) / (maxDb - minDb)).toFloat().coerceIn(0f, 1f)
+}
 
 
 /**
@@ -3768,7 +3796,7 @@ private fun MixerWorkspace(
                                 detectDragGestures(
                                     onDragStart = { start ->
                                         val height = size.height.coerceAtLeast(1).toFloat()
-                                        val value = (1f - start.y / height).coerceIn(0f, 1f) * 1.5f
+                                        val value = mixerFaderGainAtFraction(1f - start.y / height, 1.5f)
                                         val current = latestProject
                                         onProjectChange(current.copy(tracks = current.tracks.map {
                                             if (it.id == track.id) it.copy(volume = value) else it
@@ -3777,7 +3805,7 @@ private fun MixerWorkspace(
                                     onDrag = { change, _ ->
                                         change.consume()
                                         val height = size.height.coerceAtLeast(1).toFloat()
-                                        val value = (1f - change.position.y / height).coerceIn(0f, 1f) * 1.5f
+                                        val value = mixerFaderGainAtFraction(1f - change.position.y / height, 1.5f)
                                         val current = latestProject
                                         onProjectChange(current.copy(tracks = current.tracks.map {
                                             if (it.id == track.id) it.copy(volume = value) else it
@@ -3788,7 +3816,7 @@ private fun MixerWorkspace(
                             .pointerInput(track.id) {
                                 detectTapGestures(onTap = { position ->
                                     val height = size.height.coerceAtLeast(1).toFloat()
-                                    val value = (1f - position.y / height).coerceIn(0f, 1f) * 1.5f
+                                    val value = mixerFaderGainAtFraction(1f - position.y / height, 1.5f)
                                     val current = latestProject
                                     onProjectChange(current.copy(tracks = current.tracks.map {
                                         if (it.id == track.id) it.copy(volume = value) else it
@@ -3808,7 +3836,7 @@ private fun MixerWorkspace(
                             drawLine(mixerPalette.grid.copy(alpha = 0.72f),
                                 Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
                         }
-                        val fraction = track.volume.coerceIn(0f, 1.5f) / 1.5f
+                        val fraction = mixerFaderFractionForGain(track.volume, 1.5f)
                         val thumbY = railBottom - fraction * (railBottom - railTop)
                         val capLeft = size.width * 0.08f
                         val capWidth = size.width * 0.84f
@@ -3861,19 +3889,19 @@ private fun MixerWorkspace(
                         detectDragGestures(
                             onDragStart = { start ->
                                 val height = size.height.coerceAtLeast(1).toFloat()
-                                latestMasterChange((1f - start.y / height).coerceIn(0f, 1f))
+                                latestMasterChange(mixerFaderGainAtFraction(1f - start.y / height, 1f))
                             },
                             onDrag = { change, _ ->
                                 change.consume()
                                 val height = size.height.coerceAtLeast(1).toFloat()
-                                latestMasterChange((1f - change.position.y / height).coerceIn(0f, 1f))
+                                latestMasterChange(mixerFaderGainAtFraction(1f - change.position.y / height, 1f))
                             }
                         )
                     }
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { offset ->
                             val height = size.height.coerceAtLeast(1).toFloat()
-                            latestMasterChange((1f - offset.y / height).coerceIn(0f, 1f))
+                            latestMasterChange(mixerFaderGainAtFraction(1f - offset.y / height, 1f))
                         })
                     }
             ) {
@@ -3886,7 +3914,7 @@ private fun MixerWorkspace(
                     drawLine(mixerPalette.grid.copy(alpha = 0.68f),
                         Offset(railLeft - 5f, y), Offset(railLeft - 1f, y), 1f)
                 }
-                val gain = master.coerceIn(0f, 1f)
+                val gain = mixerFaderFractionForGain(master, 1f)
                 val thumbY = size.height * (1f - gain)
                 val capLeft = size.width * 0.08f
                 val capWidth = size.width * 0.84f
