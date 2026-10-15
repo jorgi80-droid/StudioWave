@@ -48,7 +48,7 @@ internal fun metronomeClickSample(
     val phase = absoluteFrame % beatFrames
     val clickDuration = min((sampleRate * 0.018f).toLong().coerceAtLeast(1L), (beatFrames / 2L).coerceAtLeast(1L))
     if (phase >= clickDuration) return 0f
-    val downbeat = (absoluteFrame / beatFrames) % beatsPerBar.coerceIn(1, 32) == 0L
+    val downbeat = (absoluteFrame / beatFrames) % beatsPerBar.coerceIn(1, 32).toLong() == 0L
     val frequency = if (downbeat) 2200.0 else 1650.0
     val envelope = 1.0 - phase.toDouble() / clickDuration.toDouble()
     val amplitude = if (downbeat) 0.30 else 0.18
