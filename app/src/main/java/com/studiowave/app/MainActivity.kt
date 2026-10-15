@@ -2120,8 +2120,13 @@ private fun TrackHeader(
                 .padding(vertical = 3.dp),
             verticalArrangement = Arrangement.Center
         ) {
-            Box(Modifier.fillMaxWidth().background(accent.copy(alpha = 0.96f)).padding(horizontal = 4.dp, vertical = 2.dp)) {
-                Text(track.name.uppercase(), fontSize = 8.sp, color = labelInk, fontWeight = FontWeight.Black, maxLines = 1)
+            Box(
+                Modifier.fillMaxWidth()
+                    .background(p.raised, RoundedCornerShape(1.dp))
+                    .border(1.dp, p.border, RoundedCornerShape(1.dp))
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
+            ) {
+                Text(track.name.uppercase(), fontSize = 8.sp, color = p.text, fontWeight = FontWeight.Black, maxLines = 1)
             }
             Spacer(Modifier.height(2.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2611,7 +2616,7 @@ private fun TimelineGrid(
                         ) else rawAccent
                         val clipInk = if (isLightTheme) Color(0xFF17191C) else Color(0xFFF4F6FA)
                         val clipFill by androidx.compose.animation.animateColorAsState(
-                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.94f else 0.76f),
+                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.30f else 0.18f),
                             animationSpec = tween(durationMillis = 140),
                             label = "clipSelectionFill"
                         )
@@ -2628,7 +2633,7 @@ private fun TimelineGrid(
                                 .background(clipFill, RoundedCornerShape(1.dp))
                                 .border(
                                     width = if (selectedClip == clip.id) 1.25.dp else 0.5.dp,
-                                    color = if (selectedClip == clip.id) timelinePalette.orange else timelinePalette.border.copy(alpha = 0.42f),
+                                    color = if (selectedClip == clip.id) timelinePalette.orange else accent.copy(alpha = if (isLightTheme) 0.72f else 0.9f),
                                     shape = RoundedCornerShape(1.dp)
                                 )
                                 .pointerInput(clip.id, trackIndex) {
@@ -2724,7 +2729,7 @@ private fun TimelineGrid(
                                 // Flat title strip and hairline border echo Live's clip headers without obscuring the note/wave content.
                                 Row(
                                     Modifier.fillMaxWidth().height(16.dp)
-                                        .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.9f), RoundedCornerShape(1.dp))
+                                        .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.88f))
                                         .padding(horizontal = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
