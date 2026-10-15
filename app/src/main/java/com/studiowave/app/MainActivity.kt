@@ -91,6 +91,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.studiowave.app.audio.DirectWaveSampler
 import com.studiowave.app.audio.ArrangementPlaybackEngine
+import com.studiowave.app.audio.ArrangementTiming
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.defaultDeviceParameters
 import com.studiowave.app.data.EFFECT_DEVICE_TYPES
@@ -2087,8 +2088,12 @@ private fun AudioEditorWorkspace(
             sourceDurationTicks = durationTicks
             if (durationTicks > 0L) {
                 val restored = audioTrimFractionsFromTicks(
-                    sourceOffsetTicks = clip?.sourceOffsetTicks ?: 0L,
-                    clipLengthTicks = clip?.lengthTicks ?: 1L,
+                    sourceOffsetTicks = clip?.sourceOffsetMicros?.let {
+                        ArrangementTiming.microsToTicks(it, project.bpm, project.ppq)
+                    } ?: (clip?.sourceOffsetTicks ?: 0L),
+                    clipLengthTicks = clip?.sourceLengthMicros?.let {
+                        ArrangementTiming.microsToTicks(it, project.bpm, project.ppq).coerceAtLeast(1L)
+                    } ?: (clip?.lengthTicks ?: 1L),
                     sourceDurationTicks = durationTicks
                 )
                 startFraction = restored.first
@@ -2114,8 +2119,11 @@ private fun AudioEditorWorkspace(
         onProjectChange(project.copy(tracks = project.tracks.map { item ->
             if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
                 if (current.id == activeClip.id) current.copy(
+                    // Keep legacy tick fields for old readers, but persist source trim in absolute time.
                     sourceOffsetTicks = startTicks,
-                    lengthTicks = nextLength
+                    lengthTicks = nextLength,
+                    sourceOffsetMicros = ArrangementTiming.ticksToMicros(startTicks, project.bpm, project.ppq),
+                    sourceLengthMicros = ArrangementTiming.ticksToMicros(nextLength, project.bpm, project.ppq).coerceAtLeast(1L)
                 ) else current
             })
         }))
@@ -2981,7 +2989,9 @@ private fun TimelineGrid(
                                     sourceOffsetTicks = clip.sourceOffsetTicks,
                                     visibleLengthTicks = clip.lengthTicks,
                                     bpm = project.bpm,
-                                    ppq = project.ppq
+                                    ppq = project.ppq,
+                                    sourceOffsetMicros = clip.sourceOffsetMicros,
+                                    visibleLengthMicros = clip.sourceLengthMicros
                                 )
                             }
                                 }
@@ -5872,12 +5882,16 @@ internal fun audioWaveformClipRange(
     bpm: Int,
     ppq: Int,
     sourceDurationSeconds: Double,
-    peakCount: Int
+    peakCount: Int,
+    sourceOffsetMicros: Long? = null,
+    sourceLengthMicros: Long? = null
 ): AudioWaveformClipRange? {
     if (!sourceDurationSeconds.isFinite() || sourceDurationSeconds <= 0.0 || peakCount <= 0) return null
     val ticksPerSecond = bpm.coerceAtLeast(1).toDouble() * ppq.coerceAtLeast(1).toDouble() / 60.0
-    val offsetSeconds = sourceOffsetTicks.coerceAtLeast(0L).toDouble() / ticksPerSecond
-    val clipSeconds = clipLengthTicks.coerceAtLeast(1L).toDouble() / ticksPerSecond
+    val offsetSeconds = sourceOffsetMicros?.coerceAtLeast(0L)?.toDouble()?.div(1_000_000.0)
+        ?: (sourceOffsetTicks.coerceAtLeast(0L).toDouble() / ticksPerSecond)
+    val clipSeconds = sourceLengthMicros?.coerceAtLeast(1L)?.toDouble()?.div(1_000_000.0)
+        ?: (clipLengthTicks.coerceAtLeast(1L).toDouble() / ticksPerSecond)
     if (!offsetSeconds.isFinite() || !clipSeconds.isFinite() || offsetSeconds >= sourceDurationSeconds) return null
     val endSeconds = (offsetSeconds + clipSeconds).coerceAtMost(sourceDurationSeconds)
     if (endSeconds <= offsetSeconds) return null
@@ -5895,7 +5909,9 @@ private fun AudioClipWaveform(
     sourceOffsetTicks: Long = 0L,
     visibleLengthTicks: Long = 1L,
     bpm: Int = 120,
-    ppq: Int = 960
+    ppq: Int = 960,
+    sourceOffsetMicros: Long? = null,
+    visibleLengthMicros: Long? = null
 ) {
     val context = LocalContext.current
     var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
@@ -5940,7 +5956,9 @@ private fun AudioClipWaveform(
                     bpm = bpm,
                     ppq = ppq,
                     sourceDurationSeconds = it,
-                    peakCount = peaks.size
+                    peakCount = peaks.size,
+                    sourceOffsetMicros = sourceOffsetMicros,
+                    sourceLengthMicros = visibleLengthMicros
                 )
             }
             if (range == null) {
