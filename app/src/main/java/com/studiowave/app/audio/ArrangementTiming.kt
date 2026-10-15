@@ -22,6 +22,35 @@ internal object ArrangementTiming {
         else frames.toLong().coerceAtLeast(0L)
     }
 
+    /** Convert absolute source time to output frames without involving project tempo. */
+    fun microsToFrames(micros: Long, sampleRate: Int = DEFAULT_SAMPLE_RATE): Long {
+        val safeMicros = micros.coerceAtLeast(0L)
+        val safeRate = sampleRate.coerceIn(8000, 192000)
+        val frames = safeMicros.toDouble() * safeRate.toDouble() / 1_000_000.0
+        return if (!frames.isFinite() || frames >= Long.MAX_VALUE.toDouble()) Long.MAX_VALUE
+        else frames.toLong().coerceAtLeast(0L)
+    }
+
+    /** Convert legacy musical ticks to absolute source microseconds at the project's current tempo. */
+    fun ticksToMicros(ticks: Long, bpm: Int, ppq: Int): Long {
+        val safeTicks = ticks.coerceAtLeast(0L)
+        val safeBpm = bpm.coerceIn(40, 240)
+        val safePpq = ppq.coerceIn(24, 3840)
+        val micros = safeTicks.toDouble() * 60_000_000.0 / (safeBpm.toDouble() * safePpq.toDouble())
+        return if (!micros.isFinite() || micros >= Long.MAX_VALUE.toDouble()) Long.MAX_VALUE
+        else micros.toLong().coerceAtLeast(0L)
+    }
+
+    /** Convert an absolute source-time endpoint to ticks only for legacy fallback calculations. */
+    fun microsToTicks(micros: Long, bpm: Int, ppq: Int): Long {
+        val safeMicros = micros.coerceAtLeast(0L)
+        val safeBpm = bpm.coerceIn(40, 240)
+        val safePpq = ppq.coerceIn(24, 3840)
+        val ticks = safeMicros.toDouble() * safeBpm.toDouble() * safePpq.toDouble() / 60_000_000.0
+        return if (!ticks.isFinite() || ticks >= Long.MAX_VALUE.toDouble()) Long.MAX_VALUE
+        else ticks.toLong().coerceAtLeast(0L)
+    }
+
     /** Saturating non-negative tick addition for source windows and clip extents. */
     fun addTicksSaturated(startTicks: Long, lengthTicks: Long): Long {
         val start = startTicks.coerceAtLeast(0L)
