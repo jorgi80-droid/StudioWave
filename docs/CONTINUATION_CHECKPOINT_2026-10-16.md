@@ -77,3 +77,9 @@
 - This is a paint-only change: note coordinates, hit-testing, selection, resize gestures, snapping, MIDI model updates, and timeline viewport math were not intentionally changed.
 - Visual principles follow Ableton Live 12's MIDI Note Editor/grid hierarchy while keeping the mobile touch controls from FL Studio Mobile. No Ableton assets or code are copied.
 - Validation is pending: latest-head Android CI must pass debug APK build, unit tests, and artifact upload. Physical Android landscape validation remains required.
+
+
+## Device-chain visual pass — 2026-10-16
+- Commit [31d096c4](https://github.com/jorgi80-droid/StudioWave/commit/31d096c40030a4bbf5da1f3c111341338c6a6c6c) adds compact numbered FX insert slot markers and directional chain cues before each effect card in Device View.
+- The markers clarify the serial order of the existing instrument/source followed by effect inserts, using the existing palette and narrow landscape-friendly spacing. They do not add, remove, reorder, enable, or process devices; existing device callbacks, parameter model and audio routing are unchanged.
+- Latest-head CI lookup returned no workflow runs for this commit, so build, unit tests and APK artifact upload are not verified. Physical Android landscape testing remains outstanding; keep PR #15 as draft.
