@@ -268,23 +268,27 @@ internal fun transformMidiNoteFromGesture(
     resize: Boolean
 ): com.studiowave.app.data.MidiNote {
     val safeStep = stepTicks.coerceAtLeast(1L)
-    val safeClipLength = clipLengthTicks.coerceAtLeast(safeStep)
-    val originalDuration = note.durationTicks.coerceIn(safeStep, safeClipLength)
+    val safeClipLength = clipLengthTicks.coerceAtLeast(1L)
+    // Preserve clip bounds even when callers supply a clip shorter than the current snap step.
+    val effectiveStep = minOf(safeStep, safeClipLength)
+    val noteStart = note.startTick.coerceIn(0L, (safeClipLength - effectiveStep).coerceAtLeast(0L))
+    val originalDuration = note.durationTicks.coerceIn(
+        effectiveStep,
+        (safeClipLength - noteStart).coerceAtLeast(effectiveStep)
+    )
     val safeDeltaSteps = deltaSteps.coerceIn(-100_000, 100_000)
     if (resize) {
-        val latestAllowedStart = (safeClipLength - safeStep).coerceAtLeast(0L)
-        val start = note.startTick.coerceIn(0L, latestAllowedStart)
-        val maxDuration = (safeClipLength - start).coerceAtLeast(safeStep)
-        val requested = originalDuration.toDouble() + safeDeltaSteps.toDouble() * safeStep.toDouble()
-        val duration = requested.coerceIn(safeStep.toDouble(), maxDuration.toDouble()).toLong()
-        return note.copy(startTick = start, durationTicks = duration.coerceIn(safeStep, maxDuration))
+        val maxDuration = (safeClipLength - noteStart).coerceAtLeast(effectiveStep)
+        val requested = originalDuration.toDouble() + safeDeltaSteps.toDouble() * effectiveStep.toDouble()
+        val duration = requested.coerceIn(effectiveStep.toDouble(), maxDuration.toDouble()).toLong()
+        return note.copy(startTick = noteStart, durationTicks = duration.coerceIn(effectiveStep, maxDuration))
     }
     val maxStart = (safeClipLength - originalDuration).coerceAtLeast(0L)
-    val start = note.startTick.coerceIn(0L, maxStart)
-    val rawStart = (start.toDouble() + safeDeltaSteps.toDouble() * safeStep.toDouble())
+    val rawStart = (noteStart.toDouble() + safeDeltaSteps.toDouble() * effectiveStep.toDouble())
         .coerceIn(0.0, maxStart.toDouble()).toLong()
-    val quotient = (rawStart.toDouble() / safeStep.toDouble()).roundToLong()
-    val snappedStart = (quotient * safeStep).coerceIn(0L, maxStart)
+    val quotient = (rawStart.toDouble() / effectiveStep.toDouble()).roundToLong()
+    val snappedStart = (quotient.toDouble() * effectiveStep.toDouble())
+        .coerceIn(0.0, maxStart.toDouble()).toLong()
     return note.copy(
         startTick = snappedStart,
         durationTicks = originalDuration,
