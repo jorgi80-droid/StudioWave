@@ -82,6 +82,7 @@ internal fun StudioWaveSettingsScreen(
 ) {
     val p = LocalStudioWavePalette.current
     var newProjectName by remember { mutableStateOf("Untitled Set") }
+    var confirmNewProject by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxSize().background(p.room).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Column(Modifier.width(164.dp).fillMaxHeight().background(p.panel, RoundedCornerShape(1.dp))
             .border(1.dp, p.border.copy(alpha = 0.9f), RoundedCornerShape(1.dp)).padding(7.dp),
@@ -178,7 +179,7 @@ internal fun StudioWaveSettingsScreen(
                             focusedLabelColor = p.accent, unfocusedLabelColor = p.muted
                         )
                     )
-                    Button(onClick = { onNewProject(newProjectName.trim().ifBlank { "Untitled Set" }) },
+                    Button(onClick = { confirmNewProject = true },
                         modifier = Modifier.fillMaxWidth().height(38.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.room),
                         shape = RoundedCornerShape(1.dp)) {
@@ -212,6 +213,23 @@ internal fun StudioWaveSettingsScreen(
                 }
             }
         }
+    }
+    if (confirmNewProject) {
+        AlertDialog(
+            onDismissRequest = { confirmNewProject = false },
+            title = { Text("Create new project?", fontWeight = FontWeight.Black) },
+            text = { Text("A new empty set named \"${newProjectName.trim().ifBlank { "Untitled Set" }}\" will replace the active arrangement in memory. Save the current set first if you need to keep it.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmNewProject = false
+                    onNewProject(newProjectName.trim().ifBlank { "Untitled Set" })
+                }) { Text("CREATE", color = p.accent, fontWeight = FontWeight.Black) }
+            },
+            dismissButton = { TextButton(onClick = { confirmNewProject = false }) { Text("CANCEL", color = p.text) } },
+            containerColor = p.panel,
+            titleContentColor = p.text,
+            textContentColor = p.muted
+        )
     }
 }
 
