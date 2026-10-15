@@ -184,3 +184,9 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - The Browser pass is in `8ddcae3347887402d05b698c2407f7b72cf5e0bc`: square palette-matched search, tighter category/action surfaces, and bordered clip/track rows.
 - Commit `7ea19bfee25e864a63542da9c747efca6dc261f9` makes the Browser Device Library placeholder use available width on mobile landscape without changing Device Dock module widths.
 - Validation must cover the latest head: debug APK build, unit tests and artifact upload. Physical Android landscape comparison is still outstanding.
+
+
+## Palette reference pass — 2026-10-16
+- Commit `c21131bacaf9c6f365b69936c81e2d3a92fc8f52` aligns the default and Live Mid palettes with the color values from the saved interface HTML: graphite surfaces, #2D2D2D controls, #FF7600 orange, #B2B2B2 text, #707070 muted labels, #2F2F2F grid, and #141414 borders.
+- Live Light and warm/cool/high-contrast options remain available. Browser and Arrangement ruler visual refinements are also on this branch.
+- Latest-head CI must confirm debug APK build, unit tests and APK artifact upload. Physical Android landscape comparison is still required.
