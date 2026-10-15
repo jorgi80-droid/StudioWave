@@ -758,6 +758,7 @@ private fun StudioWaveApp() {
                     throw cancelled
                 } catch (failure: Exception) {
                     audioError = failure.message ?: "Could not inspect the audio file."
+                    StudioWaveDiagnostics.log("ERROR", "AUDIO_IMPORT", "Audio import/metadata inspection failed: ${failure.message}")
                     selectedWorkspace = "ARRANGEMENT"
                 } finally {
                     // Clear every deferred import target on success or failure so a retry
