@@ -2324,9 +2324,9 @@ private fun TimelineGrid(
         }
         // Keep long-press handling on the background layer so it cannot steal a
         // drag that starts on a clip or its resize handle.
-        Canvas(Modifier.fillMaxSize().pointerInput(Unit) {
+        Canvas(Modifier.fillMaxSize().padding(top = 18.dp).pointerInput(Unit) {
             detectTapGestures(onLongPress = { offset ->
-                val yDp = ((offset.y - rulerHeightPx - overviewHeightPx).coerceAtLeast(0f) / density.density /
+                val yDp = ((offset.y - rulerHeightPx).coerceAtLeast(0f) / density.density /
                     currentVerticalZoom.coerceAtLeast(0.1f)) + currentScrollTracks
                 val hitIndex = currentTrackRows.indices.firstOrNull { index ->
                     val row = currentTrackRows[index]
@@ -2429,6 +2429,7 @@ private fun TimelineGrid(
         Canvas(
             Modifier
                 .fillMaxWidth()
+                .offset(y = 18.dp)
                 .height(18.dp)
                 .pointerInput(scrollTicks, zoom, timebase) {
                     detectTapGestures(onTap = { offset ->
@@ -2826,7 +2827,7 @@ private fun TimelineGrid(
         }
         // Overlay the cursor after clips so it stays visible over audio, MIDI and drum patterns.
         val playheadPalette = timelinePalette
-        Canvas(Modifier.fillMaxSize().padding(top = 24.dp).clipToBounds()) {
+        Canvas(Modifier.fillMaxSize().padding(top = 36.dp).clipToBounds()) {
             val playheadViewport = TimelineViewport(
                 timebase, viewport.effectivePixelsPerBar, scrollTicks.toDouble(), size.width, trackHeaderWidthPx
             )
