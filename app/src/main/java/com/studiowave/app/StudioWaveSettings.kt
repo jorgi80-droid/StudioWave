@@ -79,7 +79,7 @@ internal fun StudioWaveSettingsScreen(
     parallelPreparation: Boolean, onParallelPreparationChange: (Boolean) -> Unit,
     audioDiagnostics: List<String>, appLog: List<String>,
     onShareLogs: () -> Unit, onClearLogs: () -> Unit,
-    onNewProject: (String) -> Unit, onSaveProject: () -> Unit, onOpenProject: () -> Unit
+    currentProjectName: String, onNewProject: (String) -> Unit, onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     val p = LocalStudioWavePalette.current
     var newProjectName by remember { mutableStateOf("Untitled Set") }
@@ -170,7 +170,7 @@ internal fun StudioWaveSettingsScreen(
                 }
                 "PROJECT" -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsSection("PROJECT WORKFLOW", "Dedicated project actions, separate from track and clip editing.", p)
-                    SettingsInfoCard("CURRENT SET", "Project name: $newProjectName\nActive project: this session autosaves locally; use SAVE AS to create a shareable .sdaw file.", p)
+                    SettingsInfoCard("CURRENT SET", "Active project: $currentProjectName\nNew project name: $newProjectName\nThe current set autosaves locally; use SAVE AS to create a shareable .sdaw file.", p)
                     OutlinedTextField(
                         value = newProjectName, onValueChange = { newProjectName = it.take(64) },
                         modifier = Modifier.fillMaxWidth(), singleLine = true,
