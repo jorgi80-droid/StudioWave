@@ -3,6 +3,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /** Native stereo PCM output through Oboe/AAudio. Realtime callback never enters Kotlin or waits on locks. */
 class NativeAudioEngine:AutoCloseable {
  private val running=AtomicBoolean(false);private val closed=AtomicBoolean(false)
+ @Volatile private var producerBackpressureFrames=512
  companion object {
   // Keep enough ready audio for scheduler jitter without adding unnecessary monitoring latency.
   private const val MAX_QUEUED_FRAMES=1024
@@ -16,7 +17,11 @@ class NativeAudioEngine:AutoCloseable {
  private external fun nativeQueuedFrames():Int
  private external fun nativePlayedFrames():Long
  private external fun nativeUnderrunCount():Long
- @Synchronized fun start(sampleRate:Int=44100){
+ fun configureQueueTarget(targetFrames:Int){
+  producerBackpressureFrames=targetFrames.coerceIn(256,4096)
+ }
+ @Synchronized fun start(sampleRate:Int=44100,queueTargetFrames:Int=1024){
+  configureQueueTarget(queueTargetFrames)
   check(!closed.get()){"Audio engine is closed"};require(sampleRate in 8000..192000){"Unsupported sample rate: $sampleRate"}
   if(running.get())return;stop();nativeSetTone(440f,0f,0)
   val result=nativeOpenOutput(sampleRate);check(result==0){"Oboe could not open output stream (code $result)"};running.set(true)
@@ -30,7 +35,7 @@ class NativeAudioEngine:AutoCloseable {
   require(sampleCount in 2..samples.size&&sampleCount%2==0){"PCM count must contain complete stereo frames"}
   check(!closed.get()){"Audio engine is closed"}
   while(running.get()&&keepRunning()){
-   if(nativeQueuedFrames()>=PRODUCER_BACKPRESSURE_FRAMES){
+   if(nativeQueuedFrames()>=producerBackpressureFrames){
     try { Thread.sleep(1L) } catch (_:InterruptedException) { Thread.currentThread().interrupt(); return false }
     continue
    }
