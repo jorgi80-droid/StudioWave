@@ -411,4 +411,36 @@ class TimelineViewportTest {
         assertTrue("a sought playhead left of the viewport becomes visible", startX >= -0.01)
     }
 
+
+    @Test fun invalidViewportStateIsNormalizedForEveryCoordinateOperation() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val baseline = TimelineViewport(timebase, 74f, 0.0, 600f, 0f)
+        val invalid = TimelineViewport(
+            timebase = timebase,
+            pixelsPerBar = 74f,
+            scrollTimeTicks = Double.NaN,
+            viewportWidthPx = Float.NaN,
+            trackHeaderWidthPx = Float.NaN
+        )
+        assertEquals(0.0, invalid.effectiveScrollTimeTicks, 0.0)
+        assertEquals(0f, invalid.effectiveViewportWidthPx, 0f)
+        assertEquals(0f, invalid.safeTrackHeaderWidthPx, 0f)
+        assertEquals(baseline.timeToScreenX(3840L), invalid.timeToScreenX(3840L), 0.001f)
+        assertEquals(baseline.screenXToTime(100f), invalid.screenXToTime(100f))
+        assertEquals(0.0, invalid.panByScreenPixels(Float.NaN).effectiveScrollTimeTicks, 0.0)
+    }
+
+    @Test fun oversizedAndNegativeScrollAreClampedBeforeMapping() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val maxTick = maxArrangementTick(timebase)
+        val high = TimelineViewport(timebase, 74f, Double.POSITIVE_INFINITY, 600f)
+        val negative = TimelineViewport(timebase, 74f, -1000.0, 600f)
+        assertEquals(0.0, high.effectiveScrollTimeTicks, 0.0)
+        assertEquals(0.0, negative.effectiveScrollTimeTicks, 0.0)
+        val hugeFinite = TimelineViewport(timebase, 74f, Double.MAX_VALUE, 600f)
+        assertEquals(maxTick.toDouble(), hugeFinite.effectiveScrollTimeTicks, 0.0)
+        assertTrue(hugeFinite.panByScreenPixels(-100f).effectiveScrollTimeTicks <= maxTick.toDouble())
+    }
+
+
 }
