@@ -4252,9 +4252,9 @@ private fun DirectWaveDevicePanel(
         if (showSamples) {
             Column(
                 Modifier.fillMaxWidth()
-                    .heightIn(max = if (fullHeight) 150.dp else 64.dp)
+                    .heightIn(max = if (fullHeight) 112.dp else 64.dp)
                     .verticalScroll(rememberScrollState())
-                    .background(palette.panel, RoundedCornerShape(4.dp)).padding(5.dp),
+                    .background(palette.panel, RoundedCornerShape(3.dp)).padding(5.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text("STUDIOWAVE SAMPLE LIBRARY", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
@@ -4317,8 +4317,8 @@ private fun DirectWaveDevicePanel(
         )
 
         Row(
-            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(3.dp))
-                .padding(horizontal = 5.dp, vertical = 1.dp),
+            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(2.dp))
+                .padding(horizontal = 5.dp, vertical = 0.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
@@ -4335,8 +4335,8 @@ private fun DirectWaveDevicePanel(
         }
 
         Row(
-            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(3.dp))
-                .padding(horizontal = 3.dp, vertical = 2.dp),
+            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(2.dp))
+                .padding(horizontal = 3.dp, vertical = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -4365,7 +4365,7 @@ private fun DirectWaveDevicePanel(
                 preferences.edit().putInt("release.$trackId", it.toInt()).apply()
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             listOf(48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67).forEach { note ->
                 val label = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")[note % 12]
                 Surface(
@@ -4449,8 +4449,8 @@ private fun DirectWaveSampleWaveform(
             }
         } catch (_: Exception) { peaks = emptyList() }
     }
-    Column(Modifier.fillMaxWidth().height(if (sampleReady) 58.dp else 54.dp)
-        .background(palette.panel, RoundedCornerShape(3.dp)).padding(4.dp),
+    Column(Modifier.fillMaxWidth().height(if (sampleReady) 60.dp else 56.dp)
+        .background(palette.panel, RoundedCornerShape(2.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("SAMPLE WAVEFORM", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
