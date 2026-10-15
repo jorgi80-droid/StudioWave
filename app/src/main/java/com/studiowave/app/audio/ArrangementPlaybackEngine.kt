@@ -169,6 +169,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val startFrame: Long,
         val endFrame: Long,
         val sourceOffsetFrame: Long,
+        val sourceWindowFrames: Long,
         val track: StudioTrack,
         val clip: WaveClip,
         val asset: AudioAsset
@@ -378,8 +379,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     "audio" -> {
                         val source = clip.sourceUri ?: return@clipLoop
                         val asset = assets[source] ?: return@clipLoop
+                        val sourceOffsetFrame = ticksToFrames(clip.sourceOffsetTicks.coerceAtLeast(0L))
+                        // The source loop window must follow the trimmed clip length, not the
+                        // whole file. Convert timeline duration to the asset's sample-rate domain.
+                        val sourceWindowFrames = (clipLength.toDouble() *
+                            asset.sampleRate.toDouble() / sampleRate.toDouble())
+                            .toLong().coerceAtLeast(1L)
                         audioEvents.add(AudioEvent(
-                            clipStart, clipEnd, ticksToFrames(clip.sourceOffsetTicks.coerceAtLeast(0L)),
+                            clipStart, clipEnd, sourceOffsetFrame, sourceWindowFrames,
                             track, clip, asset
                         ))
                     }
@@ -669,10 +676,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             .times(event.asset.sampleRate.toDouble() / sampleRate.toDouble()).toLong()
                             .plus(scratchFrames)
                         if (event.asset.frames <= 0) continue
-                        // FL Studio Mobile loops the source when an audio clip is extended
-                        // past the end of its sample. Keep the trim offset but wrap the read
-                        // cursor instead of inserting silence after the decoded source ends.
-                        val sourceFrame = Math.floorMod(rawSourceFrame, event.asset.frames.toLong()).toInt()
+                        // Loop only inside the clip's selected source window. Wrapping across
+                        // the whole file would make playback leak into audio removed by trim.
+                        val sourceFrames = event.asset.frames.toLong()
+                        val sourceStart = event.sourceOffsetFrame.coerceIn(0L, sourceFrames - 1L)
+                        val windowFrames = event.sourceWindowFrames
+                            .coerceAtMost(sourceFrames - sourceStart).coerceAtLeast(1L)
+                        val sourceFrame = (sourceStart +
+                            Math.floorMod(rawSourceFrame - event.sourceOffsetFrame, windowFrames))
+                            .coerceIn(0L, sourceFrames - 1L).toInt()
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
                         val sourceLeft = event.asset.pcmStereo[sourceIndex] / 32768f * channelMix.volume * leftPan
