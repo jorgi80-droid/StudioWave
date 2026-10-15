@@ -3110,6 +3110,8 @@ private fun PianoRollWorkspace(
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
+                    val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
+                    val viewportHeightPx = with(pianoDensity) { (maxHeight - 20.dp).toPx() }
                     Column(Modifier.fillMaxSize()) {
                     Row(Modifier.fillMaxWidth().height(20.dp).background(pianoPalette.panel), verticalAlignment = Alignment.CenterVertically) {
                         Text("BAR", color = pianoPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(42.dp).padding(start = 3.dp))
@@ -3123,8 +3125,6 @@ private fun PianoRollWorkspace(
                             }
                         }
                     }
-                    val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
-                    val viewportHeightPx = with(pianoDensity) { (maxHeight - 20.dp).toPx() }
                     LaunchedEffect(viewportWidthPx, clipLengthSteps, stepsPerBar, zoomX) {
                         if (lastViewportWidthPx > 0f && viewportWidthPx > 0f &&
                             kotlin.math.abs(viewportWidthPx - lastViewportWidthPx) > 1f) {
@@ -3431,7 +3431,7 @@ private fun PianoRollWorkspace(
             }
         }
                     }
-                }
+                    }
                 }
             }
         }
@@ -4286,7 +4286,7 @@ private fun DirectWaveDevicePanel(
                                 Text(sample.title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 Text(sample.description, color = palette.muted, fontSize = 8.sp)
                             }
-                            Text(if (context.resources.sampleUri?.endsWith("/${sample.assetName}.wav") == true || sampleLabel == sample.title) "SELECTED" else "LOAD",
+                            Text(if (sampleUri == Uri.fromFile(java.io.File(context.cacheDir, sample.assetName + ".wav")).toString()) "SELECTED" else "LOAD",
                                 color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                         }
                     }
