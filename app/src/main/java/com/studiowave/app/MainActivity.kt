@@ -2886,24 +2886,44 @@ private fun PianoRollWorkspace(
     Column(Modifier.fillMaxSize().background(pianoPalette.room).padding(2.dp)) {
         // Clip identity and editing actions share one shallow strip so the note grid wins height.
         Row(
-            Modifier.fillMaxWidth().height(31.dp)
+            Modifier.fillMaxWidth().height(28.dp)
                 .background(pianoPalette.panel, RoundedCornerShape(4.dp))
-                .padding(horizontal = 5.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("CLIP", color = pianoPalette.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
+            Text("MIDI", color = pianoPalette.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
-                modifier = Modifier.widthIn(max = 100.dp))
+                modifier = Modifier.widthIn(max = 90.dp))
             Spacer(Modifier.weight(1f))
-            SmallAction(if (keyboardVisible) "NOTES" else "VEL") {
+            SmallAction(if (keyboardVisible) "NOTES" else "VEL LANE") {
                 keyboardVisible = !keyboardVisible
                 velocityMode = !keyboardVisible
                 panMode = false
             }
-            SmallAction("SNAP 1/${snapDenominator}") {
+            SmallAction(if (virtualKeyboardVisible) "INPUT ON" else "INPUT") { virtualKeyboardVisible = !virtualKeyboardVisible }
+            SmallAction("1/${snapDenominator}") {
                 snapDenominator = when (snapDenominator) { 32 -> 16; 16 -> 8; 8 -> 4; 4 -> 2; else -> 32 }
             }
+            TransportAction("−") {
+                val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
+                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
+                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
+                val anchor = pageStartStep + oldVisible / 2
+                zoomX = nextZoom
+                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
+            }
+            Text("BAR ${pageStartStep / stepsPerBar + 1}", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+            TransportAction("+") {
+                val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
+                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
+                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
+                val anchor = pageStartStep + oldVisible / 2
+                zoomX = nextZoom
+                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
+            }
+            TransportAction("P−") { zoomY = (zoomY / 1.2f).coerceIn(0.45f, 3.5f) }
+            TransportAction("P+") { zoomY = (zoomY * 1.2f).coerceIn(0.45f, 3.5f) }
             Box {
                 SmallAction("⋮") { noteContextMenuExpanded = true }
                 DropdownMenu(
@@ -2911,16 +2931,13 @@ private fun PianoRollWorkspace(
                     onDismissRequest = { noteContextMenuExpanded = false },
                     modifier = Modifier.background(pianoPalette.panel)
                 ) {
-                    DropdownMenuItem(text = { Text(if (virtualKeyboardVisible) "Hide input keys" else "Show input keys", color = pianoPalette.text) }, onClick = {
-                        virtualKeyboardVisible = !virtualKeyboardVisible; noteContextMenuExpanded = false
-                    })
                     DropdownMenuItem(text = { Text("Edit tools", color = pianoPalette.text) }, onClick = {
                         editToolsExpanded = !editToolsExpanded; noteContextMenuExpanded = false
                     })
                     DropdownMenuItem(text = { Text(if (selectionMode) "Exit selection" else "Select notes", color = pianoPalette.text) }, onClick = {
                         selectionMode = !selectionMode; noteContextMenuExpanded = false
                     })
-                    DropdownMenuItem(text = { Text(if (panMode) "Hide pan lane" else "Pan lane", color = pianoPalette.text) }, onClick = {
+                    DropdownMenuItem(text = { Text(if (panMode) "Exit pan lane" else "Pan lane", color = pianoPalette.text) }, onClick = {
                         panMode = !panMode; if (panMode) velocityMode = false; noteContextMenuExpanded = false
                     })
                     DropdownMenuItem(text = { Text("Octave down", color = pianoPalette.text) }, onClick = {
@@ -2950,8 +2967,10 @@ private fun PianoRollWorkspace(
                             val endTick = selectedNotes.maxOf { it.startTick + it.durationTicks }
                             val span = (endTick - anchorTick).coerceAtLeast(stepTicks)
                             val duplicates = if (endTick <= activeClip.lengthTicks - span) selectedNotes.map { it.copy(id = java.util.UUID.randomUUID().toString(), startTick = it.startTick + span) } else emptyList()
-                            if (duplicates.isNotEmpty()) { updateNotes(notes + duplicates); selectedNoteIds = duplicates.map { it.id }.toSet(); selectedNoteId = duplicates.first().id }
-                            else editMessage = "Not enough clip space to duplicate selection"
+                            if (duplicates.isNotEmpty()) {
+                                updateNotes(notes + duplicates); selectedNoteIds = duplicates.map { it.id }.toSet()
+                                selectedNoteId = duplicates.first().id; editMessage = "${duplicates.size} note(s) duplicated"
+                            } else editMessage = "Not enough clip space to duplicate selection"
                         }
                         noteContextMenuExpanded = false
                     })
@@ -2968,28 +2987,13 @@ private fun PianoRollWorkspace(
                     })
                 }
             }
-            SmallAction("−") {
-                val nextZoom = (zoomX / 1.25f).coerceIn(0.35f, 8f)
-                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
-                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
-                val anchor = pageStartStep + oldVisible / 2
-                zoomX = nextZoom
-                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
-            }
-            Text("${(zoomX * 100).toInt()}%", color = pianoPalette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-            SmallAction("+") {
-                val nextZoom = (zoomX * 1.25f).coerceIn(0.35f, 8f)
-                val oldVisible = pianoRollVisibleSteps(stepsPerBar, zoomX)
-                val newVisible = pianoRollVisibleSteps(stepsPerBar, nextZoom)
-                val anchor = pageStartStep + oldVisible / 2
-                zoomX = nextZoom
-                startStep = (anchor - newVisible / 2).coerceIn(0, (clipLengthSteps - newVisible).coerceAtLeast(0))
-            }
+            SmallAction("BACK", onBack)
+
         }
         if (editToolsExpanded) {
             Row(
-                Modifier.fillMaxWidth().height(28.dp).horizontalScroll(rememberScrollState())
-                    .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp),
+                Modifier.fillMaxWidth().height(26.dp)
+                    .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -2998,72 +3002,150 @@ private fun PianoRollWorkspace(
                     if (selected.isNotEmpty()) {
                         val anchorTick = selected.minOf { it.startTick }
                         val anchorPitch = selected.minOf { it.pitch }
-                        clipboard = selected.map { it.copy(startTick = (it.startTick - anchorTick).coerceAtLeast(0L), pitch = it.pitch - anchorPitch) }
+                        clipboard = selected.map { note ->
+                            note.copy(startTick = (note.startTick - anchorTick).coerceAtLeast(0L), pitch = note.pitch - anchorPitch)
+                        }
                         editMessage = "${selected.size} note(s) copied"
-                    } else { clipboard = emptyList(); editMessage = "Select notes first" }
-                }
-                SmallAction("PASTE") {
-                    val source = clipboard
-                    if (source.isEmpty()) editMessage = "Copy notes first"
-                    else if (clip == null) editMessage = "Create a MIDI clip first"
-                    else {
-                        val anchor = notes.firstOrNull { it.id == selectedNoteId }
-                        val origin = ((anchor?.startTick ?: pageStartStep.toLong() * stepTicks) + stepTicks)
-                            .coerceIn(0L, (clip.lengthTicks - 1L).coerceAtLeast(0L))
-                        val pitch = anchor?.pitch ?: 60
-                        val pasted = fitMidiNotesToClip(source.map {
-                            it.copy(id = java.util.UUID.randomUUID().toString(), startTick = origin + it.startTick, pitch = (pitch + it.pitch).coerceIn(0,127))
-                        }, clip.lengthTicks)
-                        if (pasted.isNotEmpty()) {
-                            updateNotes(notes + pasted); selectedNoteIds = pasted.map { it.id }.toSet(); selectedNoteId = pasted.first().id
-                            editMessage = "${pasted.size} note(s) pasted"
-                        } else editMessage = "Notes do not fit"
+                    } else {
+                        clipboard = emptyList()
+                        editMessage = "Select notes first"
                     }
                 }
-                SmallAction("DELETE") {
+                SmallAction("DEL") {
                     val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
                     if (ids.isNotEmpty()) {
-                        updateNotes(notes.filterNot { it.id in ids }); selectedNoteId = null; selectedNoteIds = emptySet()
+                        updateNotes(notes.filterNot { it.id in ids })
+                        selectedNoteId = null
+                        selectedNoteIds = emptySet()
                         editMessage = "${ids.size} note(s) deleted"
                     } else editMessage = "Select a note first"
                 }
-                SmallAction("DUPLICATE") {
+                SmallAction("DUP") {
                     val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
-                    if (selected.isEmpty()) editMessage = "Select notes first"
-                    else {
-                        val start = selected.minOf { it.startTick }
-                        val end = selected.maxOf { it.startTick + it.durationTicks }
-                        val span = (end - start).coerceAtLeast(stepTicks)
-                        if (end + span > (clip?.lengthTicks ?: 0L)) editMessage = "Not enough clip space"
-                        else {
-                            val copies = selected.map { it.copy(id = java.util.UUID.randomUUID().toString(), startTick = it.startTick + span) }
-                            updateNotes(notes + copies); selectedNoteIds = copies.map { it.id }.toSet(); selectedNoteId = copies.firstOrNull()?.id
-                            editMessage = "${copies.size} note(s) duplicated"
+                    if (selected.isEmpty()) {
+                        editMessage = "Select notes first"
+                    } else {
+                        val anchorTick = selected.minOf { it.startTick }
+                        val endTick = selected.maxOf { it.startTick + it.durationTicks }
+                        val span = (endTick - anchorTick).coerceAtLeast(stepTicks)
+                        if (endTick + span > (clip?.lengthTicks ?: 0L)) {
+                            editMessage = "Not enough clip space to duplicate selection"
+                        } else {
+                            val duplicates = selected.map { note ->
+                                note.copy(id = java.util.UUID.randomUUID().toString(), startTick = note.startTick + span)
+                            }
+                            updateNotes(notes + duplicates)
+                            selectedNoteIds = duplicates.map { it.id }.toSet()
+                            selectedNoteId = duplicates.firstOrNull()?.id
+                            editMessage = "${duplicates.size} note(s) duplicated"
                         }
                     }
                 }
-                SmallAction("QUANTIZE") { quantizeSelectedNotes() }
+                SmallAction("SNAP") {
+                    quantizeSelectedNotes()
+                }
                 SmallAction("LEGATO") {
-                    val chosen = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }.sortedBy { it.startTick }
-                    if (chosen.size < 2) editMessage = "Select at least two notes"
-                    else {
-                        val changed = chosen.mapIndexed { index, note ->
-                            val next = chosen.getOrNull(index + 1)?.startTick ?: (note.startTick + note.durationTicks)
-                            note.copy(durationTicks = (next - note.startTick).coerceAtLeast(stepTicks))
-                        }.associateBy { it.id }
-                        updateNotes(notes.map { changed[it.id] ?: it }); editMessage = "Legato applied"
+                    val selected = notes.filter { it.id in selectedNoteIds || it.id == selectedNoteId }
+                    if (selected.size >= 2) {
+                        val ordered = selected.sortedBy { it.startTick }
+                        val legato = ordered.mapIndexed { index, note ->
+                            val nextStart = ordered.getOrNull(index + 1)?.startTick
+                                ?: (note.startTick + note.durationTicks)
+                            note.copy(durationTicks = (nextStart - note.startTick).coerceAtLeast(stepTicks))
+                        }
+                        val byId = legato.associateBy { it.id }
+                        updateNotes(notes.map { byId[it.id] ?: it })
+                        editMessage = "Legato applied to ${legato.size} notes"
+                    } else editMessage = "Select at least two notes"
+                }
+                SmallAction("OCT−") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isNotEmpty()) {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch - 12).coerceAtLeast(0)) else note })
+                        editMessage = "Selection down one octave"
+                    } else editMessage = "Select notes first"
+                }
+                SmallAction("OCT+") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isNotEmpty()) {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch + 12).coerceAtMost(127)) else note })
+                        editMessage = "Selection up one octave"
+                    } else editMessage = "Select notes first"
+                }
+                SmallAction("SCALE") {
+                    val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
+                    if (ids.isEmpty()) {
+                        editMessage = "Select notes first"
+                    } else {
+                        val allowed = setOf(0, 2, 4, 5, 7, 9, 11)
+                        val changes = notes.filter { it.id in ids }.associate { note ->
+                            val nearest = (0..127).filter { Math.floorMod(it, 12) in allowed }
+                                .minByOrNull { kotlin.math.abs(it - note.pitch) } ?: note.pitch
+                            note.id to note.copy(pitch = nearest)
+                        }
+                        updateNotes(notes.map { changes[it.id] ?: it })
+                        editMessage = "Selection snapped to C major"
                     }
                 }
-                SmallAction("OCTAVE −") {
+                SmallAction("−1") {
                     val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
                     if (ids.isEmpty()) editMessage = "Select notes first"
-                    else updateNotes(notes.map { if (it.id in ids) it.copy(pitch = (it.pitch - 12).coerceAtLeast(0)) else it })
+                    else {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch - 1).coerceAtLeast(0)) else note })
+                        editMessage = "Selection −1 semitone"
+                    }
                 }
-                SmallAction("OCTAVE +") {
+                SmallAction("+1") {
                     val ids = selectedNoteIds + listOfNotNull(selectedNoteId)
                     if (ids.isEmpty()) editMessage = "Select notes first"
-                    else updateNotes(notes.map { if (it.id in ids) it.copy(pitch = (it.pitch + 12).coerceAtMost(127)) else it })
+                    else {
+                        updateNotes(notes.map { note -> if (note.id in ids) note.copy(pitch = (note.pitch + 1).coerceAtMost(127)) else note })
+                        editMessage = "Selection +1 semitone"
+                    }
                 }
+                SmallAction("PASTE") {
+                    val source = clipboard
+                    if (source.isEmpty()) {
+                        editMessage = "Copy notes first"
+                    } else if (clip == null || track == null) {
+                        editMessage = "Create a MIDI clip first"
+                    } else {
+                        val anchor = notes.firstOrNull { it.id == selectedNoteId }
+                        val pasteOrigin = ((anchor?.startTick ?: pageStartStep.toLong() * stepTicks) + stepTicks)
+                            .coerceIn(0L, (clip.lengthTicks - 1L).coerceAtLeast(0L))
+                        val basePitch = anchor?.pitch ?: 60
+                        val candidates = source.map { note ->
+                            note.copy(
+                                id = java.util.UUID.randomUUID().toString(),
+                                startTick = (pasteOrigin + note.startTick).coerceAtMost(clip.lengthTicks),
+                                pitch = (basePitch + note.pitch).coerceIn(0, 127)
+                            )
+                        }
+                        val pasted = fitMidiNotesToClip(candidates, clip.lengthTicks)
+                        if (pasted.isEmpty()) {
+                            editMessage = "Notes do not fit in this clip"
+                        } else {
+                            updateNotes(notes + pasted)
+                            selectedNoteIds = pasted.map { it.id }.toSet()
+                            selectedNoteId = pasted.first().id
+                            editMessage = "${pasted.size} note(s) pasted"
+                        }
+                    }
+                }
+                SmallAction("− LEN") {
+                    val selected = notes.firstOrNull { it.id == selectedNoteId }
+                    if (selected != null) {
+                        updateNotes(notes.map { if (it.id == selected.id) it.copy(durationTicks = (it.durationTicks - stepTicks).coerceAtLeast(stepTicks)) else it })
+                    } else editMessage = "Select a note first"
+                }
+                SmallAction("+ LEN") {
+                    val selected = notes.firstOrNull { it.id == selectedNoteId }
+                    if (selected != null) {
+                        updateNotes(notes.map { if (it.id == selected.id) it.copy(durationTicks = (it.durationTicks + stepTicks).coerceAtMost(project.ppq.toLong() * 4L * 4096L)) else it })
+                    } else editMessage = "Select a note first"
+                }
+                Spacer(Modifier.weight(1f))
+                Text(if (keyboardVisible) "NOTE EDIT" else "VELOCITY", color = pianoPalette.muted, fontSize = 7.sp, maxLines = 1)
             }
         }
 
@@ -3111,20 +3193,7 @@ private fun PianoRollWorkspace(
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
                     val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
-                    val viewportHeightPx = with(pianoDensity) { (maxHeight - 20.dp).toPx() }
-                    Column(Modifier.fillMaxSize()) {
-                    Row(Modifier.fillMaxWidth().height(20.dp).background(pianoPalette.panel), verticalAlignment = Alignment.CenterVertically) {
-                        Text("BAR", color = pianoPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold, modifier = Modifier.width(42.dp).padding(start = 3.dp))
-                        Canvas(Modifier.weight(1f).fillMaxHeight()) {
-                            val pxPerStep = size.width / pianoRollVisibleSteps(stepsPerBar, zoomX).toFloat()
-                            for (barIndex in 0..(pianoRollVisibleSteps(stepsPerBar, zoomX) / stepsPerBar + 2)) {
-                                val step = pageStartStep + barIndex * stepsPerBar
-                                val x = barIndex * stepsPerBar * pxPerStep
-                                drawLine(pianoPalette.border, Offset(x, 0f), Offset(x, size.height), 1f)
-                                drawContext.canvas.nativeCanvas.drawText((step / stepsPerBar + 1).toString(), x + 3f, size.height * 0.68f, android.graphics.Paint().apply { color = android.graphics.Color.LTGRAY; textSize = 10f; isAntiAlias = true })
-                            }
-                        }
-                    }
+                    val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
                     LaunchedEffect(viewportWidthPx, clipLengthSteps, stepsPerBar, zoomX) {
                         if (lastViewportWidthPx > 0f && viewportWidthPx > 0f &&
                             kotlin.math.abs(viewportWidthPx - lastViewportWidthPx) > 1f) {
@@ -3379,7 +3448,7 @@ private fun PianoRollWorkspace(
                                     }                                }
                             }
                         }
-                    Box(contentModifier.weight(1f)) {
+                    Box(contentModifier) {
                         Canvas(Modifier.fillMaxSize()) {
                             val localRowHeight = rowHeightPx
                             val localColWidth = size.width / currentStepsOnScreen.toFloat()
@@ -3472,12 +3541,12 @@ private fun PianoRollWorkspace(
                 }
                 SmallAction("HIDE") { virtualKeyboardVisible = false }
             }
+        }
         Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(editMessage, color = pianoPalette.muted, fontSize = 7.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             Text("H ${zoomX.format(2)}×  V ${zoomY.format(2)}×", color = pianoPalette.accent, fontSize = 7.sp)
         }
-    }
     }
 }
 
