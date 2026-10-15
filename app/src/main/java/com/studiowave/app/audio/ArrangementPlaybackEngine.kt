@@ -1,9 +1,7 @@
 package com.studiowave.app.audio
 
 import android.content.Context
-import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioTrack
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
@@ -15,6 +13,7 @@ import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioTrack
 import com.studiowave.app.data.TrackDevice
 import com.studiowave.app.data.EFFECT_DEVICE_TYPES
+import com.studiowave.app.data.INSTRUMENT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,6 +33,50 @@ import kotlin.math.pow
  * on Dispatchers.IO; the audio worker only mixes prepared PCM and synthesized notes.
  * This keeps content-provider/codec calls away from the realtime output thread.
  */
+/** Linear stereo peak/RMS for an interleaved L,R sample buffer. */
+internal data class StereoMeterLevels(
+    val peakLeft: Float,
+    val peakRight: Float,
+    val rmsLeft: Float,
+    val rmsRight: Float
+)
+
+/** Pure helper used by the realtime mixer and unit tests; it does not allocate sample buffers. */
+internal fun measureStereoMeterLevels(samples: FloatArray, sampleCount: Int = samples.size): StereoMeterLevels {
+    val count = sampleCount.coerceIn(0, samples.size)
+    var peakLeft = 0f
+    var peakRight = 0f
+    var squareLeft = 0.0
+    var squareRight = 0.0
+    var leftFrames = 0
+    var rightFrames = 0
+    var i = 0
+    while (i + 1 < count) {
+        val left = samples[i].takeIf { it.isFinite() } ?: 0f
+        val right = samples[i + 1].takeIf { it.isFinite() } ?: 0f
+        peakLeft = maxOf(peakLeft, kotlin.math.abs(left))
+        peakRight = maxOf(peakRight, kotlin.math.abs(right))
+        squareLeft += left.toDouble() * left.toDouble()
+        squareRight += right.toDouble() * right.toDouble()
+        leftFrames++
+        rightFrames++
+        i += 2
+    }
+    if (i < count) {
+        val left = samples[i].takeIf { it.isFinite() } ?: 0f
+        peakLeft = maxOf(peakLeft, kotlin.math.abs(left))
+        squareLeft += left.toDouble() * left.toDouble()
+        leftFrames++
+    }
+    val leftDenominator = leftFrames.coerceAtLeast(1).toDouble()
+    val rightDenominator = rightFrames.coerceAtLeast(1).toDouble()
+    return StereoMeterLevels(
+        peakLeft.coerceIn(0f, 1f), peakRight.coerceIn(0f, 1f),
+        kotlin.math.sqrt(squareLeft / leftDenominator).toFloat().coerceIn(0f, 1f),
+        kotlin.math.sqrt(squareRight / rightDenominator).toFloat().coerceIn(0f, 1f)
+    )
+}
+
 class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
@@ -46,6 +89,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val masterRmsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
     private val masterLufsBits = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(MasterLoudnessMeter.SILENCE_LUFS))
     private val loudnessMeter = MasterLoudnessMeter(OUTPUT_SAMPLE_RATE)
+    private data class TrackMeterBits(
+        val peakLeft: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val peakRight: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val rmsLeft: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val rmsRight: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
+    )
+    private val trackMeterBits = java.util.concurrent.ConcurrentHashMap<String, TrackMeterBits>()
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
 
     data class MasterMeterSnapshot(val peakDbfs: Float, val rmsDbfs: Float, val momentaryLufs: Float) {
@@ -59,6 +109,37 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val rms = java.lang.Float.intBitsToFloat(masterRmsBits.get()).coerceIn(0f, 1f)
         val lufs = java.lang.Float.intBitsToFloat(masterLufsBits.get()).coerceIn(-120f, 6f)
         return MasterMeterSnapshot(linearToDbfs(peak), linearToDbfs(rms), lufs)
+    }
+
+    data class TrackMeterSnapshot(
+        val peakLeft: Float,
+        val peakRight: Float,
+        val rmsLeft: Float,
+        val rmsRight: Float
+    ) {
+        val peak: Float get() = maxOf(peakLeft, peakRight)
+        val rms: Float get() = maxOf(rmsLeft, rmsRight)
+    }
+
+    fun trackMeterSnapshot(trackId: String): TrackMeterSnapshot {
+        val meter = trackMeterBits[trackId]
+            ?: return TrackMeterSnapshot(0f, 0f, 0f, 0f)
+        return TrackMeterSnapshot(
+            java.lang.Float.intBitsToFloat(meter.peakLeft.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.peakRight.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.rmsLeft.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.rmsRight.get()).coerceIn(0f, 1f)
+        )
+    }
+
+    private fun publishTrackMeter(
+        trackId: String, peakLeft: Float, peakRight: Float, rmsLeft: Float, rmsRight: Float
+    ) {
+        val meter = trackMeterBits.computeIfAbsent(trackId) { TrackMeterBits() }
+        meter.peakLeft.set(java.lang.Float.floatToRawIntBits(peakLeft.coerceIn(0f, 1f)))
+        meter.peakRight.set(java.lang.Float.floatToRawIntBits(peakRight.coerceIn(0f, 1f)))
+        meter.rmsLeft.set(java.lang.Float.floatToRawIntBits(rmsLeft.coerceIn(0f, 1f)))
+        meter.rmsRight.set(java.lang.Float.floatToRawIntBits(rmsRight.coerceIn(0f, 1f)))
     }
 
     private fun publishMasterMeter(peak: Float, rms: Float, momentaryLufs: Float) {
@@ -77,7 +158,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
     @Volatile private var worker: Thread? = null
-    @Volatile private var output: AudioTrack? = null
+    @Volatile private var output: NativeAudioEngine? = null
 
     private data class AudioAsset(
         val sampleRate: Int,
@@ -94,12 +175,22 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val asset: AudioAsset
     )
 
+    private data class SamplerInstrument(
+        val asset: AudioAsset,
+        val looping: Boolean,
+        val pitchSemitones: Int,
+        val fineTuneCents: Int,
+        val attackMs: Int,
+        val decayMs: Int,
+        val sustain: Float,
+        val releaseMs: Int
+    )
+
     private data class NoteEvent(
-        val startFrame: Long,
-        val endFrame: Long,
-        val pitch: Int,
-        val velocity: Int,
-        val track: StudioTrack
+        val startFrame: Long, val endFrame: Long, val pitch: Int, val velocity: Int, val pan: Float,
+        val track: StudioTrack, val instrument: SamplerInstrument? = null,
+        val synthType: String = "SYNTH_SINE", val synthLevel: Float = 0.8f,
+        val synthAttackMs: Float = 8f, val synthReleaseMs: Float = 90f
     )
 
     private data class DrumEvent(
@@ -118,10 +209,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     )
 
     private data class TrackMix(
-        val volume: Float,
-        val pan: Float,
-        val muted: Boolean,
-        val solo: Boolean,
+        val volume: Float, val pan: Float, val muted: Boolean, val solo: Boolean,
         val devices: List<TrackDevice>
     )
 
@@ -145,6 +233,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         liveMasterGain = masterGain.coerceIn(0f, 1f)
         loudnessMeter.reset()
         publishMasterMeter(0f, 0f, MasterLoudnessMeter.SILENCE_LUFS)
+        project.tracks.forEach { track ->
+            publishTrackMeter(track.id, 0f, 0f, 0f, 0f)
+        }
         updateMix(project)
         val plan = withContext(Dispatchers.IO) { buildPlan(project, token) }
         check(!closed.get()) { "Playback engine is closed" }
@@ -155,40 +246,24 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         runCatching {
             onProgress(ArrangementTiming.framesToTicks(startFrame, plan.bpm, plan.ppq, plan.sampleRate))
         }
-        val minBuffer = AudioTrack.getMinBufferSize(
-            plan.sampleRate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT
-        )
-        require(minBuffer > 0) { "Audio output buffer query failed: $minBuffer" }
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-            .setAudioFormat(AudioFormat.Builder().setSampleRate(plan.sampleRate)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
-                .setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setBufferSizeInBytes(maxOf(minBuffer, BLOCK_FRAMES * 4 * 4))
-            .build()
-        if (track.state != AudioTrack.STATE_INITIALIZED) {
-            track.release()
-            error("AudioTrack initialization failed")
-        }
+        val nativeOutput = NativeAudioEngine()
+        nativeOutput.start(plan.sampleRate)
         synchronized(this) {
             if (closed.get() || generation.get() != token) {
-                track.release()
+                nativeOutput.close()
                 error("Playback start was cancelled")
             }
-            output = track
+            output = nativeOutput
             running.set(true)
             try {
-                track.play()
                 worker = Thread({
                     Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
-                    renderPlan(track, plan, token, startFrame, onProgress, onCompleted, onError)
+                    renderPlan(nativeOutput, plan, token, startFrame, onProgress, onCompleted, onError)
                 }, "StudioWave-Arrangement").also { it.start() }
             } catch (failure: Throwable) {
                 running.set(false)
                 output = null
-                runCatching { track.release() }
+                runCatching { nativeOutput.close() }
                 throw failure
             }
         }
@@ -205,12 +280,19 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             ArrangementTiming.ticksToFrames(ticks, bpm, ppq, sampleRate)
 
         val tracks = project.tracks
+        val maxAllowedTick = ArrangementTiming.maxArrangementTick(
+            project.numerator, project.denominator, ppq, MAX_ARRANGEMENT_BARS
+        )
+        val defaultBarTicks = maxAllowedTick / MAX_ARRANGEMENT_BARS
         val maxTick = tracks.asSequence().flatMap { it.clips.asSequence() }.maxOfOrNull {
             val start = it.startTick.coerceAtLeast(0L).coerceAtMost(Long.MAX_VALUE / 2)
             val length = it.lengthTicks.coerceAtLeast(1L).coerceAtMost(Long.MAX_VALUE / 2)
             if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
-        } ?: (ppq.toLong() * project.numerator.coerceAtLeast(1) * 4L / project.denominator.coerceAtLeast(1))
-        val totalFrames = ticksToFrames(maxTick).coerceIn(1L, sampleRate.toLong() * MAX_ARRANGEMENT_SECONDS)
+        } ?: defaultBarTicks
+        // Keep playback aligned with the same 1800-bar musical limit as Arrangement.
+        // A fixed seconds cap would truncate valid projects at slower tempos or different meters.
+        val boundedMaxTick = maxTick.coerceIn(1L, maxAllowedTick)
+        val totalFrames = ticksToFrames(boundedMaxTick).coerceAtLeast(1L)
 
         val requestedTicksByUri = linkedMapOf<String, Long>()
         tracks.filter { it.kind == "audio" }.forEach { track ->
@@ -248,6 +330,37 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val audioEvents = ArrayList<AudioEvent>()
         val notes = ArrayList<NoteEvent>()
         val drums = ArrayList<DrumEvent>()
+        val samplerPreferences = appContext.getSharedPreferences("studiowave_directwave", Context.MODE_PRIVATE)
+        val instrumentsByTrack = HashMap<String, SamplerInstrument>()
+        tracks.asSequence().filter { it.kind == "midi" }.forEach { track ->
+            ensureCurrent()
+            val uriText = samplerPreferences.getString("sample.${track.id}", null)?.takeIf { it.isNotBlank() }
+                ?: return@forEach
+            val uri = Uri.parse(uriText)
+            // Bound instrument decoding to 30 seconds and include it in the shared PCM budget.
+            val duration = (readSourceDurationSeconds(uri) ?: 10.0).coerceIn(0.05, 30.0)
+            val frameCount = ceil(duration * sampleRate).toLong()
+                .coerceIn(1L, sampleRate.toLong() * 30L).toInt()
+            estimatedBytes += frameCount.toLong() * 4L
+            require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
+                "Instrument samples exceed the safe PCM memory budget; shorten samples or use fewer instrument tracks"
+            }
+            val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
+            val asset = audioAssetCache.get(cacheKey) ?: decodeAudioAsset(uri, duration, token).also { decoded ->
+                ensureCurrent()
+                audioAssetCache.put(cacheKey, decoded)
+            }
+            instrumentsByTrack[track.id] = SamplerInstrument(
+                asset = asset,
+                looping = samplerPreferences.getBoolean("loop.${track.id}", false),
+                pitchSemitones = samplerPreferences.getInt("pitch.${track.id}", 0).coerceIn(-24, 24),
+                fineTuneCents = samplerPreferences.getInt("fineTune.${track.id}", 0).coerceIn(-100, 100),
+                attackMs = samplerPreferences.getInt("attack.${track.id}", 5).coerceIn(0, 5000),
+                decayMs = samplerPreferences.getInt("decay.${track.id}", 120).coerceIn(0, 5000),
+                sustain = (samplerPreferences.getInt("sustain.${track.id}", 80) / 100f).coerceIn(0f, 1f),
+                releaseMs = samplerPreferences.getInt("release.${track.id}", 180).coerceIn(0, 5000)
+            )
+        }
         tracks.forEach { track ->
             ensureCurrent()
             track.clips.forEach clipLoop@{ clip ->
@@ -271,7 +384,18 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val noteDuration = ticksToFrames(note.durationTicks.coerceAtLeast(1L))
                         val noteEnd = min(clipEnd, if (noteStart > Long.MAX_VALUE - noteDuration) Long.MAX_VALUE else noteStart + noteDuration)
                         if (noteEnd > noteStart) {
-                            notes.add(NoteEvent(noteStart, noteEnd, note.pitch.coerceIn(0, 127), note.velocity.coerceIn(1, 127), track))
+                            val instrumentDevice = track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
+                            val instrumentType = instrumentDevice?.type ?: "DIRECTWAVE"
+                            val params = instrumentDevice?.parameters.orEmpty()
+                            val samplerInstrument = if (instrumentDevice == null || instrumentType == "DIRECTWAVE") instrumentsByTrack[track.id] else null
+                            val synthType = if (instrumentType in setOf("SYNTH_SINE","SYNTH_SAW","SYNTH_SQUARE","SYNTH_TRIANGLE","FM_SYNTH")) instrumentType else "SYNTH_SINE"
+                            notes.add(NoteEvent(
+                                noteStart, noteEnd, note.pitch.coerceIn(0,127), note.velocity.coerceIn(1,127),
+                                note.pan.coerceIn(-1f,1f), track, samplerInstrument, synthType,
+                                params["level"]?.coerceIn(0f,1f) ?: 0.8f,
+                                params["attackMs"]?.coerceIn(0f,5000f) ?: 8f,
+                                params["releaseMs"]?.coerceIn(0f,5000f) ?: 90f
+                            ))
                         }
                     }
                     "drum" -> {
@@ -445,8 +569,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             else -> buffer.getShort(sampleIndex * 2) / 32768f
         }
 
+    /** Latest native output health snapshot; useful for diagnostics and device stress tests. */
+    data class OutputDiagnostics(val queuedFrames: Int, val playedFrames: Long, val underruns: Long)
+
+    fun outputDiagnostics(): OutputDiagnostics {
+        val current = output
+        return if (current == null) OutputDiagnostics(0, 0L, 0L)
+        else OutputDiagnostics(current.queuedFrames(), current.playedFrames(), current.underrunCount())
+    }
+
     private fun renderPlan(
-        track: AudioTrack,
+        track: NativeAudioEngine,
         plan: Plan,
         token: Long,
         startFrame: Long,
@@ -456,8 +589,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
-        val perTrackMix = HashMap<String, FloatArray>()
-        val deviceDsp = HashMap<String, TrackDeviceDsp>()
         val perTrackMix = HashMap<String, FloatArray>()
         val deviceDsp = HashMap<String, TrackDeviceDsp>()
         val sampleRate = plan.sampleRate
@@ -489,9 +620,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
         var lastReportedFrame = -1L
         fun reportPlaybackPosition(force: Boolean = false) {
-            // The playback head tracks audible output, unlike the mixer's submitted
-            // frame cursor which runs ahead by the AudioTrack buffer latency.
-            val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+            // Native callback consumption tracks frames read from the PCM queue.
+            val playedFrames = track.playedFrames()
             val absoluteFrame = (startFrame + playedFrames).coerceAtMost(plan.totalFrames)
             val reportInterval = (sampleRate / 30).toLong().coerceAtLeast(1L)
             if (force || lastReportedFrame < 0L || absoluteFrame - lastReportedFrame >= reportInterval) {
@@ -505,7 +635,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
                 val sampleCount = frames * 2
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
-                perTrackMix.values.forEach { java.util.Arrays.fill(it, 0, sampleCount, 0f) }
                 perTrackMix.values.forEach { java.util.Arrays.fill(it, 0, sampleCount, 0f) }
                 val blockEnd = position + frames
                 val mixState = liveMix
@@ -528,10 +657,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, event.startFrame)
                     val to = min(blockEnd, event.endFrame)
+                    val trackGain = channelMix.volume * liveMasterGain
                     val pan = channelMix.pan
-                    val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
+                    val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     // Read the atomic scrub offset once per audio event/block, not per sample.
                     val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
@@ -549,8 +679,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val sourceIndex = sourceFrame * 2
                         val sourceLeft = event.asset.pcmStereo[sourceIndex] / 32768f * channelMix.volume * leftPan
                         val sourceRight = event.asset.pcmStereo[sourceIndex + 1] / 32768f * channelMix.volume * rightPan
-                        mix[outIndex] += sourceLeft * liveMasterGain
-                        mix[outIndex + 1] += sourceRight * liveMasterGain
+                        val leftSample = sourceLeft * liveMasterGain
+                        val rightSample = sourceRight * liveMasterGain
+                        mix[outIndex] += leftSample
+                        mix[outIndex + 1] += rightSample
                         channelBuffer[outIndex] += sourceLeft
                         channelBuffer[outIndex + 1] += sourceRight
                     }
@@ -561,25 +693,68 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
+                    val instrument = note.instrument
                     val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
                     val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
-                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
+                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
+                    val instrumentRate = instrument?.let {
+                        2.0.pow(((note.pitch - 60 + it.pitchSemitones).toDouble() + it.fineTuneCents / 100.0) / 12.0)
+                    } ?: 1.0
+                    val attackFrames = instrument?.let { it.attackMs.toLong() * sampleRate / 1000L } ?: 0L
+                    val decayFrames = instrument?.let { it.decayMs.toLong() * sampleRate / 1000L } ?: 0L
+                    val releaseFrames = instrument?.let { it.releaseMs.toLong() * sampleRate / 1000L } ?: 0L
                     for (absolute in from until to) {
                         val elapsed = absolute - note.startFrame
-                        val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
-                        val attack = min(1f, elapsed.toFloat() / (sampleRate * 0.008f))
-                        val release = min(1f, (noteLength - elapsed).toFloat() / (sampleRate * 0.035f))
-                        val envelope = min(attack, release)
-                        val channelWave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * channelGain * envelope
-                        val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
-                        mix[outIndex] += wave * leftPan
-                        mix[outIndex + 1] += wave * rightPan
-                        channelBuffer[outIndex] += channelWave * leftPan
-                        channelBuffer[outIndex + 1] += channelWave * rightPan
+                        if (instrument != null) {
+                            var sourceFrame = (elapsed.toDouble() * instrumentRate).toLong()
+                            if (instrument.looping) {
+                                sourceFrame %= instrument.asset.frames.toLong().coerceAtLeast(1L)
+                            } else if (sourceFrame >= instrument.asset.frames) {
+                                continue
+                            }
+                            val attackGain = if (attackFrames <= 0L) 1f
+                                else (elapsed.toFloat() / attackFrames.toFloat()).coerceIn(0f, 1f)
+                            val decayProgress = if (decayFrames <= 0L) 1f
+                                else ((elapsed - attackFrames).toFloat() / decayFrames.toFloat()).coerceIn(0f, 1f)
+                            val sustainGain = if (elapsed <= attackFrames) attackGain
+                                else 1f - (1f - instrument.sustain) * decayProgress
+                            val releaseGain = if (releaseFrames <= 0L) 1f
+                                else ((note.endFrame - absolute).toFloat() / releaseFrames.toFloat()).coerceIn(0f, 1f)
+                            val envelope = min(sustainGain, releaseGain)
+                            val sampleIndex = sourceFrame.toInt().coerceIn(0, instrument.asset.frames - 1) * 2
+                            val velocityGain = channelMix.volume * (note.velocity / 127f) * envelope
+                            val sourceLeft = instrument.asset.pcmStereo[sampleIndex] / 32768f * velocityGain * leftPan
+                            val sourceRight = instrument.asset.pcmStereo[sampleIndex + 1] / 32768f * velocityGain * rightPan
+                            mix[outIndex] += sourceLeft * liveMasterGain
+                            mix[outIndex + 1] += sourceRight * liveMasterGain
+                            channelBuffer[outIndex] += sourceLeft
+                            channelBuffer[outIndex + 1] += sourceRight
+                        } else {
+                            val attackFrames = (note.synthAttackMs.coerceIn(0f,5000f) * sampleRate / 1000f).toLong()
+                            val releaseFrames = (note.synthReleaseMs.coerceIn(0f,5000f) * sampleRate / 1000f).toLong()
+                            val attack = if (attackFrames <= 0L) 1f else (elapsed.toDouble() / attackFrames).toFloat().coerceIn(0f,1f)
+                            val release = if (releaseFrames <= 0L) 1f else ((noteLength-elapsed).toDouble()/releaseFrames).toFloat().coerceIn(0f,1f)
+                            val envelope = min(attack,release)
+                            val phase = (frequency * elapsed / sampleRate) % 1.0
+                            val oscillator = when(note.synthType) {
+                                "SYNTH_SAW" -> (2.0*phase-1.0).toFloat()
+                                "SYNTH_SQUARE" -> if(phase<0.5) 0.85f else -0.85f
+                                "SYNTH_TRIANGLE" -> (1.0-4.0*abs(phase-0.5)).toFloat()
+                                "FM_SYNTH" -> sin(2.0*PI*phase+2.6*sin(2.0*PI*phase*2.0)).toFloat()
+                                else -> sin(2.0*PI*phase).toFloat()
+                            }
+                            val channelWave = oscillator * channelGain * note.synthLevel.coerceIn(0f,1f) * envelope
+                            val wave = channelWave * liveMasterGain
+                            mix[outIndex] += wave * leftPan
+                            mix[outIndex+1] += wave * rightPan
+                            channelBuffer[outIndex] += channelWave * leftPan
+                            channelBuffer[outIndex+1] += channelWave * rightPan
+                        }
                     }
                 }
 
@@ -589,25 +764,28 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val hitEnd = drum.startFrame + DRUM_DURATION_FRAMES
                     val from = max(position, drum.startFrame)
                     val to = min(blockEnd, hitEnd)
-                    val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val channelGain = channelMix.volume * 0.38f
+                    val gain = channelGain * liveMasterGain
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
+                    val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     for (absolute in from until to) {
                         val t = (absolute - drum.startFrame).toDouble() / sampleRate
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
                         val channelWave = sin(2.0 * PI * frequency * t).toFloat() * exp(-t * 20.0).toFloat() * channelGain
                         val wave = channelWave * liveMasterGain
                         val outIndex = ((absolute - position) * 2).toInt()
+                        val sourceLeft = channelWave * leftPan
+                        val sourceRight = channelWave * rightPan
                         mix[outIndex] += wave * leftPan
                         mix[outIndex + 1] += wave * rightPan
-                        channelBuffer[outIndex] += channelWave * leftPan
-                        channelBuffer[outIndex + 1] += channelWave * rightPan
+                        channelBuffer[outIndex] += sourceLeft
+                        channelBuffer[outIndex + 1] += sourceRight
                     }
                 }
 
-                // Run the persisted track insert chain on the summed channel signal before mastering.
+                // Apply each persisted track-insert chain in order; patch its processed-minus-dry delta to master.
                 perTrackMix.forEach { (trackId, channel) ->
                     val trackMix = mixState.tracks[trackId] ?: return@forEach
                     if (trackMix.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
@@ -616,34 +794,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
-                // Publish each track's measured pre-master level from the real mixed channel buffer.
-                perTrackMix.forEach { (id, channel) ->
-                    val levels = measureStereoMeterLevels(channel, sampleCount)
-                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight)
-                }
-                mixState.tracks.keys.forEach { id ->
-                    if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f)
-                }
-
-                // Run enabled insert processors on each channel buffer; DSP adds the wet delta to master.
-                perTrackMix.forEach { (trackId, channel) ->
-                    val trackMix = mixState.tracks[trackId] ?: return@forEach
-                    if (trackMix.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
-                        deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
-                            .process(channel, mix, sampleCount, liveMasterGain, trackMix.devices)
-                    }
-                }
-                perTrackMix.forEach { (id, channel) ->
-                    val levels = measureStereoMeterLevels(channel, sampleCount)
-                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight)
-                }
-                mixState.tracks.keys.forEach { id -> if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f) }
-
+                // Per-channel meters are calculated from each track's summed pre-master stereo bus.
+                // Buffers are reused across blocks; only one meter snapshot is published per track/block.
                 var blockPeak = 0f
                 var blockSquares = 0.0
                 for (i in 0 until sampleCount) {
                     val sample = mix[i].coerceIn(-0.98f, 0.98f)
-                    mix[i] = sample // Meter the same clipped master signal that is sent to AudioTrack.
+                    mix[i] = sample // Meter the same clipped master signal queued for native output.
                     val absolute = kotlin.math.abs(sample)
                     if (absolute > blockPeak) blockPeak = absolute
                     blockSquares += sample.toDouble() * sample.toDouble()
@@ -651,30 +808,32 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
                 val momentaryLufs = loudnessMeter.processBlock(mix, sampleCount)
                 publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat(), momentaryLufs)
-                var offset = 0
-                while (offset < sampleCount && running.get()) {
-                    val written = track.write(pcm, offset, sampleCount - offset, AudioTrack.WRITE_BLOCKING)
-                    if (written < 0) error("Audio output write failed: $written")
-                    if (written == 0) Thread.yield() else offset += written
+                perTrackMix.forEach { (id, channel) ->
+                    val levels = measureStereoMeterLevels(channel, sampleCount)
+                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight)
                 }
+                // A silent/muted channel should not leave an old level stuck on screen.
+                mixState.tracks.keys.forEach { id ->
+                    if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f)
+                }
+                if (!track.queuePcm(pcm, sampleCount) { running.get() && generation.get() == token }) break
                 position = blockEnd
                 reportPlaybackPosition()
             }
             if (position >= plan.totalFrames && generation.get() == token && running.get()) {
                 val expectedPlayedFrames = (plan.totalFrames - startFrame).coerceAtLeast(0L)
                 val drainDeadlineNanos = System.nanoTime() + 5_000_000_000L
-                // Do not tear down AudioTrack immediately after the last write: queued
-                // samples must reach the output before playback is declared complete.
+                // Wait until Oboe has consumed queued PCM before reporting completion.
                 while (running.get() && generation.get() == token) {
                     reportPlaybackPosition()
-                    val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+                    val playedFrames = track.playedFrames()
                     if (playedFrames >= expectedPlayedFrames) break
                     if (System.nanoTime() >= drainDeadlineNanos) {
                         error("Audio output did not drain before timeout")
                     }
                     Thread.sleep(4L)
                 }
-                val playedFrames = track.playbackHeadPosition.toLong() and 0xFFFF_FFFFL
+                val playedFrames = track.playedFrames()
                 if (running.get() && generation.get() == token &&
                     playedFrames >= expectedPlayedFrames && running.compareAndSet(true, false)
                 ) {
@@ -694,8 +853,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             synchronized(this) {
                 if (output === track) {
                     output = null
-                    runCatching { track.pause(); track.flush() }
-                    runCatching { track.release() }
+                    runCatching { track.close() }
                 }
                 worker = null
             }
@@ -705,11 +863,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     fun updateMix(project: StudioProject) {
         val trackValues = project.tracks.map { track ->
             TrackMix(
-                volume = track.volume.coerceIn(0f, 1.5f),
-                pan = track.pan.coerceIn(-1f, 1f),
-                muted = track.muted,
-                solo = track.solo,
-                devices = track.devices
+                volume=track.volume.coerceIn(0f,1.5f), pan=track.pan.coerceIn(-1f,1f),
+                muted=track.muted, solo=track.solo, devices=track.devices
             )
         }
         liveMix = MixSnapshot(
@@ -743,15 +898,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         generation.incrementAndGet()
         scratchOffsetsMs.clear()
         stopOutputOnly()
+        trackMeterBits.keys.forEach { id -> publishTrackMeter(id, 0f, 0f, 0f, 0f) }
     }
 
     private fun stopOutputOnly() {
         running.set(false)
         val current = synchronized(this) { output }
-        // Pause/flush before joining so a blocking AudioTrack.write can unwind.
-        current?.let { track ->
-            runCatching { track.pause(); track.flush() }
-        }
+        // Closing Oboe unblocks native queue operations before joining the producer.
+        current?.let { track -> runCatching { track.stop() } }
         val thread = worker
         if (thread != null && thread !== Thread.currentThread()) {
             try {
@@ -764,8 +918,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             if (output === current) {
                 output = null
                 current?.let { track ->
-                    runCatching { track.pause(); track.flush() }
-                    runCatching { track.release() }
+                    runCatching { track.close() }
                 }
             }
             if (worker === thread && (thread == null || !thread.isAlive)) worker = null
@@ -791,7 +944,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         const val BLOCK_FRAMES = 256
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 300
-        const val MAX_ARRANGEMENT_SECONDS = 60 * 15
+        const val MAX_ARRANGEMENT_BARS = 1800
         const val MAX_TOTAL_PCM_BYTES = 64L * 1024L * 1024L
         // 64 MiB accommodates one five-minute stereo PCM source (~50.5 MiB), avoiding
         // cache eviction and expensive source decoding every time a long clip is resized.
