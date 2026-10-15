@@ -1535,11 +1535,15 @@ private fun ArrangementWorkspace(
         // becoming a separate Column child that could steal timeline height.
         Row(
             Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
-                .background(Raised.copy(alpha = 0.94f), RoundedCornerShape(28.dp))
+                .background(Raised.copy(alpha = 0.96f), RoundedCornerShape(22.dp))
+                .border(1.dp, LocalStudioWavePalette.current.border.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
                 .padding(horizontal = 5.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+                FloatingTimelineControl("FILES", "Open sample and project browser") {
+                    onOpenEditor("BROWSER", null, null)
+                }
                 FloatingTimelineControl("FIT", "Fit clips to view") {
                     onZoom(fitZoom)
                     onVerticalZoom(1f)
