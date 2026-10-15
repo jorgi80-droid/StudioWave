@@ -30,20 +30,21 @@
 - Timeline fixes: shared `TimelineViewport` mapping, pane-local factory, anchor zoom test, max 1800 bars.
 
 ## Latest CI status and known compile failures
-- Most recent run launched for commit `2ff63d87f5eeeb2ef7d2b5a89636f24d142a3f49`: https://github.com/jorgi80-droid/StudioWave/actions/runs/38735040285
-- At last check it was still in progress at setup-gradle; poll before further assumptions.
-- Older build failures included: missing `DeviceModuleCard` helper (resolved by returning MainActivity to previously CI-tested baseline at `8b9ec03b23d734d3c7d379f5b2a058351a0577ce`), missing `R.raw.one_shot` (latest MainActivity change generates this sample through FactorySampleLibrary instead), and audio engine interface mismatches (latest engine returned to tested native-queue baseline and then minimal device DSP routing was added; test via the latest CI).
+- Latest corrected viewport test commit: `d980bd7729a9a92cc975c5cb6b328673c0cc22f5`; outdated `visibleSubdivisionTicks()` calls were replaced with `gridSubdivisionTicks(beatPixels)`.
+- Track FX render integration commit: `0e034fc56a8ca1ba8e2a7ce01802eabe7b65848d`; duplicate buffer declaration was removed at `4d2ac86d77b416d81634b13aced3bf17f2aeb32b`. Latest visible engine blob SHA is `c10548572bdb35ba9cda068a3b031f50f8cf0bcd`.
+- Last polled CI runs: viewport test run `38741454039` and DSP integration run `38741469140`. Both were still running; build steps had not produced a final result at checkpoint time.
+- Prior CI run `38735345435` had successful APK compilation but unit tests failed due to the obsolete viewport API; the source test was since fixed.
+- Historical build failures also included an absent `R.raw.one_shot`; latest MainActivity generates the sample via the offline factory pack.
 - A successful historical baseline existed at `8b9ec03b23d734d3c7d379f5b2a058351a0577ce`, run `38678231952`, job `116236609946`.
-- Do not call current branch green until the current build and unit tests complete successfully. Do not provide an APK link unless artifact exists and exact path/asset is verified.
+- Do not call current branch green until the newest build AND unit tests pass. Do not provide an APK link unless a successful workflow artifact exists and its exact path is verified.
 
 ## Next actions (resume here)
-1. Poll run `38735040285` and inspect job logs if failed; fix only exact compiler errors.
-2. Ensure new arrangement render routing compiles and TrackDeviceDsp tests pass.
-3. Make sure all device changes survive JSON save/load and effect enabled/parameters are actually sent into render.
-4. Add/expand tests: processor response and bypass, EQ response, finite output, delay state continuation, limiter safety, device persistence and ordered chain.
-5. Keep Full Analyzer/Multi FX/SuperSaw/MiniSynth/GMS visibly unavailable until real measured FFT / serial chain / synth voice implementations exist. Then implement and add tests before exposing as enabled.
-6. Update this file and PR body after each stable batch; PR stays draft until build/tests pass.
-7. Only after CI + verified artifact, report APK path and note that physical Android touch/audible validation is still necessary.
+1. Poll runs `38741454039` and `38741469140`; retrieve logs on failure and fix the exact error.
+2. If unit tests fail, inspect DSP assertions after viewport tests pass; ensure enabled insert effects really modify the per-track signal in chain order and do not make master double-count the dry signal.
+3. Ensure Full Analyzer/Multi FX/SuperSaw/MiniSynth/GMS are not shown as working until there are engine-backed implementations and tests.
+4. Continue visual pass against the submitted Ableton Live screenshots: arrangement clip detail/waveforms, device chain/effect graphs and knobs, mixer channel strips/meters, responsive horizontal navigation.
+5. Keep PR #15 draft until CI is green, update this checkpoint after each stable batch, and report only verified artifacts.
+6. Physical Android touch/audio test is still required after CI.
 
 ## Honest status
 As of this checkpoint, the integration is not yet build-verified on the latest commit. Do not merge PR #15, do not claim 1:1 Ableton parity, and do not claim all requested devices work.
