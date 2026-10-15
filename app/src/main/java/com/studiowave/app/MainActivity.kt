@@ -3472,7 +3472,6 @@ private fun PianoRollWorkspace(
                 }
                 SmallAction("HIDE") { virtualKeyboardVisible = false }
             }
-        }
         Row(Modifier.fillMaxWidth().height(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(editMessage, color = pianoPalette.muted, fontSize = 7.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
