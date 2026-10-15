@@ -2597,11 +2597,11 @@ private fun TimelineGrid(
                                 .padding(top = 7.dp, bottom = 7.dp)
                                 .timelineClipWidthPx(clipWidthPx)
                                 .fillMaxHeight()
-                                .background(clipFill, RoundedCornerShape(2.dp))
+                                .background(clipFill, RoundedCornerShape(1.dp))
                                 .border(
                                     width = if (selectedClip == clip.id) 1.25.dp else 0.5.dp,
                                     color = if (selectedClip == clip.id) timelinePalette.orange else timelinePalette.border.copy(alpha = 0.42f),
-                                    shape = RoundedCornerShape(2.dp)
+                                    shape = RoundedCornerShape(1.dp)
                                 )
                                 .pointerInput(clip.id, trackIndex) {
                                     // The trailing grip owns resize gestures. Do not let the clip-body
@@ -2748,12 +2748,16 @@ private fun TimelineGrid(
                                     val beatTicks = (project.ppq.toLong() * 4L /
                                         project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
                                     val barTicks = beatTicks * project.numerator.coerceAtLeast(1).toLong()
-                                    val beatCount = (duration / beatTicks.toDouble()).toInt().coerceIn(1, 256)
-                                    for (beat in 1 until beatCount) {
-                                        val x = (beat.toDouble() * beatTicks.toDouble() / duration * size.width).toFloat()
-                                        val isBarLine = beatTicks * beat.toLong() % barTicks == 0L
+                                    val beatCount = kotlin.math.ceil(duration / beatTicks.toDouble()).toInt().coerceIn(1, 256)
+                                    // Include the clip's zero point as a real bar line; subsequent
+                                    // beat and bar guides use the same clip-relative tick transform.
+                                    for (beat in 0 until beatCount) {
+                                        val tick = beatTicks * beat.toLong()
+                                        val x = (tick.toDouble() / duration * size.width).toFloat()
+                                        val isBarLine = beat == 0 || tick % barTicks == 0L
                                         drawLine(
-                                            clipInk.copy(alpha = if (isLightTheme) 0.20f else 0.18f),
+                                            if (isBarLine) accent.copy(alpha = if (isLightTheme) 0.72f else 0.62f)
+                                            else clipInk.copy(alpha = if (isLightTheme) 0.20f else 0.18f),
                                             Offset(x, 0f), Offset(x, size.height),
                                             if (isBarLine) 1.2f else 0.55f
                                         )
@@ -3684,14 +3688,17 @@ private fun PianoRollWorkspace(
                                 val y = row * localRowHeight
                                 val width = (note.durationTicks.toDouble() / stepTicks.toDouble() * localColWidth).toFloat().coerceAtLeast(3f)
                                 if (note.pitch in 0..127 && x < size.width && x + width > 0 && y + localRowHeight > 0 && y < size.height) {
-                                    drawRoundRect(
-                                        color = if (note.id == selectedNoteId || note.id in selectedNoteIds) pianoPalette.orange else pianoPalette.accent,
-                                        topLeft = Offset(x.toFloat(), y + 1f),
-                                        size = Size(width, (localRowHeight - 2f).coerceAtLeast(2f)),
-                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3f)
-                                    )
-                                    drawRect(Color.White.copy(alpha = 0.8f),
-                                        Offset(x.toFloat() + width - 3f, y + 1f), Size(2f, (localRowHeight - 2f).coerceAtLeast(2f)))
+                                    val noteHeight = (localRowHeight - 2f).coerceAtLeast(2f)
+                                    val selected = note.id == selectedNoteId || note.id in selectedNoteIds
+                                    val velocityAlpha = (0.52f + note.velocity.coerceIn(1, 127) / 270f).coerceIn(0.52f, 0.98f)
+                                    val noteColor = if (selected) pianoPalette.orange else pianoPalette.accent.copy(alpha = velocityAlpha)
+                                    // Live-inspired MIDI notes use a flat rectangular body. Velocity
+                                    // changes opacity, while selection remains clearly orange.
+                                    drawRect(noteColor, Offset(x.toFloat(), y + 1f), Size(width, noteHeight))
+                                    drawLine(Color.White.copy(alpha = if (selected) 0.95f else 0.62f),
+                                        Offset(x.toFloat(), y + 1f), Offset(x.toFloat() + width, y + 1f), 1f)
+                                    drawRect(Color.White.copy(alpha = if (selected) 0.95f else 0.72f),
+                                        Offset(x.toFloat() + width - 2f, y + 1f), Size(2f, noteHeight))
                                 }
                             }
                         }
