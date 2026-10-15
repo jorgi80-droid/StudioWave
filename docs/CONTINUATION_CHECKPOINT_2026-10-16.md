@@ -92,3 +92,10 @@
 - Arrangement track headers now show a compact zero-padded track index alongside the track name, improving lane scanning without changing track IDs or timeline geometry.
 - Implementation commits: [09c028fd](https://github.com/jorgi80-droid/StudioWave/commit/09c028fdbd4f23b4ff0a892688b9062d02d2a92e), [9990e826](https://github.com/jorgi80-droid/StudioWave/commit/9990e82615ba8fda8b39417c79d1bfff53109f0d), [a61fda6a](https://github.com/jorgi80-droid/StudioWave/commit/a61fda6a0afc8be5b51b0f8c5806f73646e9d277), [9ab12106](https://github.com/jorgi80-droid/StudioWave/commit/9ab12106fbfea16fbf5b374d96261ba9af369e1).
 - Validation is pending for the latest source head: debug APK build, unit tests, and APK artifact upload must pass. Physical Android landscape testing remains outstanding; PR #15 stays draft.
+
+
+## Arrangement / Device enabled-state animation pass — 2026-10-16
+- Commit [0ee396c2](https://github.com/jorgi80-droid/StudioWave/commit/0ee396c22757394f449574c22c163b8744784868) adds a 120 ms eased color transition to the Arrangement clip-selection outline, in addition to the existing selection-fill transition.
+- Effect device faceplates now ease the active top strip and enabled-state indicator between enabled and disabled colors over 120 ms. The existing ON/OFF control and device model callback are unchanged.
+- These are presentation-only Compose animations. No timeline coordinates, clip drag/resize/snap mapping, audio processing, device enable semantics, parameter persistence, or routing were intentionally changed.
+- Latest-head CI and physical landscape Android validation remain pending. Keep PR #15 as draft until debug APK build, unit tests, artifact upload, and device checks are complete.
