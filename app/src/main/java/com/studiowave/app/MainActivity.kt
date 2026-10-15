@@ -2912,6 +2912,7 @@ private fun PianoRollWorkspace(
             Text(clip?.name ?: "NO CLIP", color = pianoPalette.text, fontSize = 8.sp, maxLines = 1,
                 modifier = Modifier.widthIn(max = 90.dp))
             Spacer(Modifier.weight(1f))
+            SmallAction("×") { onBack() }
             SmallAction(if (keyboardVisible) "NOTES" else "VEL LANE") {
                 keyboardVisible = !keyboardVisible
                 velocityMode = !keyboardVisible
