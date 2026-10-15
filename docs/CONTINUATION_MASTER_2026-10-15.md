@@ -39,7 +39,7 @@
 - Do not call current branch green until the newest build AND unit tests pass. Do not provide an APK link unless a successful workflow artifact exists and its exact path is verified.
 
 ## Next actions (resume here)
-1. Poll runs `38741454039` and `38741469140`; retrieve logs on failure and fix the exact error.
+1. Poll run `38742059249`; the previous CI failure was a test-only numeric assertion error. Confirm both APK build and unit tests pass.
 2. If unit tests fail, inspect DSP assertions after viewport tests pass; ensure enabled insert effects really modify the per-track signal in chain order and do not make master double-count the dry signal.
 3. Ensure Full Analyzer/Multi FX/SuperSaw/MiniSynth/GMS are not shown as working until there are engine-backed implementations and tests.
 4. Continue visual pass against the submitted Ableton Live screenshots: arrangement clip detail/waveforms, device chain/effect graphs and knobs, mixer channel strips/meters, responsive horizontal navigation.
