@@ -4576,9 +4576,16 @@ private fun DirectWaveDevicePanel(
     }
 
     val compact = !fullHeight
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
     val knobSize = if (compact) 48.dp else 62.dp
     val waveformHeight = if (compact) 45.dp else 76.dp
-    val panelHeight = if (compact) 287.dp else 410.dp
+    val panelWidth = if (fullHeight) {
+        (screenWidth - 96.dp).coerceIn(480.dp, 860.dp)
+    } else {
+        (screenWidth - 168.dp).coerceIn(400.dp, 610.dp)
+    }
+    val panelHeight = if (compact) 287.dp else (configuration.screenHeightDp.dp - 92.dp).coerceIn(300.dp, 410.dp)
     val statusText = when {
         sampleReady && isFactorySample -> "FACTORY SAMPLE · READY"
         sampleReady -> "USER SAMPLE · READY"
@@ -4587,8 +4594,8 @@ private fun DirectWaveDevicePanel(
     }
 
     Column(
-        Modifier.width(if (fullHeight) 860.dp else 610.dp)
-            .height(if (fullHeight) panelHeight else 287.dp)
+        Modifier.width(panelWidth)
+            .height(panelHeight)
             .background(palette.canvas, RoundedCornerShape(1.dp))
             .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(4.dp),
