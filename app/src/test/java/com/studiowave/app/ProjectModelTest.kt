@@ -190,4 +190,51 @@ class ProjectModelTest {
         assertEquals(2.4f, restoredDevice.parameters["band4Q"] ?: 0f, 0.001f)
     }
 
+
+    @Test fun absoluteAudioTrimCoordinatesRoundTripThroughProjectJson() {
+        val original = StudioProject()
+        val audioTrack = original.tracks.first { it.kind == "audio" }
+        val clip = com.studiowave.app.data.WaveClip(
+            name = "Trimmed audio",
+            startTick = 0L,
+            lengthTicks = 1_920L,
+            sourceUri = "content://test/audio",
+            sourceOffsetTicks = 960L,
+            sourceOffsetMicros = 375_000L,
+            sourceLengthMicros = 625_000L
+        )
+        val edited = original.copy(tracks = original.tracks.map { track ->
+            if (track.id == audioTrack.id) track.copy(clips = listOf(clip)) else track
+        })
+        val restored = StudioProject.fromJson(edited.toJson())
+        val restoredClip = restored.tracks.first { it.id == audioTrack.id }.clips.single()
+        assertEquals(375_000L, restoredClip.sourceOffsetMicros)
+        assertEquals(625_000L, restoredClip.sourceLengthMicros)
+        assertEquals(960L, restoredClip.sourceOffsetTicks)
+        assertEquals(1_920L, restoredClip.lengthTicks)
+    }
+
+    @Test fun legacyAudioTrimMigratesUsingSavedProjectTempo() {
+        val original = StudioProject(bpm = 120, ppq = 960)
+        val audioTrack = original.tracks.first { it.kind == "audio" }
+        val legacyClip = com.studiowave.app.data.WaveClip(
+            name = "Legacy audio",
+            startTick = 0L,
+            lengthTicks = 1_920L,
+            sourceUri = "content://test/legacy-audio",
+            sourceOffsetTicks = 960L
+        )
+        val legacyProject = original.copy(tracks = original.tracks.map { track ->
+            if (track.id == audioTrack.id) track.copy(clips = listOf(legacyClip)) else track
+        })
+        val restored = StudioProject.fromJson(legacyProject.toJson())
+        val migrated = restored.tracks.first { it.id == audioTrack.id }.clips.single()
+        assertEquals(500_000L, migrated.sourceOffsetMicros)
+        assertEquals(1_000_000L, migrated.sourceLengthMicros)
+        val reopened = StudioProject.fromJson(restored.toJson())
+        val reopenedClip = reopened.tracks.first { it.id == audioTrack.id }.clips.single()
+        assertEquals(migrated.sourceOffsetMicros, reopenedClip.sourceOffsetMicros)
+        assertEquals(migrated.sourceLengthMicros, reopenedClip.sourceLengthMicros)
+    }
+
 }
