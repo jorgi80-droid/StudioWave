@@ -2086,12 +2086,13 @@ private fun AudioEditorWorkspace(
             } else 0L
             sourceDurationTicks = durationTicks
             if (durationTicks > 0L) {
-                val offset = (clip?.sourceOffsetTicks ?: 0L).coerceIn(0L, durationTicks - 1L)
-                val end = (offset + (clip?.lengthTicks ?: 1L).coerceAtLeast(1L))
-                    .coerceAtMost(durationTicks).coerceAtLeast(offset + 1L)
-                startFraction = (offset.toDouble() / durationTicks).toFloat().coerceIn(0f, 0.99f)
-                endFraction = (end.toDouble() / durationTicks).toFloat()
-                    .coerceIn(startFraction + 0.01f, 1f)
+                val restored = audioTrimFractionsFromTicks(
+                    sourceOffsetTicks = clip?.sourceOffsetTicks ?: 0L,
+                    clipLengthTicks = clip?.lengthTicks ?: 1L,
+                    sourceDurationTicks = durationTicks
+                )
+                startFraction = restored.first
+                endFraction = restored.second
             }
         } catch (_: Exception) {
             sourceDurationTicks = 0L
@@ -2103,13 +2104,13 @@ private fun AudioEditorWorkspace(
         val activeClip = clip ?: return
         val durationTicks = sourceDurationTicks
         if (durationTicks < 2L) return
-        val safeStart = startFractionValue.coerceIn(0f, 0.99f)
-        val safeEnd = endFractionValue.coerceIn(safeStart + 0.01f, 1f)
-        val startTicks = (durationTicks.toDouble() * safeStart.toDouble()).toLong()
-            .coerceIn(0L, durationTicks - 1L)
-        val endTicks = (durationTicks.toDouble() * safeEnd.toDouble()).toLong()
-            .coerceIn(startTicks + 1L, durationTicks)
-        val nextLength = (endTicks - startTicks).coerceAtLeast(1L)
+        val range = audioTrimRangeFromFractions(
+            startFraction = startFractionValue,
+            endFraction = endFractionValue,
+            sourceDurationTicks = durationTicks
+        ) ?: return
+        val startTicks = range.startTicks
+        val nextLength = range.endTicksExclusive - range.startTicks
         onProjectChange(project.copy(tracks = project.tracks.map { item ->
             if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
                 if (current.id == activeClip.id) current.copy(
@@ -5814,6 +5815,43 @@ private fun readAudioSourceDurationSeconds(context: android.content.Context, uri
     } finally {
         extractor.release()
     }
+}
+
+internal data class AudioTrimTickRange(val startTicks: Long, val endTicksExclusive: Long)
+
+/** Restores editor slider fractions from persisted musical source coordinates without overflowing. */
+internal fun audioTrimFractionsFromTicks(
+    sourceOffsetTicks: Long,
+    clipLengthTicks: Long,
+    sourceDurationTicks: Long
+): Pair<Float, Float> {
+    if (sourceDurationTicks < 2L) return 0f to 1f
+    val start = sourceOffsetTicks.coerceIn(0L, sourceDurationTicks - 1L)
+    val length = clipLengthTicks.coerceAtLeast(1L)
+    val remaining = sourceDurationTicks - start
+    val end = start + length.coerceAtMost(remaining)
+    val startFraction = (start.toDouble() / sourceDurationTicks.toDouble()).toFloat().coerceIn(0f, 0.99f)
+    val endFraction = (end.toDouble() / sourceDurationTicks.toDouble()).toFloat()
+        .coerceIn(startFraction + 1f / sourceDurationTicks.toFloat(), 1f)
+    return startFraction to endFraction
+}
+
+/** Converts slider fractions to a valid non-empty source range using safe tick arithmetic. */
+internal fun audioTrimRangeFromFractions(
+    startFraction: Float,
+    endFraction: Float,
+    sourceDurationTicks: Long
+): AudioTrimTickRange? {
+    if (sourceDurationTicks < 2L) return null
+    val safeStart = if (startFraction.isFinite()) startFraction.coerceIn(0f, 0.99f) else 0f
+    val minimumEndFraction = (safeStart + 1f / sourceDurationTicks.toFloat()).coerceAtMost(1f)
+    val requestedEnd = if (endFraction.isFinite()) endFraction else 1f
+    val safeEnd = requestedEnd.coerceIn(minimumEndFraction, 1f)
+    val start = (sourceDurationTicks.toDouble() * safeStart.toDouble()).toLong()
+        .coerceIn(0L, sourceDurationTicks - 1L)
+    val end = (sourceDurationTicks.toDouble() * safeEnd.toDouble()).toLong()
+        .coerceIn(start + 1L, sourceDurationTicks)
+    return AudioTrimTickRange(start, end)
 }
 
 internal data class AudioWaveformClipRange(
