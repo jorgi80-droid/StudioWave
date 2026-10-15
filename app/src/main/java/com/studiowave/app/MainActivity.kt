@@ -2521,7 +2521,7 @@ private fun TimelineGrid(
              val barWidth = rulerViewport.effectivePixelsPerBar
              val firstVisibleBar = rulerViewport.firstVisibleBar().coerceAtMost(4096L).toInt()
              val lastVisibleBar = rulerViewport.lastVisibleBar().coerceAtMost(4096L).toInt()
-             val labelEveryBar = barWidth >= with(density) { 94.dp.toPx() }
+             val labelEveryBar = barWidth >= with(density) { 52.dp.toPx() }
              for (bar in firstVisibleBar..lastVisibleBar) {
                  val x = rulerViewport.timeToViewportX(bar.toLong() * timebase.ticksPerBar)
                  if (bar % 4 == 0 || labelEveryBar) {
