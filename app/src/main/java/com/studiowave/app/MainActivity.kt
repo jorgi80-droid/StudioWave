@@ -3431,7 +3431,6 @@ private fun PianoRollWorkspace(
             }
         }
                     }
-                    }
                 }
             }
         }
