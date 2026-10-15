@@ -2515,7 +2515,10 @@ private fun TimelineGrid(
                                 }
                                 .combinedClickable(
                                     onClick = { onSelectClip(clip.id) },
-                                    onDoubleClick = { onSelectClip(clip.id); onOpenEditor(clip.id) },
+                                    onDoubleClick = {
+                                        onSelectClip(clip.id)
+                                        onOpenEditor(clip.id)
+                                    },
                                     onLongClick = { onSelectClip(clip.id); onClipLongPress(clip.id) }
                                 )
                                 .padding(4.dp)
