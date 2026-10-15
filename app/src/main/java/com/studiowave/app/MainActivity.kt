@@ -5830,7 +5830,9 @@ internal fun audioTrimFractionsFromTicks(
     val length = clipLengthTicks.coerceAtLeast(1L)
     val remaining = sourceDurationTicks - start
     val end = start + length.coerceAtMost(remaining)
-    val startFraction = (start.toDouble() / sourceDurationTicks.toDouble()).toFloat().coerceIn(0f, 0.99f)
+    val maximumStartFraction = (1f - 1f / sourceDurationTicks.toFloat()).coerceAtLeast(0f)
+    val startFraction = (start.toDouble() / sourceDurationTicks.toDouble()).toFloat()
+        .coerceIn(0f, maximumStartFraction)
     val endFraction = (end.toDouble() / sourceDurationTicks.toDouble()).toFloat()
         .coerceIn(startFraction + 1f / sourceDurationTicks.toFloat(), 1f)
     return startFraction to endFraction
@@ -5843,7 +5845,8 @@ internal fun audioTrimRangeFromFractions(
     sourceDurationTicks: Long
 ): AudioTrimTickRange? {
     if (sourceDurationTicks < 2L) return null
-    val safeStart = if (startFraction.isFinite()) startFraction.coerceIn(0f, 0.99f) else 0f
+    val maximumStartFraction = (1f - 1f / sourceDurationTicks.toFloat()).coerceAtLeast(0f)
+    val safeStart = if (startFraction.isFinite()) startFraction.coerceIn(0f, maximumStartFraction) else 0f
     val minimumEndFraction = (safeStart + 1f / sourceDurationTicks.toFloat()).coerceAtMost(1f)
     val requestedEnd = if (endFraction.isFinite()) endFraction else 1f
     val safeEnd = requestedEnd.coerceIn(minimumEndFraction, 1f)
