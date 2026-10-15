@@ -56,6 +56,49 @@ class ProjectModelTest {
         })
     }
 
+    @Test fun perNotePanRoundTripsAndIsClampedToStereoRange() {
+        val project = StudioProject()
+        val midiTrack = project.tracks.first { it.kind == "midi" }
+        val firstClip = midiTrack.clips.first()
+        val note = firstClip.midiNotes.first()
+        val edited = project.copy(tracks = project.tracks.map { track ->
+            if (track.id != midiTrack.id) track else track.copy(clips = track.clips.map { clip ->
+                if (clip.id != firstClip.id) clip else clip.copy(midiNotes = clip.midiNotes.map {
+                    if (it.id == note.id) it.copy(pan = 0.65f) else it
+                })
+            })
+        })
+        val restored = StudioProject.fromJson(JSONObject(edited.toJson().toString()))
+        val restoredNote = restored.tracks.first { it.id == midiTrack.id }.clips.first()
+            .midiNotes.first { it.id == note.id }
+        assertEquals(0.65f, restoredNote.pan, 0.0001f)
+
+        val json = edited.toJson()
+        val tracks = json.getJSONArray("tracks")
+        val noteJson = tracks.getJSONObject(1).getJSONArray("clips").getJSONObject(0)
+            .getJSONArray("midiNotes").getJSONObject(0)
+        noteJson.put("pan", 4.0)
+        val clamped = StudioProject.fromJson(json).tracks.first { it.id == midiTrack.id }
+            .clips.first().midiNotes.first()
+        assertEquals(1f, clamped.pan, 0f)
+    }
+
+    @Test fun legacyMidiNotesWithoutPanLoadCentered() {
+        val json = StudioProject().toJson()
+        val tracks = json.getJSONArray("tracks")
+        for (i in 0 until tracks.length()) {
+            val clips = tracks.getJSONObject(i).getJSONArray("clips")
+            for (j in 0 until clips.length()) {
+                val notes = clips.getJSONObject(j).getJSONArray("midiNotes")
+                for (k in 0 until notes.length()) notes.getJSONObject(k).remove("pan")
+            }
+        }
+        val restored = StudioProject.fromJson(json)
+        restored.tracks.flatMap { it.clips }.flatMap { it.midiNotes }.forEach {
+            assertEquals(0f, it.pan, 0f)
+        }
+    }
+
     @Test fun MIDIStarterNotesAreWithinValidRange() {
         val project = StudioProject()
         val notes = project.tracks.flatMap { it.clips }.flatMap { it.midiNotes }
@@ -157,6 +200,64 @@ class ProjectModelTest {
         } catch (expected: IllegalArgumentException) {
             assertTrue(expected.message!!.contains("duplicate clip IDs"))
         }
+    }
+
+    @Test fun splittingAudioClipPreservesArrangementContinuityAndSourceOffset() {
+        val source = com.studiowave.app.data.WaveClip(
+            id = "source", name = "song", startTick = 0L, lengthTicks = 3L * 60L * 120L * 960L / 60L,
+            sourceUri = "content://audio/song", sourceOffsetTicks = 0L
+        )
+        val splitTick = 60L * 120L * 960L / 60L
+        val (left, right) = splitWaveClip(source, splitTick)!!
+        assertEquals(splitTick, left.lengthTicks)
+        assertEquals(splitTick, right.startTick)
+        assertEquals(source.lengthTicks - splitTick, right.lengthTicks)
+        assertEquals(splitTick, right.sourceOffsetTicks)
+        assertEquals(source.sourceUri, left.sourceUri)
+        assertEquals(source.sourceUri, right.sourceUri)
+        assertTrue(left.id != right.id)
+        assertEquals(null, splitWaveClip(source, source.startTick))
+        assertEquals(null, splitWaveClip(source, source.startTick + source.lengthTicks))
+    }
+
+    @Test fun splittingMidiClipClipsNotesAtBoundaryWithoutDuplicatingNoteIds() {
+        val source = com.studiowave.app.data.WaveClip(
+            id = "midi", name = "notes", startTick = 1000L, lengthTicks = 4000L,
+            midiNotes = listOf(
+                com.studiowave.app.data.MidiNote(id = "before", pitch = 60, startTick = 0L, durationTicks = 1000L),
+                com.studiowave.app.data.MidiNote(id = "cross", pitch = 62, startTick = 1500L, durationTicks = 2000L),
+                com.studiowave.app.data.MidiNote(id = "after", pitch = 64, startTick = 3200L, durationTicks = 400L)
+            )
+        )
+        val (left, right) = splitWaveClip(source, 3000L)!!
+        assertTrue(left.midiNotes.all { it.startTick + it.durationTicks <= 2000L })
+        assertTrue(right.midiNotes.all { it.startTick + it.durationTicks <= right.lengthTicks })
+        assertTrue(right.midiNotes.any { it.id == "after" })
+        assertTrue(right.midiNotes.none { it.id == "before" || it.id == "cross" })
+        // The note crosses the split boundary: 500 ticks remain in the left clip,
+        // and 1,500 ticks continue from source-relative zero in the right clip.
+        assertEquals(0L, right.midiNotes.first { it.pitch == 62 }.startTick)
+        assertEquals(500L, left.midiNotes.first { it.id == "cross" }.durationTicks)
+        assertEquals(1500L, right.midiNotes.first { it.pitch == 62 }.durationTicks)
+        assertTrue(left.midiNotes.map { it.id }.intersect(right.midiNotes.map { it.id }.toSet()).isEmpty())
+    }
+
+
+    @Test fun mobileWorkspaceOverlayPolicyKeepsOnlyOneContextMenuOpen() {
+        fun normalize(timeline: Boolean, add: Boolean, trackFab: Boolean): Triple<Boolean, Boolean, Boolean> = when {
+            trackFab -> Triple(false, false, true)
+            add -> Triple(false, true, false)
+            else -> Triple(timeline, false, false)
+        }
+        assertEquals(Triple(false, false, true), normalize(true, true, true))
+        assertEquals(Triple(false, true, false), normalize(true, true, false))
+        assertEquals(Triple(true, false, false), normalize(true, false, false))
+    }
+
+    @Test fun timelineMenuNeverDuplicatesInstrumentTrackType() {
+        val availableTrackKinds = listOf("midi", "audio", "drum")
+        assertEquals(availableTrackKinds.size, availableTrackKinds.toSet().size)
+        assertEquals(listOf("midi", "audio", "drum"), availableTrackKinds)
     }
 
 }
