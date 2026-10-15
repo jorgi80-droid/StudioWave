@@ -4810,6 +4810,14 @@ private fun TrackEffectDeviceCard(
                 }
             }
             "PARAM_EQ_8" -> {
+                var selectedBand by remember(device.id) { mutableIntStateOf(1) }
+                val defaultFreqNorms = listOf(0.159f, 0.259f, 0.366f, 0.466f, 0.566f, 0.681f, 0.799f, 0.900f)
+                val gain = (p["band$selectedBand"] ?: 0f).coerceIn(-18f, 18f)
+                val freqKey = "band${selectedBand}FreqNorm"
+                val qKey = "band${selectedBand}Q"
+                val freqNorm = (p[freqKey] ?: defaultFreqNorms[selectedBand - 1]).coerceIn(0f, 1f)
+                val frequencyHz = (20.0 * Math.pow(1000.0, freqNorm.toDouble())).toInt()
+                val q = (p[qKey] ?: 1.1f).coerceIn(0.25f, 8f)
                 val gains = (1..8).map { band -> (p["band$band"] ?: 0f).coerceIn(-18f, 18f) }
                 Canvas(
                     Modifier.fillMaxWidth().height(58.dp)
@@ -4830,32 +4838,51 @@ private fun TrackEffectDeviceCard(
                         drawLine(palette.border.copy(alpha = 0.42f), Offset(x, 0f), Offset(x, size.height), 0.6.dp.toPx())
                     }
                     val curve = androidx.compose.ui.graphics.Path()
-                    gains.forEachIndexed { index, gain ->
+                    gains.forEachIndexed { index, bandGain ->
                         val x = size.width * index / (gains.size - 1).toFloat()
-                        val y = midY - (gain / 18f) * (size.height * 0.44f)
+                        val y = midY - (bandGain / 18f) * (size.height * 0.44f)
                         if (index == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
                     }
                     drawPath(curve, palette.orange, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
-                    gains.forEachIndexed { index, gain ->
+                    gains.forEachIndexed { index, bandGain ->
                         val x = size.width * index / (gains.size - 1).toFloat()
-                        val y = midY - (gain / 18f) * (size.height * 0.44f)
-                        drawCircle(palette.text, radius = 2.dp.toPx(), center = Offset(x, y))
+                        val y = midY - (bandGain / 18f) * (size.height * 0.44f)
+                        drawCircle(if (index + 1 == selectedBand) palette.orange else palette.text,
+                            radius = if (index + 1 == selectedBand) 3.dp.toPx() else 2.dp.toPx(), center = Offset(x, y))
                     }
                 }
-                Text("EQ RESPONSE · 8 BANDS", color = palette.orange, fontSize = 6.sp, fontWeight = FontWeight.Black)
-                (1..8).forEach { band ->
-                    val key = "band$band"
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(listOf("60", "120", "250", "500", "1k", "2k", "5k", "10k")[band - 1],
-                            color = palette.muted, fontSize = 6.sp, modifier = Modifier.width(22.dp))
-                        Slider(
-                            value = (p[key] ?: 0f).coerceIn(-18f, 18f),
-                            onValueChange = { next -> onUpdate(device.copy(parameters = p + (key to next))) },
-                            valueRange = -18f..18f,
-                            modifier = Modifier.weight(1f).height(21.dp),
-                            colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.orange,
-                                inactiveTrackColor = palette.control)
-                        )
+                Text("PARAMETRIC EQ · SELECT BAND TO EDIT", color = palette.orange, fontSize = 6.sp, fontWeight = FontWeight.Black)
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    (1..8).forEach { band ->
+                        DirectWaveStateButton("B$band", selectedBand == band, palette) { selectedBand = band }
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    DirectWaveKnob(
+                        "FREQ", freqNorm, 0f..1f, if (frequencyHz >= 1000) String.format(java.util.Locale.US, "%.1f kHz", frequencyHz / 1000f) else "$frequencyHz Hz",
+                        palette, Modifier.weight(1f), 43.dp
+                    ) { next ->
+                        onUpdate(device.copy(parameters = p + (freqKey to next)))
+                    }
+                    DirectWaveKnob(
+                        "Q", q, 0.25f..8f, String.format(java.util.Locale.US, "%.2f", q),
+                        palette, Modifier.weight(1f), 43.dp
+                    ) { next ->
+                        onUpdate(device.copy(parameters = p + (qKey to next)))
+                    }
+                    DirectWaveKnob(
+                        "GAIN", gain, -18f..18f, String.format(java.util.Locale.US, "%+.1f dB", gain),
+                        palette, Modifier.weight(1f), 43.dp
+                    ) { next ->
+                        onUpdate(device.copy(parameters = p + ("band$selectedBand" to next)))
                     }
                 }
             }
