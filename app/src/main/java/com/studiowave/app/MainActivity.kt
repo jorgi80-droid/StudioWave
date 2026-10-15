@@ -4488,7 +4488,7 @@ private fun DirectWaveDevicePanel(
                     Text(if (sampleReady) "READY" else "SOURCE", color = palette.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold)
                 }
                 Text(sampleLabel.uppercase(), color = palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                DirectWaveSampleWaveform(
+                DirectWaveDeviceWaveform(
                     sampleUri = sampleUri,
                     sampleReady = sampleReady,
                     palette = palette,
@@ -4671,7 +4671,7 @@ private fun DirectWaveKnob(
 }
 
 @Composable
-private fun DirectWaveSampleWaveform(
+private fun DirectWaveDeviceWaveform(
     sampleUri: String?,
     sampleReady: Boolean,
     palette: StudioWavePalette,
