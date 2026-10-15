@@ -83,3 +83,9 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - Track headers now use a narrow full-height track-color rail, a track-color name strip with contrast-aware text, compact square M/S states, a small audio scratch affordance, and square reorder/resize handles. This follows the uploaded HTML reference's dark industrial surfaces, thin borders, colored track headers and compact controls while retaining existing callback wiring and track model state.
 - Preserved track double-tap/long-press entry to Device View, mute/solo model updates, audio scratch gesture, track reorder and track-height resizing. No timeline tick/viewport math or clip storage was changed.
 - Validation required for this commit: Android CI debug build + unit tests, then visual and gesture checks on a landscape Android device. Do not claim pixel-identical Ableton parity or physical-device validation before those checks.
+
+## Arrangement ruler refinement — 2026-10-16
+- Updated the ruler's bar-label density threshold from 94 dp to 52 dp in `MainActivity.kt`, so individual bar numbers become visible at a more practical medium zoom instead of only appearing every fourth bar at common zoom levels.
+- This is a rendering-only adjustment; musical ticks, viewport mapping, clip positions, snap, gestures, and the 1,800-bar cap are unchanged.
+- Commit: `0a7bc028dbcbb104d9e7f434549003f0ca1807f9`.
+- Validation: check the commit's Android CI result before treating it as verified; physical-device comparison is still pending.
