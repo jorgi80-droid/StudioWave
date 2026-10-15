@@ -186,4 +186,90 @@ class TimelineViewportTest {
         }
     }
 
+    @Test fun gridSubdivisionNeverReturnsZeroWhenAVisibleBeatNeedsSubdivision() {
+        // Small PPQ plus a large denominator can produce fewer than 16 ticks per beat.
+        // A zero subdivision would make the Compose Canvas grid loop never advance.
+        val unusual = TimelineTimebase(120, 1, 32, 24)
+        val viewport = TimelineViewport(unusual, 1200f, 0.0, 800f)
+        assertEquals(3L, unusual.ticksPerBeat)
+        assertEquals(1L, viewport.gridSubdivisionTicks(1200.0))
+        assertEquals(0L, viewport.gridSubdivisionTicks(15.9))
+    }
+
+    @Test fun gridSubdivisionScalesWithZoomForNormalMeter() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 100f, 0.0, 800f)
+        assertEquals(60L, viewport.gridSubdivisionTicks(100.0))
+        assertEquals(120L, viewport.gridSubdivisionTicks(60.0))
+        assertEquals(240L, viewport.gridSubdivisionTicks(35.0))
+        assertEquals(480L, viewport.gridSubdivisionTicks(20.0))
+        assertEquals(0L, viewport.gridSubdivisionTicks(10.0))
+    }
+
+
+    @Test fun viewportXAndScreenXConversionsAreExactInTheirOwnCoordinateSpaces() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 148f, 7680.0, 900f, 104f)
+        listOf(0L, 7680L, 9120L, 50000L).forEach { tick ->
+            val paneX = viewport.timeToViewportX(tick)
+            assertTrue(kotlin.math.abs(tick - viewport.viewportXToTime(paneX)) <= 1L)
+            assertTrue(kotlin.math.abs(tick - viewport.screenXToTime(viewport.timeToScreenX(tick))) <= 1L)
+            assertEquals(paneX, viewport.timeToScreenX(tick) - viewport.trackHeaderWidthPx, 0.001f)
+        }
+    }
+
+    @Test fun clipWidthUsesOneScaleAndDoesNotChangeWithViewportScroll() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val start = 12_345L
+        val length = 9_876L
+        listOf(20f, 74f, 600f, 1200f).forEach { scale ->
+            val a = TimelineViewport(timebase, scale, 0.0, 900f, 104f)
+            val b = a.copy(scrollTimeTicks = 27_000.0)
+            assertEquals(a.tickDeltaToPixels(length), b.tickDeltaToPixels(length), 0.001f)
+            assertEquals(a.tickDeltaToPixels(length),
+                b.timeToViewportX(start + length) - b.timeToViewportX(start), 0.02f)
+        }
+    }
+
+    @Test fun nonFinitePixelDeltasAreIgnored() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 20f, 0.0, 500f)
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.NaN))
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.POSITIVE_INFINITY))
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.NEGATIVE_INFINITY))
+    }
+
+
+    @Test fun placeTickAtViewportXKeepsAnchorAcrossScrollAndZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        listOf(24f, 74f, 240f, 1190f).forEach { scale ->
+            val initial = TimelineViewport(timebase, scale, 7680.0, 900f)
+            val anchorX = 377f
+            val anchorTick = initial.viewportXToTime(anchorX)
+            val placed = initial.placeTickAtViewportX(anchorTick, anchorX)
+            assertTrue(kotlin.math.abs(anchorTick - placed.viewportXToTime(anchorX)) <= 1L)
+            assertEquals(scale, placed.effectivePixelsPerBar, 0.001f)
+        }
+    }
+
+    @Test fun placeTickAtViewportXIgnoresNonFiniteAnchor() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 74f, 1200.0, 900f)
+        assertTrue(viewport == viewport.placeTickAtViewportX(3840L, Float.NaN))
+        assertTrue(viewport == viewport.placeTickAtViewportX(3840L, Float.POSITIVE_INFINITY))
+    }
+
+
+    @Test fun longClipGeometryRemainsLongerThanViewportAtHighZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewportWidthPx = 720f
+        val clipStart = 0L
+        val clipLength = timebase.ticksPerBar * 12L
+        listOf(1f, 2f, 4f).forEach { zoom ->
+            val viewport = TimelineViewport(timebase, 180f * zoom, 0.0, viewportWidthPx)
+            val clipWidth = viewport.tickDeltaToPixels(clipLength)
+            val mappedEnd = viewport.timeToViewportX(clipStart + clipLength)
+            val mappedStart = viewport.timeToViewportX(clipStart)
+            assertTrue("zoom=$zoom clip should extend beyond the visible lane", clipWidth > viewportWidthPx)
+            assertEquals("zoom=$zoom exact clip extent", clipWidth, mappedEnd - mappedStart, 0.05f)
+        }
+    }
+
+
 }

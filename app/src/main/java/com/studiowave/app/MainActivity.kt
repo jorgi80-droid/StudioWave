@@ -46,9 +46,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlin.math.roundToInt
 import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -75,6 +78,32 @@ private val MutedText = Color(0xFFA4A8B0)
 private val Mint = Color(0xFF00D2B4)
 private val Green = Color(0xFF22C55E)
 private val Red = Color(0xFFEF4444)
+
+
+/**
+ * Give an Arrangement clip its real timeline width even when it is wider than the
+ * visible lane. Modifier.width() respects the lane's maxWidth and silently truncates
+ * long clips to the viewport, making their apparent duration change as the viewport zooms.
+ *
+ * The parent reports a constrained width to preserve layout, but the child is measured
+ * at its requested width and placed at x=0. TimelineGrid's clipToBounds() clips only the
+ * off-screen portion, not the clip's musical extent.
+ */
+private fun Modifier.timelineClipWidthPx(widthPx: Float): Modifier = layout { measurable, constraints ->
+    // Compose packs dimensions into Constraints; keep a generous finite ceiling while
+    // never using the viewport width as the clip's preferred width.
+    val desiredWidthPx = if (widthPx.isFinite()) {
+        widthPx.roundToInt().coerceIn(1, 262_143)
+    } else {
+        1
+    }
+    val childConstraints = constraints.copy(minWidth = desiredWidthPx, maxWidth = desiredWidthPx)
+    val placeable = measurable.measure(childConstraints)
+    val reportedWidth = desiredWidthPx.coerceIn(constraints.minWidth, constraints.maxWidth)
+    layout(reportedWidth, placeable.height) {
+        placeable.placeRelative(0, 0)
+    }
+}
 
 private data class TrackRowLayout(val topDp: Float, val heightDp: Float)
 
@@ -201,11 +230,6 @@ private fun StudioWaveApp() {
         playbackLoading = false
         audioError = null
     }
-    fun seekToTick(tick: Long) {
-        val target = tick.coerceAtLeast(0L)
-        if (playing || playbackLoading) stopPlayback()
-        playheadTick = target
-    }
     fun startPlaybackAt(tick: Long, projectSnapshot: StudioProject = project) {
         val session = playbackSession + 1L
         playbackSession = session
@@ -267,6 +291,17 @@ private fun StudioWaveApp() {
                     playbackJob = null
                 }
             }
+        }
+    }
+    fun seekToTick(tick: Long) {
+        val target = tick.coerceAtLeast(0L)
+        // Match DAW transport semantics: seeking while the transport is active is a
+        // discontinuity, not an implicit STOP. Rebuild playback from the requested
+        // musical position so the audio and playhead remain together.
+        if (playing || playbackLoading) {
+            startPlaybackAt(target)
+        } else {
+            playheadTick = target
         }
     }
     val latestProject by rememberUpdatedState(project)
@@ -1345,14 +1380,11 @@ private fun TimelineGrid(
                                 val pinchViewport = TimelineViewport(
                                     timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat()
                                 )
-                                val anchoredViewport = pinchViewport.zoomKeepingAnchor(
-                                    newBarWidth, previousCentroid.x
-                                )
-                                val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x).toDouble()
-                                val newScroll = (anchoredViewport.scrollTimeTicks +
-                                    (previousCentroid.x - centroid.x).toDouble() *
-                                    timebase.ticksPerBar.toDouble() / newBarWidth.toDouble()
-                                ).coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
+                                // Preserve the same musical tick under the moving pinch centroid.
+                                val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x)
+                                val newScroll = TimelineViewport(
+                                    timebase, newBarWidth, currentScroll.toDouble(), size.width.toFloat()
+                                ).placeTickAtViewportX(anchorTick, centroid.x).scrollTimeTicks.toFloat()
                                  val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
                                  val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
                                  val anchorTrackDp = currentScrollTracks + (previousCentroid.y - rulerHeightPx) / (density.density * oldVerticalZoom).coerceAtLeast(0.1f)
@@ -1389,28 +1421,29 @@ private fun TimelineGrid(
             }
     ) {
         val timelineWidthPx = with(density) { maxWidth.toPx() }
-        LaunchedEffect(isPlaying, playheadTick, zoom, scrollTicks, timelineWidthPx, timebase) {
+        // Stable follow loop: do not cancel/restart it for each playhead update.
+        LaunchedEffect(isPlaying, timelineWidthPx, timebase) {
             if (isPlaying && timelineWidthPx > 0f) {
-                val barWidthPx = viewport.effectivePixelsPerBar
-                val currentViewport = TimelineViewport(
-                    timebase, barWidthPx, scrollTicks.toDouble(), timelineWidthPx, trackHeaderWidthPx
-                )
-                val currentX = currentViewport.timeToViewportX(playheadTick)
-                val leftGuard = timelineWidthPx * 0.08f
-                // Start following sooner so playback from later bars scrolls the ruler
-                // underneath a steady playhead instead of appearing stalled.
-                val rightGuard = timelineWidthPx * 0.70f
-                // Re-anchor at the guard line that was crossed, not back at 70% of
-                // the viewport. This prevents the visible ruler/playhead "jump".
-                val targetX = when {
-                    currentX < leftGuard -> leftGuard
-                    currentX > rightGuard -> rightGuard
-                    else -> return@LaunchedEffect
+                while (isPlaying) {
+                    val currentViewport = TimelineViewport(
+                        timebase, baseBarWidthPx * currentZoom, currentScroll.toDouble(),
+                        timelineWidthPx, trackHeaderWidthPx
+                    )
+                    val currentX = currentViewport.timeToViewportX(playheadTick)
+                    val leftGuard = timelineWidthPx * 0.08f
+                    val rightGuard = timelineWidthPx * 0.70f
+                    val targetX = when {
+                        currentX < leftGuard -> leftGuard
+                        currentX > rightGuard -> rightGuard
+                        else -> null
+                    }
+                    if (targetX != null) {
+                        val nextScroll = currentViewport.placeTickAtViewportX(playheadTick, targetX)
+                            .scrollTimeTicks.toFloat()
+                        if (kotlin.math.abs(nextScroll - currentScroll) > 0.5f) currentOnScroll(nextScroll)
+                    }
+                    delay(33L)
                 }
-                val ticksPerPixel = timebase.ticksPerBar.toDouble() / barWidthPx
-                val nextScroll = (playheadTick.toDouble() - targetX.toDouble() * ticksPerPixel)
-                    .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
-                if (kotlin.math.abs(nextScroll - scrollTicks) > 0.5f) currentOnScroll(nextScroll)
             }
         }
         // Keep long-press handling on the background layer so it cannot steal a
@@ -1432,13 +1465,7 @@ private fun TimelineGrid(
                      val beatPixels = beatTicks * canvasViewport.pixelsPerTick
                      // Use a progressive musical grid like FL Studio Mobile: the
                      // horizontal zoom decides which subdivisions are worth drawing.
-                     val subdivision = when {
-                         beatPixels >= 80.0 -> beatTicks / 16L
-                         beatPixels >= 52.0 -> beatTicks / 8L
-                         beatPixels >= 30.0 -> beatTicks / 4L
-                         beatPixels >= 16.0 -> beatTicks / 2L
-                         else -> 0L
-                     }
+                     val subdivision = canvasViewport.gridSubdivisionTicks(beatPixels)
                      for (beat in 0 until timebase.safeNumerator) {
                          val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
                          val beatX = canvasViewport.timeToViewportX(beatTick)
@@ -1523,8 +1550,8 @@ private fun TimelineGrid(
                     track.clips.forEach { clip ->
                         // Clip geometry is derived only from musical duration and the shared
                         // viewport scale; a fixed visual minimum makes clip lengths jump on zoom.
-                        val clipWidthPx = viewport.tickDeltaToPixels(clip.lengthTicks).coerceIn(0.01f, 1_000_000f)
-                        val clipWidthDp = with(density) { clipWidthPx.toDp().value }.coerceAtLeast(0.01f)
+                        val clipWidthPx = viewport.tickDeltaToPixels(clip.lengthTicks.coerceAtLeast(1L)).coerceAtLeast(1f)
+                        val clipWidthDp = with(density) { clipWidthPx.toDp().value }
                         val resizeGripWidthDp = minOf(18f, clipWidthDp * 0.38f).coerceAtLeast(0.01f)
                         val resizeGripWidthPx = with(density) { resizeGripWidthDp.dp.toPx() }
                         val displayLeftPx = viewport.timeToViewportX(clip.startTick)
@@ -1539,7 +1566,7 @@ private fun TimelineGrid(
                                     translationY = if (draggingClip == clip.id) dragDy else 0f
                                 }
                                 .padding(top = 7.dp, bottom = 7.dp)
-                                .width(clipWidthDp.dp)
+                                .timelineClipWidthPx(clipWidthPx)
                                 .fillMaxHeight()
                                 .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
@@ -1666,13 +1693,17 @@ private fun TimelineGrid(
                                                 onDragStart = { leftResizeDeltaPx = 0f; onSelectClip(clip.id) },
                                                 onDrag = { change, amount -> change.consume(); leftResizeDeltaPx += amount.x },
                                                 onDragEnd = {
-                                                    val originalEnd = clip.startTick + clip.lengthTicks.coerceAtLeast(1L)
+                                                    val originalStart = clip.startTick.coerceAtLeast(0L)
+                                                    val originalLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    val originalEnd = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
                                                     val snapStep = snapDivision.ticks(timebase)
                                                     val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
-                                                    val earliestStart = (clip.startTick - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
+                                                    val earliestStart = (originalStart - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
                                                     val latestStart = (originalEnd - minimumLength).coerceAtLeast(earliestStart)
-                                                    val rawStart = (clip.startTick + viewport.pixelsToTickDelta(leftResizeDeltaPx)).coerceAtLeast(0L)
-                                                    val snappedStart = if (snapToGrid && snapStep > 0L) timebase.snap(rawStart, snapDivision) else rawStart
+                                                    val deltaTicks = viewport.pixelsToTickDelta(leftResizeDeltaPx)
+                                                    val rawStart = (originalStart.toDouble() + deltaTicks.toDouble())
+                                                        .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong()
+                                                    val snappedStart = viewport.snapTick(rawStart, snapDivision, snapToGrid)
                                                     val newStart = snappedStart.coerceIn(earliestStart, latestStart)
                                                     val newLength = (originalEnd - newStart).coerceAtLeast(minimumLength)
                                                     if (newStart != clip.startTick && newLength > 0L) {
@@ -1697,13 +1728,16 @@ private fun TimelineGrid(
                                                 onDragStart = { resizeDeltaPx = 0f },
                                                 onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
                                                 onDragEnd = {
-                                                    val originalEndTick = clip.startTick + clip.lengthTicks.coerceAtLeast(1L)
+                                                    val originalStart = clip.startTick.coerceAtLeast(0L)
+                                                    val originalLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    val originalEndTick = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
                                                     val rawEndTick = (originalEndTick.toDouble() +
                                                         viewport.pixelsToTickDelta(resizeDeltaPx).toDouble())
-                                                        .coerceIn((clip.startTick + 1L).toDouble(), Long.MAX_VALUE.toDouble()).toLong()
-                                                     val snapStep = snapDivision.ticks(timebase)
-                                                     val snappedEndTick = if (snapToGrid && snapStep > 0L) timebase.snap(rawEndTick, snapDivision) else rawEndTick
-                                                     val newLength = (snappedEndTick - clip.startTick).coerceAtLeast(if (snapToGrid && snapStep > 0L) snapStep else 1L)
+                                                        .coerceIn((originalStart.toDouble() + 1.0).coerceAtMost(Long.MAX_VALUE.toDouble()), Long.MAX_VALUE.toDouble()).toLong()
+                                                    val snapStep = snapDivision.ticks(timebase)
+                                                    val snappedEndTick = viewport.snapTick(rawEndTick, snapDivision, snapToGrid)
+                                                    val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
+                                                    val newLength = (snappedEndTick - originalStart).coerceAtLeast(minimumLength)
                                                     onResizeClip(clip.id, clip.startTick, newLength)
                                                     resizeDeltaPx = 0f
                                                 },
