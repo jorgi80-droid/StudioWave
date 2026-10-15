@@ -155,3 +155,9 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - Commits: `9e092235`, `103620dc`, `19f23b0f`, `df8e52d9`, `ab859a9b`.
 - Validation: GitHub Actions is running for the latest test commit. Do not mark the batch green until `assembleDebug`, `testDebugUnitTest`, and APK artifact upload complete successfully.
 - Scope note: the displayed EQ shape is a compact gain overview, not a measured FFT spectrum. EQ DSP is an original native implementation, not Ableton's proprietary code.
+
+## Ableton Live visual consistency pass — 2026-10-16
+- Commit [af657638](https://github.com/jorgi80-droid/StudioWave/commit/af6576386238c36e3e7aa52ed840043f6bf74f77) normalizes remaining large rounded Arrangement surfaces and floating menus to a compact 2 dp corner radius, adds a thin boundary around the Arrangement workspace, and adds graphite borders to timeline/context menus.
+- This is a native Compose styling pass, not copied Ableton code/assets or a claim of pixel-identical reproduction. It does not intentionally alter musical coordinate mapping, clip edit callbacks, snap, transport, or the 1,800-bar limit.
+- Validation status: no CI result was returned for this exact commit from the available status/workflow lookup. The current CI result is therefore unverified; check debug APK build, unit tests, and artifact upload before treating this pass as green. Physical landscape-device validation remains outstanding.
+- Next visual audit should focus on remaining workspace-specific differences (Arrangement clip/track hierarchy, Piano Roll ruler/note/velocity styling, Device Dock control/readout hierarchy, and Mixer meter/fader contrast) while preserving existing interaction bindings.
