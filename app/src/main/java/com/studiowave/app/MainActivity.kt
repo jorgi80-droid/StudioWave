@@ -4471,6 +4471,7 @@ private fun DeviceDock(
                 }
                 Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Top) {
+                    DeviceChainSlotMarker(number = 1, palette = palette, label = "SRC")
                     when (track.kind) {
                         "midi" -> DirectWaveDevicePanel(
                             trackId = track.id, trackName = track.name, trackKind = track.kind,
@@ -4544,7 +4545,7 @@ private fun DeviceDock(
 }
 
 @Composable
-private fun DeviceChainSlotMarker(number: Int, palette: StudioWavePalette) {
+private fun DeviceChainSlotMarker(number: Int, palette: StudioWavePalette, label: String = "FX") {
     Column(
         Modifier.width(22.dp).height(42.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -4553,7 +4554,7 @@ private fun DeviceChainSlotMarker(number: Int, palette: StudioWavePalette) {
         Text(number.toString().padStart(2, '0'), color = palette.orange,
             fontSize = 8.sp, fontWeight = FontWeight.Black)
         Box(Modifier.width(1.dp).height(9.dp).background(palette.border))
-        Text("FX", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold)
         Box(Modifier.width(1.dp).height(9.dp).background(palette.border))
         Text("›", color = palette.orange, fontSize = 14.sp, fontWeight = FontWeight.Black)
     }
