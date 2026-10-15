@@ -55,3 +55,10 @@
 - Arrangement clips now use a restrained tinted body, a stronger track-color title strip, and a clearer non-selected accent outline; selected clips retain the orange focus border. This follows the Live-inspired hierarchy of colored clip headers over darker clip content while preserving the existing note/drum/audio preview rendering.
 - Only Compose surface styling changed. No timeline timebase, viewport transforms, clip hit-testing, snapping, drag/resize callbacks, playback, or 1,800-bar limit was intentionally changed.
 - The source edit is committed, but CI for this commit is pending. Verify debug APK build, unit tests, and artifact upload before treating the batch as validated. Physical landscape-device visual/touch checks remain outstanding.
+
+
+## Mixer channel header hierarchy pass — 2026-10-16
+- Commit: [9edbfa0f](https://github.com/jorgi80-droid/StudioWave/commit/9edbfa0fff61e1f3fba3a1f181ca8d16f02d4e3b).
+- Mixer track headers now use the graphite canvas surface, a thin border, neutral readable track-name/type labels, and a narrow rail using the track's existing color. This avoids full-width saturated header blocks while preserving track identity.
+- Only header presentation changed. Mute/solo callbacks, volume mapping, fader interaction, meter rendering, pan and project model behavior were not intentionally changed.
+- CI and physical landscape-device verification for this commit are still pending; do not mark this batch validated until debug APK build, unit tests and artifact upload succeed.
