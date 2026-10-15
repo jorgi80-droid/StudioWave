@@ -159,4 +159,44 @@ class ProjectModelTest {
         }
     }
 
+    @Test fun splittingAudioClipPreservesArrangementContinuityAndSourceOffset() {
+        val source = com.studiowave.app.data.WaveClip(
+            id = "source", name = "song", startTick = 0L, lengthTicks = 3L * 60L * 120L * 960L / 60L,
+            sourceUri = "content://audio/song", sourceOffsetTicks = 0L
+        )
+        val splitTick = 60L * 120L * 960L / 60L
+        val (left, right) = splitWaveClip(source, splitTick)!!
+        assertEquals(splitTick, left.lengthTicks)
+        assertEquals(splitTick, right.startTick)
+        assertEquals(source.lengthTicks - splitTick, right.lengthTicks)
+        assertEquals(splitTick, right.sourceOffsetTicks)
+        assertEquals(source.sourceUri, left.sourceUri)
+        assertEquals(source.sourceUri, right.sourceUri)
+        assertTrue(left.id != right.id)
+        assertEquals(null, splitWaveClip(source, source.startTick))
+        assertEquals(null, splitWaveClip(source, source.startTick + source.lengthTicks))
+    }
+
+    @Test fun splittingMidiClipClipsNotesAtBoundaryWithoutDuplicatingNoteIds() {
+        val source = com.studiowave.app.data.WaveClip(
+            id = "midi", name = "notes", startTick = 1000L, lengthTicks = 4000L,
+            midiNotes = listOf(
+                com.studiowave.app.data.MidiNote(id = "before", pitch = 60, startTick = 0L, durationTicks = 1000L),
+                com.studiowave.app.data.MidiNote(id = "cross", pitch = 62, startTick = 1500L, durationTicks = 2000L),
+                com.studiowave.app.data.MidiNote(id = "after", pitch = 64, startTick = 3200L, durationTicks = 400L)
+            )
+        )
+        val (left, right) = splitWaveClip(source, 3000L)!!
+        assertTrue(left.midiNotes.all { it.startTick + it.durationTicks <= 2000L })
+        assertTrue(right.midiNotes.all { it.startTick + it.durationTicks <= right.lengthTicks })
+        assertTrue(right.midiNotes.any { it.id == "after" })
+        assertTrue(right.midiNotes.none { it.id == "before" || it.id == "cross" })
+        // The note crosses the split boundary: 500 ticks remain in the left clip,
+        // and 1,500 ticks continue from source-relative zero in the right clip.
+        assertEquals(0L, right.midiNotes.first { it.pitch == 62 }.startTick)
+        assertEquals(500L, left.midiNotes.first { it.id == "cross" }.durationTicks)
+        assertEquals(1500L, right.midiNotes.first { it.pitch == 62 }.durationTicks)
+        assertTrue(left.midiNotes.map { it.id }.intersect(right.midiNotes.map { it.id }.toSet()).isEmpty())
+    }
+
 }
