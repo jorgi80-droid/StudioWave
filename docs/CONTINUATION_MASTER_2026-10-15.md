@@ -37,11 +37,11 @@ Project is Android-only for the user (AndroidIDE), beginner friendly. Provide di
 ## CI checkpoint
 - CI on commit `7b0a2471c90790ff02bb1ac3dac2af3717c3481e` completed successfully, including build, unit tests, and APK artifact upload: https://github.com/jorgi80-droid/StudioWave/actions/runs/38741833854
 - Artifact from that successful run: `StudioWave-debug-apk`, artifact ID `11976422706`, 17,478,001 bytes, not expired at last check. This artifact predates the last viewport assertion fix and checkpoint-doc-only changes, so prefer waiting for the latest run before sharing an APK as current.
-- Latest code/test commit at checkpoint: `140d430eeba3b435e58ce26167e8552117b68383`. Run `38742059249` was queued/in progress when last polled; poll it and confirm both `Build debug APK` and `Run unit tests`.
+- Latest code/test commit verified green: `2049b9b36c33721babcbbe5a02806582a8523bff`, run `38742059249`: https://github.com/jorgi80-droid/StudioWave/actions/runs/38742059249. Build debug APK, unit tests and artifact upload all succeeded.
 - Historical known errors have been addressed: missing `R.raw.one_shot`, stale `visibleSubdivisionTicks()`, wrong numeric assertion in viewport tests, duplicate per-track buffer declaration.
 
 ## Next actions (start here in a new chat)
-1. Poll workflow run `38742059249`: https://github.com/jorgi80-droid/StudioWave/actions/runs/38742059249. Inspect exact logs if it fails. Do not rely on old result without checking.
+1. Latest verified CI run `38742059249` passed. Artifact ID: `11975929414` (`StudioWave-debug-apk`, 17,478,006 bytes, unexpired at checkpoint). Obtain/use this exact run artifact if sharing the APK.
 2. If CI passes, download and share only the artifact for the current green run; then request physical Android checks for launch, landscape, sample note output, insert effects audible response, timeline gestures and saved-project reopening.
 3. Implement the actual DeviceRack UI connected to `project.tracks[selectedTrackId].devices`. Provide Add/Remove/Enable/Reorder; device parameter changes must update model and be audible through `ArrangementPlaybackEngine`. Make UI visual language closer to screenshots: narrow device headers, knobs, graph/curve surfaces, compact chain blocks and audio levels.
 4. Add real implementations/tests before adding active controls for Full Analyzer (windowed FFT/bins), Multi FX (serial chain composition), SuperSaw, MiniSynth, and GMS. Keep unavailable/inactive states honest until then.
@@ -51,4 +51,4 @@ Project is Android-only for the user (AndroidIDE), beginner friendly. Provide di
 8. Keep this master updated after stable batches. PR #15 stays draft until all CI checks are green.
 
 ## Honest status
-The latest historical CI run is green, but code commit `140d430eeba3b435e58ce26167e8552117b68383` still needs its own verification. This is not yet a fully implemented Ableton/FL Studio Mobile competitor. FX routing exists underneath, but the full device UI and requested synth/analyzer/multi-FX features are still incomplete. Real device audio and touch behavior still require on-device validation.
+CI is green for code/test commit `2049b9b36c33721babcbbe5a02806582a8523bff` (run `38742059249`). This does not certify all requested device features. This is not yet a fully implemented Ableton/FL Studio Mobile competitor. FX routing exists underneath, but the full device UI and requested synth/analyzer/multi-FX features are still incomplete. Real device audio and touch behavior still require on-device validation.
