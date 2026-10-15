@@ -3991,27 +3991,24 @@ private fun DeviceDock(
     onToggle: () -> Unit
 ) {
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
-    val devicePalette = LocalStudioWavePalette.current
+    val palette = LocalStudioWavePalette.current
     var expanded by remember { mutableStateOf(true) }
-    val gainDb = selectedTrack?.volume?.takeIf { it > 0.001f }?.let {
-        String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(it))
-    } ?: "−∞ dB"
     Column(
         Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp)
-            .background(devicePalette.panel, RoundedCornerShape(7.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .background(palette.panel, RoundedCornerShape(5.dp)).padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICE VIEW", fontSize = 9.sp, fontWeight = FontWeight.Black, color = devicePalette.orange)
+            Text("DEVICE VIEW", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.width(8.dp))
-            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 9.sp, color = devicePalette.text, maxLines = 1)
+            Text(selectedTrack?.name ?: "NO TRACK", color = palette.text, fontSize = 9.sp, maxLines = 1)
             Spacer(Modifier.weight(1f))
             SmallAction(if (expanded) "−" else "+") { expanded = !expanded }
             SmallAction("×") { onToggle() }
         }
         if (expanded) {
             if (selectedTrack == null) {
-                Text("Add a track in Arrangement to see its controls.", color = devicePalette.muted, fontSize = 9.sp)
+                Text("Add a track in Arrangement to see its devices.", color = palette.muted, fontSize = 9.sp)
             } else {
                 Row(
                     Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
@@ -4021,24 +4018,22 @@ private fun DeviceDock(
                     when (selectedTrack.kind) {
                         "midi" -> DirectWaveDevicePanel(
                             trackId = selectedTrack.id, trackName = selectedTrack.name,
-                            trackKind = selectedTrack.kind, palette = devicePalette
+                            trackKind = selectedTrack.kind, palette = palette
                         )
                         "drum" -> DeviceModuleCard(
-                            title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = devicePalette,
-                            body = "Open a drum clip to edit its steps. Only available device controls are shown here."
+                            title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = palette,
+                            body = "Open a drum clip to edit its steps. Only supported device controls are shown here."
                         )
                         else -> DeviceModuleCard(
-                            title = "AUDIO SOURCE", subtitle = "CLIP / SAMPLE", palette = devicePalette,
-                            body = "Select an audio clip in Arrangement to inspect source waveform and supported editing controls."
+                            title = "AUDIO SOURCE", subtitle = "CLIP / SAMPLE", palette = palette,
+                            body = "Select an audio clip in Arrangement to inspect the source waveform and supported clip controls."
                         )
                     }
-                }
                 }
             }
         }
     }
 }
-
 
 @Composable
 private fun DeviceModuleCard(
