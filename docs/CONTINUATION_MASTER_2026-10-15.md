@@ -134,3 +134,8 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - The same commit corrects DirectWave sample-source status. Factory presets and the generated bundled One Shoot sample are now persisted as factory-origin samples, while imported user audio is labeled separately. This fixes the previous false classification caused by factory samples being generated as cache-file URIs rather than `android.resource://` URIs.
 - DirectWave shell and header geometry are tightened to the square-edged graphite device style. Existing sampler load, note audition, ADSR, pitch, loop, output-gain, and effect parameter callbacks are preserved.
 - Validation is pending for this exact commit: require Android CI Build debug APK, unit tests, and APK artifact upload. Do not infer success from older workflow runs. Device-level landscape and touch validation remains outstanding.
+
+
+## Continuation update — 2026-10-16 (FX device control banks)
+- Commit `9f8dbc88e2f26d4abc0a383826528bf78f881973` replaces generic sliders with compact rotary knob banks for Compressor, Saturator, Filter, and Limiter controls, keeping the existing parameter keys and update callbacks intact. EQ Eight retains the 8-band slider bank plus response-curve visualization; Reverb and Delay already use knobs.
+- This is a control-surface/UI change only. It does not expand the DSP parameter model or claim that unsupported processing is implemented. Latest Android CI must verify compilation and unit tests; physical Android landscape/touch validation remains outstanding.
