@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.studiowave.app.audio.DirectWaveSampler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 private data class DirectWavePreset(
     val category: String,
@@ -190,18 +191,18 @@ internal fun DirectWaveDevicePanel(
                 ) {
                     LiveSectionLabel("TUNE / OUTPUT")
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                        LiveKnob("PITCH", pitch, -48f..48f, "${pitch.toInt()} st", modifier = Modifier.weight(1f), diameter = if (fullScreen) 64.dp else 46.dp) {
-                            pitch = it; sampler.pitchSemitones = it.toInt()
-                            prefs.edit().putInt("pitch.$trackId", it.toInt()).apply()
-                        }
-                        LiveKnob("FINE", fine, -100f..100f, "${fine.toInt()} ct", modifier = Modifier.weight(1f), diameter = if (fullScreen) 64.dp else 46.dp) {
-                            fine = it; sampler.fineTuneCents = it.toInt()
-                            prefs.edit().putInt("fine.$trackId", it.toInt()).apply()
-                        }
-                        LiveKnob("LEVEL", level, 0f..1f, "${(level * 100).roundToInt()}%", modifier = Modifier.weight(1f), diameter = if (fullScreen) 64.dp else 46.dp) {
-                            level = it; sampler.outputGain = it
-                            prefs.edit().putFloat("level.$trackId", it).apply()
-                        }
+                        LiveKnob("PITCH", pitch, -48f..48f, "${pitch.toInt()} st", modifier = Modifier.weight(1f), diameter = if (fullScreen) 64.dp else 46.dp, onValueChange = { value ->
+                            pitch = value; sampler.pitchSemitones = value.toInt()
+                            prefs.edit().putInt("pitch.$trackId", value.toInt()).apply()
+                        })
+                        LiveKnob("FINE", fine, -100f..100f, "${fine.toInt()} ct", modifier = Modifier.weight(1f), diameter = if (fullScreen) 64.dp else 46.dp, onValueChange = { value ->
+                            fine = value; sampler.fineTuneCents = value.toInt()
+                            prefs.edit().putInt("fine.$trackId", value.toInt()).apply()
+                        })
+                        LiveKnob("LEVEL", level, 0f..1f, "${(level * 100).roundToInt()}%", modifier = Modifier.weight(1f), diameter = if (fullScreen) 64.dp else 46.dp, onValueChange = { value ->
+                            level = value; sampler.outputGain = value
+                            prefs.edit().putFloat("level.$trackId", value).apply()
+                        })
                     }
                 }
             }
@@ -211,22 +212,22 @@ internal fun DirectWaveDevicePanel(
             ) {
                 LiveSectionLabel("AMP ENVELOPE  /  ADSR")
                 Row(Modifier.fillMaxWidth().height(if (fullScreen) 110.dp else 83.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                    LiveKnob("ATTACK", attack, 0f..2000f, "${attack.roundToInt()} ms", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp) {
-                        attack = it; sampler.attackMs = it.toInt()
-                        prefs.edit().putInt("attack.$trackId", it.toInt()).apply()
-                    }
-                    LiveKnob("DECAY", decay, 0f..2000f, "${decay.roundToInt()} ms", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp) {
-                        decay = it; sampler.decayMs = it.toInt()
-                        prefs.edit().putInt("decay.$trackId", it.toInt()).apply()
-                    }
-                    LiveKnob("SUSTAIN", sustain, 0f..1f, "${(sustain * 100).roundToInt()}%", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp) {
-                        sustain = it; sampler.sustain = it
-                        prefs.edit().putFloat("sustain.$trackId", it).apply()
-                    }
-                    LiveKnob("RELEASE", release, 0f..2000f, "${release.roundToInt()} ms", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp) {
-                        release = it; sampler.releaseMs = it.toInt()
-                        prefs.edit().putInt("release.$trackId", it.toInt()).apply()
-                    }
+                    LiveKnob("ATTACK", attack, 0f..2000f, "${attack.roundToInt()} ms", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp, onValueChange = { value ->
+                        attack = value; sampler.attackMs = value.toInt()
+                        prefs.edit().putInt("attack.$trackId", value.toInt()).apply()
+                    })
+                    LiveKnob("DECAY", decay, 0f..2000f, "${decay.roundToInt()} ms", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp, onValueChange = { value ->
+                        decay = value; sampler.decayMs = value.toInt()
+                        prefs.edit().putInt("decay.$trackId", value.toInt()).apply()
+                    })
+                    LiveKnob("SUSTAIN", sustain, 0f..1f, "${(sustain * 100).roundToInt()}%", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp, onValueChange = { value ->
+                        sustain = value; sampler.sustain = value
+                        prefs.edit().putFloat("sustain.$trackId", value).apply()
+                    })
+                    LiveKnob("RELEASE", release, 0f..2000f, "${release.roundToInt()} ms", modifier = Modifier.weight(1f), diameter = if (fullScreen) 60.dp else 43.dp, onValueChange = { value ->
+                        release = value; sampler.releaseMs = value.toInt()
+                        prefs.edit().putInt("release.$trackId", value.toInt()).apply()
+                    })
                 }
             }
 
