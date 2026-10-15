@@ -4760,13 +4760,6 @@ private fun DirectWaveDeviceWaveform(
     }
 }
 
-private data class BuiltInStudioSample(
-    val category: String,
-    val title: String,
-    val assetName: String,
-    val description: String
-)
-
 @Composable
 private fun DirectWaveReadout(label: String, value: String, palette: StudioWavePalette, modifier: Modifier = Modifier) {
     Column(modifier, verticalArrangement = Arrangement.Center) {
