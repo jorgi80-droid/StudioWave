@@ -525,7 +525,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     if (!ArrangementTiming.trackIsAudible(channelMix.muted, channelMix.solo, mixState.soloActive)) continue
                     val from = max(position, event.startFrame)
                     val to = min(blockEnd, event.endFrame)
-                    val trackGain = channelMix.volume * liveMasterGain
                     val pan = channelMix.pan
                     val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
                     val leftPan = if (pan > 0f) 1f - pan else 1f
