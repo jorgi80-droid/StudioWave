@@ -4,12 +4,14 @@ import android.os.Build
 import android.os.Debug
 import android.os.Process
 import android.os.SystemClock
+import android.util.Log
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.io.File
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -68,6 +70,13 @@ internal object StudioWaveDiagnostics {
     fun log(level: String = "INFO", tag: String = "APP", message: String) {
         val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
         val line = "$timestamp [${level.uppercase(Locale.US)}] [$tag] $message"
+        val priority = when (level.uppercase(Locale.US)) {
+            "ERROR", "FATAL" -> Log.ERROR
+            "WARN", "WARNING" -> Log.WARN
+            "DEBUG" -> Log.DEBUG
+            else -> Log.INFO
+        }
+        runCatching { Log.println(priority, "StudioWave/$tag", message) }
         entries.addLast(line)
         while (entries.size > MAX_ENTRIES) entries.pollFirst()
         val target = logFile
@@ -114,6 +123,7 @@ internal object StudioWaveDiagnostics {
             Thread.setDefaultUncaughtExceptionHandler { thread, error ->
                 log("FATAL", "CRASH", "Uncaught exception on thread ${thread.name}: ${error.javaClass.name}: ${error.message}")
                 error.stackTraceToString().lineSequence().forEach { log("FATAL", "CRASH", it) }
+                runCatching { diskWriter.submit { }.get(750, TimeUnit.MILLISECONDS) }
                 previous?.uncaughtException(thread, error)
             }
             crashHandlerInstalled = true
