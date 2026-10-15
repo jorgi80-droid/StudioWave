@@ -4175,7 +4175,8 @@ private fun BrowserWorkspace(
                 when (category) {
                     "DEVICES" -> DeviceModuleCard(
                         title = "DEVICE LIBRARY", subtitle = "AVAILABLE INSTRUMENTS", palette = p,
-                        body = "DirectWave is available on MIDI tracks from Device View. Active effect inserts are listed only when an engine-backed processor exists."
+                        body = "DirectWave is available on MIDI tracks from Device View. Active effect inserts are listed only when an engine-backed processor exists.",
+                        fillAvailableWidth = true
                     )
                     "TRACKS" -> Column(
                         Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -4411,10 +4412,11 @@ private fun DeviceModuleCard(
     title: String,
     subtitle: String,
     palette: StudioWavePalette,
-    body: String
+    body: String,
+    fillAvailableWidth: Boolean = false
 ) {
     Column(
-        Modifier.width(320.dp).height(160.dp)
+        (if (fillAvailableWidth) Modifier.fillMaxWidth() else Modifier.width(320.dp)).height(160.dp)
             .background(palette.panel, RoundedCornerShape(1.dp))
             .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(10.dp),
