@@ -4879,20 +4879,58 @@ private fun TrackEffectDeviceCard(
                 }
             }
             "COMPRESSOR" -> {
-                DeviceParameterSlider("THRESHOLD", p["thresholdDb"] ?: -18f, -60f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("thresholdDb" to it))) }
-                DeviceParameterSlider("RATIO", p["ratio"] ?: 3f, 1f..20f, palette, ":1") { onUpdate(device.copy(parameters = p + ("ratio" to it))) }
-                DeviceParameterSlider("ATTACK", p["attackMs"] ?: 10f, 0.1f..250f, palette, " ms") { onUpdate(device.copy(parameters = p + ("attackMs" to it))) }
-                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 120f, 1f..1500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
-                DeviceParameterSlider("MAKEUP", p["makeupDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("makeupDb" to it))) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    DirectWaveKnob("THRESH", p["thresholdDb"] ?: -18f, -60f..0f,
+                        String.format(java.util.Locale.US, "%.1f dB", p["thresholdDb"] ?: -18f), palette, Modifier.weight(1f), 39.dp) {
+                        onUpdate(device.copy(parameters = p + ("thresholdDb" to it)))
+                    }
+                    DirectWaveKnob("RATIO", p["ratio"] ?: 3f, 1f..20f,
+                        String.format(java.util.Locale.US, "%.1f:1", p["ratio"] ?: 3f), palette, Modifier.weight(1f), 39.dp) {
+                        onUpdate(device.copy(parameters = p + ("ratio" to it)))
+                    }
+                    DirectWaveKnob("ATTACK", p["attackMs"] ?: 10f, 0.1f..250f,
+                        String.format(java.util.Locale.US, "%.1f ms", p["attackMs"] ?: 10f), palette, Modifier.weight(1f), 39.dp) {
+                        onUpdate(device.copy(parameters = p + ("attackMs" to it)))
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    DirectWaveKnob("RELEASE", p["releaseMs"] ?: 120f, 1f..1500f,
+                        String.format(java.util.Locale.US, "%.0f ms", p["releaseMs"] ?: 120f), palette, Modifier.weight(1f), 39.dp) {
+                        onUpdate(device.copy(parameters = p + ("releaseMs" to it)))
+                    }
+                    DirectWaveKnob("MAKEUP", p["makeupDb"] ?: 0f, -12f..12f,
+                        String.format(java.util.Locale.US, "%.1f dB", p["makeupDb"] ?: 0f), palette, Modifier.weight(1f), 39.dp) {
+                        onUpdate(device.copy(parameters = p + ("makeupDb" to it)))
+                    }
+                }
             }
             "SATURATOR" -> {
-                DeviceParameterSlider("DRIVE", p["drive"] ?: 2.5f, 0.2f..12f, palette) { onUpdate(device.copy(parameters = p + ("drive" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.35f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
-                DeviceParameterSlider("OUTPUT", p["outputDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("outputDb" to it))) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    DirectWaveKnob("DRIVE", p["drive"] ?: 2.5f, 0.2f..12f,
+                        String.format(java.util.Locale.US, "%.1f", p["drive"] ?: 2.5f), palette, Modifier.weight(1f), 41.dp) {
+                        onUpdate(device.copy(parameters = p + ("drive" to it)))
+                    }
+                    DirectWaveKnob("WET", p["wet"] ?: 0.35f, 0f..1f,
+                        String.format(java.util.Locale.US, "%.0f%%", (p["wet"] ?: 0.35f) * 100f), palette, Modifier.weight(1f), 41.dp) {
+                        onUpdate(device.copy(parameters = p + ("wet" to it)))
+                    }
+                    DirectWaveKnob("OUTPUT", p["outputDb"] ?: 0f, -12f..12f,
+                        String.format(java.util.Locale.US, "%.1f dB", p["outputDb"] ?: 0f), palette, Modifier.weight(1f), 41.dp) {
+                        onUpdate(device.copy(parameters = p + ("outputDb" to it)))
+                    }
+                }
             }
             "FILTER" -> {
-                DeviceParameterSlider("CUTOFF", p["cutoffHz"] ?: 16000f, 20f..20000f, palette, " Hz") { onUpdate(device.copy(parameters = p + ("cutoffHz" to it))) }
-                DeviceParameterSlider("RESONANCE", p["resonance"] ?: 0.15f, 0f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("resonance" to it))) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    DirectWaveKnob("CUTOFF", p["cutoffHz"] ?: 16000f, 20f..20000f,
+                        "${(p["cutoffHz"] ?: 16000f).toInt()} Hz", palette, Modifier.weight(1f), 41.dp) {
+                        onUpdate(device.copy(parameters = p + ("cutoffHz" to it)))
+                    }
+                    DirectWaveKnob("RESONANCE", p["resonance"] ?: 0.15f, 0f..0.95f,
+                        String.format(java.util.Locale.US, "%.2f", p["resonance"] ?: 0.15f), palette, Modifier.weight(1f), 41.dp) {
+                        onUpdate(device.copy(parameters = p + ("resonance" to it)))
+                    }
+                }
                 val mode = (p["mode"] ?: 0f).toInt()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("MODE", color = palette.muted, fontSize = 6.sp, modifier = Modifier.weight(1f))
@@ -4904,8 +4942,16 @@ private fun TrackEffectDeviceCard(
                 }
             }
             "LIMITER" -> {
-                DeviceParameterSlider("CEILING", p["ceilingDb"] ?: -1f, -12f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("ceilingDb" to it))) }
-                DeviceParameterSlider("RELEASE", p["releaseMs"] ?: 80f, 10f..500f, palette, " ms") { onUpdate(device.copy(parameters = p + ("releaseMs" to it))) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    DirectWaveKnob("CEILING", p["ceilingDb"] ?: -1f, -12f..0f,
+                        String.format(java.util.Locale.US, "%.1f dB", p["ceilingDb"] ?: -1f), palette, Modifier.weight(1f), 41.dp) {
+                        onUpdate(device.copy(parameters = p + ("ceilingDb" to it)))
+                    }
+                    DirectWaveKnob("RELEASE", p["releaseMs"] ?: 80f, 10f..500f,
+                        String.format(java.util.Locale.US, "%.0f ms", p["releaseMs"] ?: 80f), palette, Modifier.weight(1f), 41.dp) {
+                        onUpdate(device.copy(parameters = p + ("releaseMs" to it)))
+                    }
+                }
             }
         }
         Text("Track insert · parameters persist and route through playback.", color = palette.muted, fontSize = 6.sp)
