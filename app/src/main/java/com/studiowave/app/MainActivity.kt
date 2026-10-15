@@ -4068,58 +4068,67 @@ private fun DeviceDock(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (selectedTrack.kind == "midi") {
-                            DirectWaveDevicePanel(
-                                trackId = selectedTrack.id,
-                                trackName = selectedTrack.name,
-                                trackKind = selectedTrack.kind,
-                                palette = devicePalette
+                        when (selectedTrack.kind) {
+                            "midi" -> DirectWaveDevicePanel(
+                                trackId = selectedTrack.id, trackName = selectedTrack.name,
+                                trackKind = selectedTrack.kind, palette = devicePalette
                             )
-                        } else if (selectedTrack.kind == "drum") {
-                            DeviceModuleCard(
-                                title = "DRUM RACK",
-                                subtitle = "STEP SEQUENCER",
-                                palette = devicePalette,
-                                body = "Use the track's Drum Sequencer to edit hits. Double-tap a drum clip to open it."
+                            "drum" -> DeviceModuleCard(
+                                title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = devicePalette,
+                                body = "Drum patterns open in the dedicated step sequencer. Double-tap a drum clip to edit hits."
                             )
-                        } else {
-                            DeviceModuleCard(
-                                title = "AUDIO INPUT",
-                                subtitle = "SOURCE / LEVEL",
-                                palette = devicePalette,
-                                body = "Select an audio clip to inspect its waveform, trim and source properties."
+                            else -> DeviceModuleCard(
+                                title = "AUDIO CLIP", subtitle = "SOURCE / WAVEFORM", palette = devicePalette,
+                                body = "Select an audio clip to inspect the source waveform and trim it in Clip View."
                             )
                         }
                         DeviceModuleCard(
-                            title = "SATURATOR",
-                            subtitle = "AUDIO EFFECT",
-                            palette = devicePalette,
-                            body = "No saturator DSP is connected yet; this device is not shown with fake controls."
+                            title = "SATURATOR", subtitle = "AUDIO EFFECT", palette = devicePalette,
+                            body = "DSP is not connected yet. This module deliberately exposes no fake knobs."
                         )
                         DeviceModuleCard(
-                            title = "EQUALIZER",
-                            subtitle = "AUDIO EFFECT",
-                            palette = devicePalette,
-                            body = "No equalizer DSP is connected yet; the module remains informational until the engine supports it."
+                            title = "EQUALIZER", subtitle = "AUDIO EFFECT", palette = devicePalette,
+                            body = "Equalizer processing is not implemented in the current audio graph."
                         )
                         DeviceModuleCard(
-                            title = "COMPRESSOR",
-                            subtitle = "AUDIO EFFECT",
-                            palette = devicePalette,
-                            body = "No compressor DSP is connected yet; avoiding decorative knobs that do not alter audio."
+                            title = "COMPRESSOR", subtitle = "AUDIO EFFECT", palette = devicePalette,
+                            body = "Compression is not yet connected to playback; no decorative controls are presented."
                         )
                         DeviceModuleCard(
-                            title = "END OF CHAIN",
-                            subtitle = "DEVICE INSERT",
-                            palette = devicePalette,
-                            body = "Additional devices can appear here when processing is implemented."
+                            title = "END OF CHAIN", subtitle = "DEVICE INSERT", palette = devicePalette,
+                            body = "More processors can be added here once they have working DSP implementations."
                         )
                     }
-                }
             }
         }
     }
 }
+
+
+@Composable
+private fun DeviceModuleCard(
+    title: String,
+    subtitle: String,
+    palette: StudioWavePalette,
+    body: String
+) {
+    Column(
+        Modifier.width(156.dp).height(176.dp)
+            .background(palette.panel, RoundedCornerShape(4.dp))
+            .border(1.dp, palette.border.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+            .padding(7.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            Box(Modifier.size(7.dp).background(palette.orange, RoundedCornerShape(50)))
+            Text(title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        }
+        Text(subtitle, color = palette.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+        Divider(color = palette.border)
+        Text(body, color = palette.muted, fontSize = 8.sp, lineHeight = 11.sp)
+    }
+}
+
 @Composable
 private fun DirectWaveDevicePanel(
     trackId: String,
