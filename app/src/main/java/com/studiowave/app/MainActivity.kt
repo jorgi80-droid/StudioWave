@@ -4702,12 +4702,16 @@ private fun TrackEffectDeviceCard(
     val p = device.parameters
     Column(
         Modifier.width(242.dp).height(250.dp).verticalScroll(rememberScrollState())
-            .background(palette.canvas, RoundedCornerShape(2.dp))
+            .background(palette.panel, RoundedCornerShape(2.dp))
             .border(1.dp, palette.border, RoundedCornerShape(2.dp))
             .padding(7.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.fillMaxWidth().height(2.dp).background(if (device.enabled) palette.orange else palette.border))
+        Row(
+            Modifier.fillMaxWidth().background(palette.raised).padding(horizontal = 4.dp, vertical = 3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(Modifier.size(6.dp).background(if (device.enabled) palette.orange else palette.muted, RoundedCornerShape(1.dp)))
             Text(device.name.uppercase(), color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Black,
                 maxLines = 1, modifier = Modifier.weight(1f))
@@ -4741,7 +4745,7 @@ private fun TrackEffectDeviceCard(
                         onValueChange = { next -> onUpdate(device.copy(parameters = p + (key to next))) },
                         valueRange = -18f..18f,
                         modifier = Modifier.weight(1f).height(21.dp),
-                        colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.accent,
+                        colors = SliderDefaults.colors(thumbColor = palette.orange, activeTrackColor = palette.orange,
                             inactiveTrackColor = palette.control)
                     )
                 }
