@@ -5,6 +5,70 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TimelineViewportTest {
+    @Test fun refreshRatePreferenceCapsAt120AndLeaves60HzToSystem() {
+        assertEquals(120f, choosePreferredRefreshRate(listOf(60f, 90f, 120f, 144f)) ?: 0f, 0.001f)
+        assertEquals(90f, choosePreferredRefreshRate(listOf(60f, 90f)) ?: 0f, 0.001f)
+        assertEquals(null, choosePreferredRefreshRate(listOf(60f, 59.94f)))
+        assertEquals(null, choosePreferredRefreshRate(emptyList()))
+    }
+
+    @Test fun arrangementExtentIsCappedAtExactly1800Bars() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val maxTick = maxArrangementTick(timebase)
+        assertEquals(1800L * timebase.ticksPerBar, maxTick)
+        val viewport = TimelineViewport(timebase, 74f, maxTick.toDouble(), 900f)
+        assertEquals(maxTick, viewport.screenXToTime(100_000f))
+        assertTrue(viewport.panByScreenPixels(-10_000f).scrollTimeTicks <= maxTick.toDouble())
+        assertEquals(1799L, viewport.lastVisibleBar(10))
+    }
+
+    @Test fun longArrangementTicksRemainBoundedAt1800BarsAcrossZoomAndPan() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val endTick = maxArrangementTick(timebase)
+        listOf(20f, 74f, 600f, 1200f, 4800f).forEach { scale ->
+            val viewport = TimelineViewport(timebase, scale, endTick.toDouble(), 1000f)
+            assertTrue(viewport.scrollTimeTicks <= endTick.toDouble())
+            assertEquals(endTick, viewport.screenXToTime(Float.MAX_VALUE))
+            assertTrue(viewport.panByScreenPixels(-100_000f).scrollTimeTicks <= endTick.toDouble())
+            assertTrue(viewport.placeTickAtViewportX(endTick.toDouble(), 500f).scrollTimeTicks <= endTick.toDouble())
+        }
+    }
+
+    @Test fun pinchFrameReturnsToStartScaleAndScrollAfterRelease() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val initialZoom = 1f
+        val startScroll = 123_456.375
+        val anchorX = 417.25f
+        val baseViewport = TimelineViewport(timebase, 74f * initialZoom, startScroll, 900f)
+        val anchor = startScroll + anchorX / baseViewport.pixelsPerTick
+        val spans = listOf(180f, 220f, 255f, 230f, 190f, 180f)
+        val frames = spans.map { span ->
+            calculatePinchZoomFrame(timebase, initialZoom, startScroll, 180f, span, anchor, anchorX, 74f)
+        }
+        assertEquals(initialZoom, frames.first().zoom, 0.001f)
+        assertTrue(frames[2].zoom > frames[1].zoom)
+        assertEquals(initialZoom, frames.last().zoom, 0.001f)
+        val restoredViewport = TimelineViewport(
+            timebase, 74f * frames.last().zoom, frames.last().scrollTicks, 900f
+        )
+        assertEquals(anchor, frames.last().scrollTicks + anchorX / restoredViewport.pixelsPerTick, 1e-6)
+        frames.forEach { assertTrue(it.scrollTicks >= 0.0) }
+    }
+
+    @Test fun pinchFramesDoNotAccumulatePreviousFrameRounding() {
+        val timebase = TimelineTimebase(126, 7, 8, 960)
+        val start = TimelineViewport(timebase, 111f, 50_000.125, 900f)
+        val anchorX = 320f
+        val anchorTick = start.scrollTimeTicks + anchorX / start.pixelsPerTick
+        val shrunk = calculatePinchZoomFrame(timebase, 1.5f, start.scrollTimeTicks,
+            200f, 160f, anchorTick, anchorX, 74f)
+        val restored = calculatePinchZoomFrame(timebase, 1.5f, start.scrollTimeTicks,
+            200f, 200f, anchorTick, anchorX, 74f)
+        assertTrue(shrunk.zoom < 1.5f)
+        assertEquals(1.5f, restored.zoom, 0.001f)
+        assertEquals(start.scrollTimeTicks, restored.scrollTicks, 1e-6)
+    }
+
     @Test fun timebaseUsesProjectPpqAndMeter() {
         val common = TimelineTimebase(bpm = 120, numerator = 4, denominator = 4, ppq = 960)
         assertEquals(960L, common.ticksPerBeat)
@@ -183,6 +247,130 @@ class TimelineViewportTest {
                 kotlin.math.abs(viewport.viewportXToTime(right) - (clipStart + clipLength)) <= 1L)
             assertTrue("resize delta at scale=$scale",
                 kotlin.math.abs(viewport.pixelsToTickDelta(width) - clipLength) <= 1L)
+        }
+    }
+
+    @Test fun gridSubdivisionNeverReturnsZeroWhenAVisibleBeatNeedsSubdivision() {
+        // Small PPQ plus a large denominator can produce fewer than 16 ticks per beat.
+        // A zero subdivision would make the Compose Canvas grid loop never advance.
+        val unusual = TimelineTimebase(120, 1, 32, 24)
+        val viewport = TimelineViewport(unusual, 1200f, 0.0, 800f)
+        assertEquals(3L, unusual.ticksPerBeat)
+        assertEquals(1L, viewport.gridSubdivisionTicks(1200.0))
+        assertEquals(0L, viewport.gridSubdivisionTicks(15.9))
+    }
+
+    @Test fun gridSubdivisionScalesWithZoomForNormalMeter() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 100f, 0.0, 800f)
+        assertEquals(60L, viewport.gridSubdivisionTicks(100.0))
+        assertEquals(120L, viewport.gridSubdivisionTicks(60.0))
+        assertEquals(240L, viewport.gridSubdivisionTicks(35.0))
+        assertEquals(480L, viewport.gridSubdivisionTicks(20.0))
+        assertEquals(0L, viewport.gridSubdivisionTicks(10.0))
+    }
+
+
+    @Test fun viewportXAndScreenXConversionsAreExactInTheirOwnCoordinateSpaces() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 148f, 7680.0, 900f, 104f)
+        listOf(0L, 7680L, 9120L, 50000L).forEach { tick ->
+            val paneX = viewport.timeToViewportX(tick)
+            assertTrue(kotlin.math.abs(tick - viewport.viewportXToTime(paneX)) <= 1L)
+            assertTrue(kotlin.math.abs(tick - viewport.screenXToTime(viewport.timeToScreenX(tick))) <= 1L)
+            assertEquals(paneX, viewport.timeToScreenX(tick) - viewport.trackHeaderWidthPx, 0.001f)
+        }
+    }
+
+    @Test fun clipWidthUsesOneScaleAndDoesNotChangeWithViewportScroll() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val start = 12_345L
+        val length = 9_876L
+        listOf(20f, 74f, 600f, 1200f).forEach { scale ->
+            val a = TimelineViewport(timebase, scale, 0.0, 900f, 104f)
+            val b = a.copy(scrollTimeTicks = 27_000.0)
+            assertEquals(a.tickDeltaToPixels(length), b.tickDeltaToPixels(length), 0.001f)
+            assertEquals(a.tickDeltaToPixels(length),
+                b.timeToViewportX(start + length) - b.timeToViewportX(start), 0.02f)
+        }
+    }
+
+    @Test fun nonFinitePixelDeltasAreIgnored() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 20f, 0.0, 500f)
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.NaN))
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.POSITIVE_INFINITY))
+        assertEquals(0L, viewport.pixelsToTickDelta(Float.NEGATIVE_INFINITY))
+    }
+
+
+    @Test fun placeTickAtViewportXKeepsAnchorAcrossScrollAndZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        listOf(24f, 74f, 240f, 1190f).forEach { scale ->
+            val initial = TimelineViewport(timebase, scale, 7680.0, 900f)
+            val anchorX = 377f
+            val anchorTick = initial.viewportXToTime(anchorX)
+            val placed = initial.placeTickAtViewportX(anchorTick, anchorX)
+            assertTrue(kotlin.math.abs(anchorTick - placed.viewportXToTime(anchorX)) <= 1L)
+            assertEquals(scale, placed.effectivePixelsPerBar, 0.001f)
+        }
+    }
+
+    @Test fun placeTickAtViewportXIgnoresNonFiniteAnchor() {
+        val viewport = TimelineViewport(TimelineTimebase(120, 4, 4, 960), 74f, 1200.0, 900f)
+        assertTrue(viewport == viewport.placeTickAtViewportX(3840L, Float.NaN))
+        assertTrue(viewport == viewport.placeTickAtViewportX(3840L, Float.POSITIVE_INFINITY))
+    }
+
+
+    @Test fun longClipGeometryRemainsLongerThanViewportAtHighZoom() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val viewportWidthPx = 720f
+        val clipStart = 0L
+        val clipLength = timebase.ticksPerBar * 12L
+        listOf(1f, 2f, 4f).forEach { zoom ->
+            val viewport = TimelineViewport(timebase, 180f * zoom, 0.0, viewportWidthPx)
+            val clipWidth = viewport.tickDeltaToPixels(clipLength)
+            val mappedEnd = viewport.timeToViewportX(clipStart + clipLength)
+            val mappedStart = viewport.timeToViewportX(clipStart)
+            assertTrue("zoom=$zoom clip should extend beyond the visible lane", clipWidth > viewportWidthPx)
+            assertEquals("zoom=$zoom exact clip extent", clipWidth, mappedEnd - mappedStart, 0.05f)
+        }
+    }
+
+
+    @Test fun extendedZoomRangeKeepsClipGeometryAndResizeDeltasConsistent() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        val start = 8192L
+        val length = timebase.ticksPerBar * 10L
+        listOf(1200f, 1800f, 2400f, 3600f).forEach { scale ->
+            val viewport = TimelineViewport(timebase, scale, 4000.0, 720f, 104f)
+            val left = viewport.timeToViewportX(start)
+            val right = viewport.timeToViewportX(start + length)
+            val width = viewport.tickDeltaToPixels(length)
+            assertEquals("scale=$scale", width, right - left, 0.05f)
+            assertTrue("scale=$scale", kotlin.math.abs(viewport.pixelsToTickDelta(width) - length) <= 1L)
+            assertEquals(scale, viewport.effectivePixelsPerBar, 0.01f)
+        }
+    }
+
+    @Test fun repeatedPinchZoomKeepsFractionalAnchorStableWithoutTickRoundingDrift() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        var viewport = TimelineViewport(timebase, 74f, 123_456.375, 900f, 104f)
+        val anchorX = 417.25f
+        val originalAnchorTick = viewport.scrollTimeTicks + anchorX.toDouble() / viewport.pixelsPerTick
+        val scales = listOf(80f, 96f, 72f, 120f, 60f, 148f, 74f, 200f, 74f)
+        scales.forEach { scale ->
+            viewport = viewport.zoomKeepingAnchor(scale, 104f + anchorX)
+        }
+        val finalAnchorTick = viewport.scrollTimeTicks + anchorX.toDouble() / viewport.pixelsPerTick
+        assertEquals(originalAnchorTick, finalAnchorTick, 1e-7)
+    }
+
+    @Test fun repeatedAnchoredZoomNeverProducesNegativeScrollAtSongStart() {
+        val timebase = TimelineTimebase(120, 4, 4, 960)
+        var viewport = TimelineViewport(timebase, 74f, 0.0, 900f, 104f)
+        repeat(100) { index ->
+            val scale = if (index % 2 == 0) 150f else 38f
+            viewport = viewport.zoomKeepingAnchor(scale, 104f + 450f)
+            assertTrue(viewport.scrollTimeTicks >= 0.0)
         }
     }
 

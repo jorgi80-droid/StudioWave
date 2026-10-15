@@ -2,6 +2,12 @@ package com.studiowave.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -9,6 +15,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -44,11 +52,17 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlin.math.roundToInt
 import org.json.JSONObject
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -61,7 +75,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import com.studiowave.app.audio.NativeAudioEngine
 import com.studiowave.app.audio.ArrangementPlaybackEngine
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioProjectFile
@@ -76,16 +89,120 @@ private val Mint = Color(0xFF00D2B4)
 private val Green = Color(0xFF22C55E)
 private val Red = Color(0xFFEF4444)
 
+internal fun choosePreferredRefreshRate(supportedRates: Iterable<Float>): Float? =
+    supportedRates.asSequence()
+        .filter { it.isFinite() && it >= 90f && it <= 120f }
+        .maxOrNull()
+
+
+/**
+ * Give an Arrangement clip its real timeline width even when it is wider than the
+ * visible lane. Modifier.width() respects the lane's maxWidth and silently truncates
+ * long clips to the viewport, making their apparent duration change as the viewport zooms.
+ *
+ * The parent reports a constrained width to preserve layout, but the child is measured
+ * at its requested width and placed at x=0. TimelineGrid's clipToBounds() clips only the
+ * off-screen portion, not the clip's musical extent.
+ */
+private fun Modifier.timelineClipWidthPx(widthPx: Float): Modifier = layout { measurable, constraints ->
+    // Compose packs dimensions into Constraints; keep a generous finite ceiling while
+    // never using the viewport width as the clip's preferred width.
+    val desiredWidthPx = if (widthPx.isFinite()) {
+        widthPx.roundToInt().coerceIn(1, 262_143)
+    } else {
+        1
+    }
+    val childConstraints = constraints.copy(minWidth = desiredWidthPx, maxWidth = desiredWidthPx)
+    val placeable = measurable.measure(childConstraints)
+    val reportedWidth = desiredWidthPx.coerceIn(constraints.minWidth, constraints.maxWidth)
+    layout(reportedWidth, placeable.height) {
+        placeable.placeRelative(0, 0)
+    }
+}
+
 private data class TrackRowLayout(val topDp: Float, val heightDp: Float)
+
+internal data class PinchZoomFrame(val zoom: Float, val scrollTicks: Double)
+
+/** Compute a pinch from an immutable gesture-start baseline and fractional tick anchor. */
+internal fun calculatePinchZoomFrame(
+    timebase: TimelineTimebase,
+    baseZoom: Float,
+    baseScrollTicks: Double,
+    baseSpanPx: Float,
+    currentSpanPx: Float,
+    anchorTick: Double,
+    centroidX: Float,
+    baseBarWidthPx: Float
+): PinchZoomFrame {
+    val ratio = if (baseSpanPx > 1f && currentSpanPx.isFinite() && currentSpanPx > 1f)
+        currentSpanPx / baseSpanPx else 1f
+    val requestedZoom = (baseZoom * ratio).coerceIn(0.1f, 16f)
+    val viewportScale = TimelineViewport(
+        timebase, baseBarWidthPx * requestedZoom, baseScrollTicks, 0f
+    ).effectivePixelsPerBar
+    val effectiveZoom = viewportScale / baseBarWidthPx
+    // Pinch anchor is stored as a fractional tick, so returning to the start scale must
+    // return the start scroll without an integer-tick snap.
+    val scroll = TimelineViewport(timebase, viewportScale, baseScrollTicks, 0f)
+        .placeTickAtViewportX(anchorTick, centroidX).scrollTimeTicks
+    return PinchZoomFrame(effectiveZoom, scroll)
+}
+/** Split a clip at an absolute arrangement tick while keeping both halves tied to source time. */
+internal fun splitWaveClip(clip: com.studiowave.app.data.WaveClip, splitTick: Long): Pair<com.studiowave.app.data.WaveClip, com.studiowave.app.data.WaveClip>? {
+    val start = clip.startTick.coerceAtLeast(0L)
+    val length = clip.lengthTicks.coerceAtLeast(1L)
+    val end = if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
+    if (splitTick <= start || splitTick >= end) return null
+    val leftLength = splitTick - start
+    val rightLength = end - splitTick
+    val sourceOffset = clip.sourceOffsetTicks.coerceAtLeast(0L)
+    val rightSourceOffset = if (sourceOffset > Long.MAX_VALUE - leftLength) Long.MAX_VALUE else sourceOffset + leftLength
+    fun clippedNotes(offset: Long, windowLength: Long, newIds: Boolean) = clip.midiNotes.mapNotNull { note ->
+        val noteStart = note.startTick.coerceAtLeast(0L)
+        val noteEnd = if (noteStart > Long.MAX_VALUE - note.durationTicks.coerceAtLeast(1L)) Long.MAX_VALUE
+            else noteStart + note.durationTicks.coerceAtLeast(1L)
+        val from = noteStart.coerceAtLeast(offset)
+        val to = noteEnd.coerceAtMost(offset + windowLength)
+        if (to <= from) null else note.copy(
+            // Keep IDs for notes that remain wholly in one piece; only a note
+            // crossing the split boundary needs a new ID for its right-hand segment.
+            id = if (newIds && noteStart < offset && noteEnd > offset) java.util.UUID.randomUUID().toString() else note.id,
+            startTick = from - offset, durationTicks = to - from
+        )
+    }
+    val splitIndex = if (clip.drumSteps.isEmpty()) 0 else
+        kotlin.math.floor(clip.drumSteps.size.toDouble() * leftLength.toDouble() / length.toDouble())
+            .toInt().coerceIn(0, clip.drumSteps.size)
+    val left = clip.copy(lengthTicks = leftLength, midiNotes = clippedNotes(0L, leftLength, false), drumSteps = clip.drumSteps.take(splitIndex))
+    val right = clip.copy(
+        id = java.util.UUID.randomUUID().toString(), name = clip.name + " (2)", startTick = splitTick,
+        lengthTicks = rightLength, sourceOffsetTicks = rightSourceOffset,
+        midiNotes = clippedNotes(leftLength, rightLength, true), drumSteps = clip.drumSteps.drop(splitIndex)
+    )
+    return left to right
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        preferAdaptiveHighRefreshRate()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         hideDawSystemBars()
         window.navigationBarColor = android.graphics.Color.rgb(20, 21, 23)
         setContent { StudioWaveApp() }
+    }
+
+    /** Ask for 90/120 Hz where available; Android may still adapt for battery/thermal policy. */
+    @Suppress("DEPRECATION")
+    private fun preferAdaptiveHighRefreshRate() {
+        val targetRate = choosePreferredRefreshRate(
+            windowManager.defaultDisplay.supportedModes.map { it.refreshRate }.asIterable()
+        )
+        if (targetRate != null) {
+            window.attributes = window.attributes.apply { preferredRefreshRate = targetRate }
+        }
     }
 
     private fun hideDawSystemBars() {
@@ -131,7 +248,6 @@ private fun suggestedSdawFileName(projectName: String): String {
 @Composable
 private fun StudioWaveApp() {
     val context = LocalContext.current
-    val engine = remember { NativeAudioEngine() }
     val arrangementPlayback = remember(context) { com.studiowave.app.audio.ArrangementPlaybackEngine(context) }
     val playbackScope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("studiowave_project", android.content.Context.MODE_PRIVATE) }
@@ -147,6 +263,20 @@ private fun StudioWaveApp() {
     var playbackJob by remember { mutableStateOf<Job?>(null) }
     var playheadTick by remember { mutableLongStateOf(0L) }
     var playbackSession by remember { mutableLongStateOf(0L) }
+    val playbackProgress = remember { Channel<Pair<Long, Long>>(Channel.CONFLATED) }
+    val latestProjectForProgress by rememberUpdatedState(project)
+    LaunchedEffect(playbackProgress) {
+        for ((session, tick) in playbackProgress) {
+            if (session == playbackSession) {
+                val activeProject = latestProjectForProgress
+                val limit = maxArrangementTick(TimelineTimebase(
+                    activeProject.bpm, activeProject.numerator, activeProject.denominator, activeProject.ppq
+                ))
+                val boundedTick = tick.coerceIn(0L, limit)
+                if (boundedTick >= playheadTick) playheadTick = boundedTick
+            }
+        }
+    }
     var bpm by remember { mutableIntStateOf(project.bpm) }
     var audioError by remember { mutableStateOf<String?>(null) }
     var master by remember { mutableFloatStateOf(0.72f) }
@@ -158,7 +288,7 @@ private fun StudioWaveApp() {
     // Start with the device drawer collapsed so Arrangement gets the full vertical workspace.
     var showDock by remember { mutableStateOf(false) }
     var zoom by remember { mutableFloatStateOf(1f) }
-    var scrollTicks by remember { mutableFloatStateOf(0f) }
+    var scrollTicks by remember { mutableDoubleStateOf(0.0) }
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
@@ -196,15 +326,9 @@ private fun StudioWaveApp() {
         playbackJob?.cancel()
         playbackJob = null
         runCatching { arrangementPlayback.stop() }
-        runCatching { engine.stop() }
         playing = false
         playbackLoading = false
         audioError = null
-    }
-    fun seekToTick(tick: Long) {
-        val target = tick.coerceAtLeast(0L)
-        if (playing || playbackLoading) stopPlayback()
-        playheadTick = target
     }
     fun startPlaybackAt(tick: Long, projectSnapshot: StudioProject = project) {
         val session = playbackSession + 1L
@@ -224,8 +348,14 @@ private fun StudioWaveApp() {
                     snapshot,
                     gain,
                     onCompleted = {
-                        playbackScope.launch {
+                        playbackScope.launch(Dispatchers.Main.immediate) {
                             if (session == playbackSession) {
+                                playheadTick = snapshot.tracks.asSequence().flatMap { it.clips.asSequence() }
+                                    .maxOfOrNull { clip ->
+                                        val start = clip.startTick.coerceAtLeast(0L)
+                                        val length = clip.lengthTicks.coerceAtLeast(1L)
+                                        if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
+                                    } ?: playheadTick
                                 playing = false
                                 playbackLoading = false
                                 playbackJob = null
@@ -233,7 +363,7 @@ private fun StudioWaveApp() {
                         }
                     },
                     onError = { message ->
-                        playbackScope.launch {
+                        playbackScope.launch(Dispatchers.Main.immediate) {
                             if (session == playbackSession) {
                                 playing = false
                                 playbackLoading = false
@@ -244,12 +374,16 @@ private fun StudioWaveApp() {
                     },
                     startAtTick = startTick,
                     onProgress = { positionTicks ->
-                        playbackScope.launch {
-                            if (session == playbackSession) playheadTick = positionTicks.coerceAtLeast(0L)
-                        }
+                        // Conflate progress from the audio worker to avoid an unbounded main-thread backlog.
+                        playbackProgress.trySend(session to positionTicks.coerceAtLeast(0L))
                     }
                 )
-                if (session == playbackSession) playing = true
+                if (session == playbackSession) {
+                    playing = true
+                    playbackLoading = false
+                    // Keep transport state until AudioTrack drains; start() only launches its worker.
+                    awaitCancellation()
+                }
             } catch (_: CancellationException) {
                 if (session == playbackSession) {
                     playing = false
@@ -267,6 +401,17 @@ private fun StudioWaveApp() {
                     playbackJob = null
                 }
             }
+        }
+    }
+    fun seekToTick(tick: Long) {
+        val target = tick.coerceAtLeast(0L)
+        // Match DAW transport semantics: seeking while the transport is active is a
+        // discontinuity, not an implicit STOP. Rebuild playback from the requested
+        // musical position so the audio and playhead remain together.
+        if (playing || playbackLoading) {
+            startPlaybackAt(target)
+        } else {
+            playheadTick = target
         }
     }
     val latestProject by rememberUpdatedState(project)
@@ -310,12 +455,20 @@ private fun StudioWaveApp() {
                                     currentProject.ppq / 60_000.0).toLong().coerceAtLeast(1L)
                             } else 15360L
                             val snapStep = SnapDivision.QUARTER_BEAT.ticks(timebase)
-                            val lengthTicks = if (durationMs > 0L) {
+                            val requestedLengthTicks = if (durationMs > 0L) {
                                 (((exactTicks + snapStep - 1L) / snapStep) * snapStep).coerceAtLeast(snapStep)
                             } else 15360L
+                            val arrangementEndTick = maxArrangementTick(timebase)
+                            val requestedStart = target.clips.maxOfOrNull { clip ->
+                                val end = clip.startTick.coerceAtLeast(0L)
+                                val length = clip.lengthTicks.coerceAtLeast(0L)
+                                if (end > Long.MAX_VALUE - length) Long.MAX_VALUE else end + length
+                            } ?: 0L
+                            val clipStart = requestedStart.coerceIn(0L, arrangementEndTick - 1L)
+                            val lengthTicks = requestedLengthTicks.coerceIn(1L, arrangementEndTick - clipStart)
                             val clip = com.studiowave.app.data.WaveClip(
                                 name = uri.lastPathSegment?.substringAfterLast('/')?.take(32)?.ifBlank { "Audio clip" } ?: "Audio clip",
-                                startTick = target.clips.maxOfOrNull { it.startTick + it.lengthTicks } ?: 0L,
+                                startTick = clipStart,
                                 lengthTicks = lengthTicks,
                                 sourceUri = uri.toString()
                             )
@@ -371,12 +524,11 @@ private fun StudioWaveApp() {
                     playbackJob?.cancel()
                     playbackJob = null
                     arrangementPlayback.stop()
-                    engine.stop()
                     playing = false
                     playbackLoading = false
                     changeProject(imported)
                     bpm = imported.bpm
-                    scrollTicks = 0f
+                    scrollTicks = 0.0
                     scrollTracks = 0f
                     zoom = 1f
                     verticalZoom = 1f
@@ -418,11 +570,10 @@ private fun StudioWaveApp() {
             // Autosave must not crash editing; the next project change will retry it.
         }
     }
-    DisposableEffect(engine, arrangementPlayback) {
+    DisposableEffect(arrangementPlayback) {
         onDispose {
             playbackJob?.cancel()
             arrangementPlayback.close()
-            engine.close()
         }
     }
 
@@ -479,7 +630,7 @@ private fun StudioWaveApp() {
                         "BROWSER" -> BrowserWorkspace(onImportAudio = { audioPicker.launch(arrayOf("audio/*")) })
                         "DRUM SEQUENCER" -> DrumSequencerWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(project.tracks.firstOrNull { it.id == editorTrackId }, onBack = { selectedWorkspace = "ARRANGEMENT" })
-                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 4f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0f) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
+                        else -> ArrangementWorkspace(project, { changeProject(it) }, zoom, { zoom = it.coerceIn(0.1f, 16f) }, scrollTicks, { scrollTicks = it.coerceAtLeast(0.0) }, verticalZoom, { verticalZoom = it.coerceIn(0.65f, 1.8f) }, scrollTracks, { scrollTracks = it.coerceAtLeast(0f) }, { workspace, trackId -> editorTrackId = trackId; selectedWorkspace = workspace },
                             onPlaybackRestart = { updatedProject ->
                                 if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
                             },
@@ -492,9 +643,19 @@ private fun StudioWaveApp() {
                             onSeekTick = { tick -> seekToTick(tick) })
                     }
                 }
-                if (showDock) {
+                AnimatedVisibility(
+                    visible = showDock,
+                    enter = fadeIn(tween(150)) + slideInVertically(tween(180), initialOffsetY = { it / 3 }),
+                    exit = fadeOut(tween(100)) + slideOutVertically(tween(120), targetOffsetY = { it / 4 })
+                ) {
                     Box(Modifier.fillMaxWidth().height(105.dp)) {
-                        DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
+                        DeviceDock(
+                            project = project,
+                            selectedTrackId = editorTrackId,
+                            onSelectTrack = { editorTrackId = it },
+                            onProjectChange = { changeProject(it) },
+                            onToggle = { showDock = false }
+                        )
                         Surface(
                             color = Raised.copy(alpha = 0.96f),
                             shape = RoundedCornerShape(50),
@@ -588,7 +749,7 @@ private fun ArrangementWorkspace(
     project: StudioProject,
     onProjectChange: (StudioProject) -> Unit,
     zoom: Float, onZoom: (Float) -> Unit,
-    scrollTicks: Float, onScroll: (Float) -> Unit,
+    scrollTicks: Double, onScroll: (Double) -> Unit,
     verticalZoom: Float, onVerticalZoom: (Float) -> Unit,
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?) -> Unit,
@@ -667,9 +828,19 @@ private fun ArrangementWorkspace(
         when (action) {
             "Open editor" -> onOpenEditor(when (track.kind) { "drum" -> "DRUM SEQUENCER"; "audio" -> "AUDIO EDITOR"; else -> "PIANO ROLL" }, track.id)
             "Cut" -> {
-                copiedClip = track to clip
-                onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item -> if (index == trackIndex) item.copy(clips = item.clips.filterNot { it.id == clipId }) else item }))
-                statusMessage = "Clip cut"
+                // Arrangement Cut splits at the playhead; it must not delete the entire clip.
+                val split = splitWaveClip(clip, playheadTick)
+                when {
+                    split == null -> statusMessage = "Place the playhead inside the clip to split it"
+                    track.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK -> statusMessage = "Clip limit reached for this track"
+                    else -> {
+                        val (left, right) = split
+                        onProjectChange(project.copy(tracks = project.tracks.mapIndexed { index, item ->
+                            if (index == trackIndex) item.copy(clips = (item.clips.filterNot { it.id == clipId } + left + right).sortedBy { it.startTick }) else item
+                        }))
+                        statusMessage = "Clip split at playhead"
+                    }
+                }
             }
             "Copy" -> { copiedClip = track to clip; statusMessage = "Clip copied" }
             "Duplicate" -> {
@@ -755,7 +926,7 @@ private fun ArrangementWorkspace(
             val baseBarWidthPx = with(density) { 74.dp.toPx() }.coerceAtLeast(1f)
             (timelineWidthPx.toDouble() * fitTimebase.ticksPerBar.toDouble() /
                 (baseBarWidthPx.toDouble() * maxEndTick.toDouble()))
-                .toFloat().coerceIn(0.1f, 4f)
+                .toFloat().coerceIn(0.1f, 16f)
         }
         Column(Modifier.fillMaxSize().background(CanvasSurface, RoundedCornerShape(7.dp)).padding(1.dp)) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
@@ -885,13 +1056,15 @@ private fun ArrangementWorkspace(
                 onClipAction = { action, clipId -> handleClipAction(action, clipId) },
                 onDismissClipMenu = { clipMenu = null },
                 onResizeClip = { clipId, newStartTick, lengthTicks ->
-                    val safeLength = lengthTicks.coerceIn(1L, Long.MAX_VALUE / 2L)
+                    val resizeTimebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+                    val arrangementEndTick = maxArrangementTick(resizeTimebase)
+                    val safeStart = newStartTick.coerceIn(0L, arrangementEndTick - 1L)
+                    val safeLength = lengthTicks.coerceIn(1L, arrangementEndTick - safeStart)
                     val resizedProject = project.copy(tracks = project.tracks.map { track ->
                         track.copy(clips = track.clips.map { clip ->
                             if (clip.id != clipId) clip else {
                                 val delta = newStartTick - clip.startTick
                                 val oldLength = clip.lengthTicks.coerceAtLeast(1L)
-                                val safeStart = newStartTick.coerceAtLeast(0L)
                                 val safeDelta = safeStart - clip.startTick
                                 val nextNotes = if (safeDelta > 0L) {
                                     clip.midiNotes.mapNotNull { note ->
@@ -920,7 +1093,12 @@ private fun ArrangementWorkspace(
                                 clip.copy(
                                     startTick = safeStart,
                                     lengthTicks = safeLength,
-                                    sourceOffsetTicks = (clip.sourceOffsetTicks + safeDelta).coerceAtLeast(0L),
+                                    sourceOffsetTicks = if (safeDelta >= 0L) {
+                                        val oldOffset = clip.sourceOffsetTicks.coerceAtLeast(0L)
+                                        if (oldOffset > Long.MAX_VALUE - safeDelta) Long.MAX_VALUE else oldOffset + safeDelta
+                                    } else {
+                                        (clip.sourceOffsetTicks.coerceAtLeast(0L) + safeDelta).coerceAtLeast(0L)
+                                    },
                                     midiNotes = nextNotes,
                                     drumSteps = nextDrumSteps
                                 )
@@ -928,12 +1106,18 @@ private fun ArrangementWorkspace(
                         })
                     })
                     onProjectChange(resizedProject)
-                    // Playback uses a prepared arrangement snapshot. Rebuild it at the current
-                    // playhead after an edge-resize commit so the new clip end is honored.
-                    onPlaybackRestart(resizedProject)
+                    // Do not flush/recreate AudioTrack just to commit an edge edit; this
+                    // causes an audible gap. A fresh plan is built on the next explicit Play/seek.
                 },
                 onMoveClip = { clipId, targetTrackId, startTick ->
-                    val movedProject = project.moveClipToTrack(clipId, targetTrackId, startTick)
+                    val moveTimebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+                    val arrangementEndTick = maxArrangementTick(moveTimebase)
+                    val movingClip = project.tracks.asSequence().flatMap { it.clips.asSequence() }
+                        .firstOrNull { it.id == clipId }
+                    val maxStartTick = (arrangementEndTick - (movingClip?.lengthTicks ?: 1L).coerceAtLeast(1L))
+                        .coerceAtLeast(0L)
+                    val boundedStartTick = startTick.coerceIn(0L, maxStartTick)
+                    val movedProject = project.moveClipToTrack(clipId, targetTrackId, boundedStartTick)
                     if (movedProject != null) {
                         onProjectChange(movedProject)
                         onPlaybackRestart(movedProject)
@@ -963,7 +1147,7 @@ private fun ArrangementWorkspace(
                 FloatingTimelineControl("FIT", "Fit clips to view") {
                     onZoom(fitZoom)
                     onVerticalZoom(1f)
-                    onScroll(0f)
+                    onScroll(0.0)
                     onScrollTracks(0f)
                 }
                 FloatingTimelineControl(if (snapEnabled) "SN" else "SN×", if (snapEnabled) "Snap on" else "Snap off") {
@@ -972,7 +1156,7 @@ private fun ArrangementWorkspace(
                 FloatingTimelineControl(snapDivision.label, "Change snap division") {
                     snapDivision = snapDivision.next().let { if (it == SnapDivision.OFF) SnapDivision.BAR else it }
                 }
-                FloatingTimelineControl(if (showDevices) "DEV×" else "DEV", if (showDevices) "Hide devices" else "Show devices") {
+                FloatingTimelineControl(if (showDevices) "TRK×" else "TRK", if (showDevices) "Hide track inspector" else "Show track inspector") {
                     onToggleDevices()
                 }
             }
@@ -1237,8 +1421,8 @@ private fun TimelineGrid(
     onSeekTick: (Long) -> Unit,
     zoom: Float,
     onZoom: (Float) -> Unit,
-    scrollTicks: Float,
-    onScroll: (Float) -> Unit,
+    scrollTicks: Double,
+    onScroll: (Double) -> Unit,
     verticalZoom: Float,
     onVerticalZoom: (Float) -> Unit,
     snapEnabled: Boolean,
@@ -1265,10 +1449,10 @@ private fun TimelineGrid(
         TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
     }
     val requestedPixelsPerBar = baseBarWidthPx * zoom
-    val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks.toDouble(), 0f)
+    val pixelsPerBar = TimelineViewport(timebase, requestedPixelsPerBar, scrollTicks, 0f)
         .effectivePixelsPerBar
     val viewport = remember(timebase, pixelsPerBar, scrollTicks, trackHeaderWidthPx) {
-        TimelineViewport(timebase, pixelsPerBar, scrollTicks.toDouble(), 0f, trackHeaderWidthPx)
+        TimelineViewport(timebase, pixelsPerBar, scrollTicks, 0f, trackHeaderWidthPx)
     }
     val trackHeightPx = with(density) { 67.dp.toPx() } * verticalZoom
     val latestProject by rememberUpdatedState(project)
@@ -1278,15 +1462,24 @@ private fun TimelineGrid(
     val rulerPaint = remember(density) { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; textSize = with(density) { 9.sp.toPx() } } }
     val currentZoom by rememberUpdatedState(zoom)
     val currentScroll by rememberUpdatedState(scrollTicks)
+    val currentPlayhead by rememberUpdatedState(playheadTick)
     val currentScrollTracks by rememberUpdatedState(scrollTracks)
     val currentVerticalZoom by rememberUpdatedState(verticalZoom)
     val currentOnVerticalZoom by rememberUpdatedState(onVerticalZoom)
     val currentOnScrollTracks by rememberUpdatedState(onScrollTracks)
+    val currentViewport by rememberUpdatedState(viewport)
+    val currentTrackHeightPx by rememberUpdatedState(trackHeightPx)
+    val currentTimebase by rememberUpdatedState(timebase)
+    val currentSnapDivision by rememberUpdatedState(snapDivision)
+    val currentSnapEnabled by rememberUpdatedState(snapToGrid)
     val currentOnZoom by rememberUpdatedState(onZoom)
     val currentOnScroll by rememberUpdatedState(onScroll)
     val currentOnSeekTick by rememberUpdatedState(onSeekTick)
     val currentTrackRows by rememberUpdatedState(trackRowLayout)
     var draggingClip by remember { mutableStateOf<String?>(null) }
+    var resizingClip by remember { mutableStateOf<String?>(null) }
+    var liveResizeStart by remember { mutableLongStateOf(0L) }
+    var liveResizeLength by remember { mutableLongStateOf(1L) }
     var dragFromTrack by remember { mutableIntStateOf(-1) }
     var dragOriginalTick by remember { mutableLongStateOf(0L) }
     var dragDx by remember { mutableFloatStateOf(0f) }
@@ -1306,61 +1499,80 @@ private fun TimelineGrid(
                         val rowY = firstDown.position.y - rulerHeightPx
                         val rowIndex = hitProject.tracks.indices.firstOrNull { index ->
                             val row = currentTrackRows.getOrNull(index) ?: TrackRowLayout(index * 67f, 67f)
-                            val topPx = with(density) { ((row.topDp - currentScrollTracks) * currentVerticalZoom).dp.toPx() }
-                            val heightPx = with(density) { (row.heightDp * currentVerticalZoom).dp.toPx() }
+                            val topPx = (row.topDp - currentScrollTracks) * currentVerticalZoom * density.density
+                            val heightPx = row.heightDp * currentVerticalZoom * density.density
                             rowY >= topPx && rowY <= topPx + heightPx
                         }
                         val hitTrack = rowIndex?.let { hitProject.tracks.getOrNull(it) }
-                        val barWidthPx = TimelineViewport(timebase, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                        hitTrack?.clips?.any { clip ->
-                            val hitViewport = TimelineViewport(timebase, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx)
-                             val left = hitViewport.timeToViewportX(clip.startTick)
-                            val width = hitViewport.tickDeltaToPixels(clip.lengthTicks)
-                            val right = left + width
+                        if (hitTrack == null) {
+                            false
+                        } else {
+                            val hitViewport = TimelineViewport(
+                                timebase, baseBarWidthPx * currentZoom,
+                                currentScroll, size.width.toFloat(), trackHeaderWidthPx
+                            )
                             val pointerX = firstDown.position.x
-                            // A pointer to the right of the final clip is empty canvas.
-                            // This is what lets the user begin viewport panning after clips.
-                            pointerX >= left && pointerX <= right
-                        } == true
+                            hitTrack.clips.any { clip ->
+                                val left = hitViewport.timeToViewportX(clip.startTick)
+                                val right = left + hitViewport.tickDeltaToPixels(clip.lengthTicks.coerceAtLeast(1L))
+                                pointerX >= left && pointerX <= right
+                            }
+                        }
                     }
                     var previousSinglePosition = firstDown.position
                     var previousCentroid = Offset.Zero
                     var previousSpan = 0f
                     var initialized = false
+                    var multiTouchGestureOccurred = false
+                    var gestureBaseSpan = 0f
+                    var gesturePointerCount = 0
+                    var gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
+                    var gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                    var gestureBaseScrollTicks = currentScroll
+                    var gestureAnchorTick = 0.0
+                    var gestureAnchorTrackDp = 0f
                     do {
                         val event = awaitPointerEvent()
                         val pointers = event.changes.filter { it.pressed }
                         if (pointers.size >= 2) {
+                            multiTouchGestureOccurred = true
                             val centroid = Offset(
                                 pointers.map { it.position.x }.average().toFloat(),
                                 pointers.map { it.position.y }.average().toFloat()
                             )
                             val span = pointers.map { (it.position - centroid).getDistance() }.average().toFloat() * 2f
-                            if (initialized) {
-                                val zoomFactor = if (previousSpan > 1f && span > 1f) (span / previousSpan).coerceIn(0.85f, 1.18f) else 1f
-                                val oldZoom = currentZoom.coerceIn(0.1f, 4f)
-                                val newZoom = (oldZoom * zoomFactor).coerceIn(0.1f, 4f)
-                                val oldBarWidth = TimelineViewport(timebase, baseBarWidthPx * oldZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                                val newBarWidth = TimelineViewport(timebase, baseBarWidthPx * newZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                                val pinchViewport = TimelineViewport(
-                                    timebase, oldBarWidth, currentScroll.toDouble(), size.width.toFloat()
+                            if (initialized && pointers.size == gesturePointerCount) {
+                                // Derive every scale/scroll frame from the same baseline.
+                                val frame = calculatePinchZoomFrame(
+                                    timebase, gestureBaseZoom, gestureBaseScrollTicks, gestureBaseSpan, span,
+                                    gestureAnchorTick, centroid.x, baseBarWidthPx
                                 )
-                                val anchoredViewport = pinchViewport.zoomKeepingAnchor(
-                                    newBarWidth, previousCentroid.x
-                                )
-                                val anchorTick = pinchViewport.viewportXToTime(previousCentroid.x).toDouble()
-                                val newScroll = (anchoredViewport.scrollTimeTicks +
-                                    (previousCentroid.x - centroid.x).toDouble() *
-                                    timebase.ticksPerBar.toDouble() / newBarWidth.toDouble()
-                                ).coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
-                                 val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
-                                 val newVerticalZoom = (oldVerticalZoom * zoomFactor).coerceIn(0.65f, 1.8f)
-                                 val anchorTrackDp = currentScrollTracks + (previousCentroid.y - rulerHeightPx) / (density.density * oldVerticalZoom).coerceAtLeast(0.1f)
-                                 val newTrackScroll = (anchorTrackDp - (centroid.y - rulerHeightPx) / (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
+                                val spanRatio = if (gestureBaseSpan > 1f && span > 1f) span / gestureBaseSpan else 1f
+                                val newZoom = frame.zoom
+                                val newScroll = frame.scrollTicks
+                                val oldZoom = currentZoom.coerceIn(0.1f, 16f)
+                                val oldVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                                val newVerticalZoom = (gestureBaseVerticalZoom * spanRatio).coerceIn(0.65f, 1.8f)
+                                val newTrackScroll = (gestureAnchorTrackDp - (centroid.y - rulerHeightPx) /
+                                    (density.density * newVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                 if (kotlin.math.abs(newZoom - oldZoom) > 0.0005f) currentOnZoom(newZoom)
-                                if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
+                                if (kotlin.math.abs(newScroll - currentScroll) > 0.0005) currentOnScroll(newScroll)
                                 if (kotlin.math.abs(newVerticalZoom - oldVerticalZoom) > 0.0005f) currentOnVerticalZoom(newVerticalZoom)
                                 if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
+                            }
+                            if (!initialized || pointers.size != gesturePointerCount) {
+                                gestureBaseSpan = span.coerceAtLeast(1f)
+                                gestureBaseZoom = currentZoom.coerceIn(0.1f, 16f)
+                                gesturePointerCount = pointers.size
+                                gestureBaseVerticalZoom = currentVerticalZoom.coerceIn(0.65f, 1.8f)
+                                gestureBaseScrollTicks = currentScroll
+                                val baseViewport = TimelineViewport(
+                                    timebase, baseBarWidthPx * gestureBaseZoom, gestureBaseScrollTicks, size.width.toFloat()
+                                )
+                                // Preserve a fractional tick anchor in the timeline's local coordinate space.
+                                gestureAnchorTick = baseViewport.scrollTimeTicks + centroid.x.toDouble() / baseViewport.pixelsPerTick
+                                gestureAnchorTrackDp = currentScrollTracks +
+                                    (centroid.y - rulerHeightPx) / (density.density * gestureBaseVerticalZoom).coerceAtLeast(0.1f)
                             }
                             previousCentroid = centroid
                             previousSpan = span
@@ -1368,14 +1580,16 @@ private fun TimelineGrid(
                             event.changes.forEach { change -> if (change.position != change.previousPosition) change.consume() }
                         } else {
                             initialized = false
-                            previousSpan = 0f
+                            gestureBaseSpan = 0f
+                            gesturePointerCount = 0
                             val pointer = pointers.firstOrNull()
                             if (pointer != null) {
                                 val delta = pointer.position - previousSinglePosition
-                                if (!startsOnClip && (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
+                                if (!multiTouchGestureOccurred && !startsOnClip &&
+                                    (kotlin.math.abs(delta.x) > 0.01f || kotlin.math.abs(delta.y) > 0.01f)) {
                                     val timebaseNow = TimelineTimebase(latestProject.bpm, latestProject.numerator, latestProject.denominator, latestProject.ppq)
-                                       val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll.toDouble(), size.width.toFloat()).effectivePixelsPerBar
-                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll.toDouble(), size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks.toFloat()
+                                       val barWidthPx = TimelineViewport(timebaseNow, baseBarWidthPx * currentZoom, currentScroll, size.width.toFloat()).effectivePixelsPerBar
+                                    val newScroll = TimelineViewport(timebaseNow, barWidthPx, currentScroll, size.width.toFloat(), trackHeaderWidthPx).panByScreenPixels(delta.x).scrollTimeTicks
                                     val newTrackScroll = (currentScrollTracks - delta.y / (density.density * currentVerticalZoom).coerceAtLeast(0.1f)).coerceAtLeast(0f)
                                     if (kotlin.math.abs(newScroll - currentScroll) > 0.0005f) currentOnScroll(newScroll)
                                     if (kotlin.math.abs(newTrackScroll - currentScrollTracks) > 0.0005f) currentOnScrollTracks(newTrackScroll)
@@ -1389,28 +1603,34 @@ private fun TimelineGrid(
             }
     ) {
         val timelineWidthPx = with(density) { maxWidth.toPx() }
-        LaunchedEffect(isPlaying, playheadTick, zoom, scrollTicks, timelineWidthPx, timebase) {
+        // Stable follow loop: do not cancel/restart it for each playhead update.
+        LaunchedEffect(isPlaying, timelineWidthPx, timebase) {
             if (isPlaying && timelineWidthPx > 0f) {
-                val barWidthPx = viewport.effectivePixelsPerBar
-                val currentViewport = TimelineViewport(
-                    timebase, barWidthPx, scrollTicks.toDouble(), timelineWidthPx, trackHeaderWidthPx
-                )
-                val currentX = currentViewport.timeToViewportX(playheadTick)
-                val leftGuard = timelineWidthPx * 0.08f
-                // Start following sooner so playback from later bars scrolls the ruler
-                // underneath a steady playhead instead of appearing stalled.
-                val rightGuard = timelineWidthPx * 0.70f
-                // Re-anchor at the guard line that was crossed, not back at 70% of
-                // the viewport. This prevents the visible ruler/playhead "jump".
-                val targetX = when {
-                    currentX < leftGuard -> leftGuard
-                    currentX > rightGuard -> rightGuard
-                    else -> return@LaunchedEffect
+                var previousFrameNanos = 0L
+                while (isPlaying) {
+                    val frameNanos = withFrameNanos { it }
+                    val dt = if (previousFrameNanos == 0L) 0.016f
+                        else ((frameNanos - previousFrameNanos).coerceAtLeast(0L) / 1_000_000_000f).coerceIn(0f, 0.05f)
+                    previousFrameNanos = frameNanos
+                    val currentViewport = TimelineViewport(
+                        timebase, baseBarWidthPx * currentZoom, currentScroll,
+                        timelineWidthPx, trackHeaderWidthPx
+                    )
+                    val currentX = currentViewport.timeToViewportX(currentPlayhead)
+                    val leftGuard = timelineWidthPx * 0.08f
+                    val rightGuard = timelineWidthPx * 0.70f
+                    val targetX = when {
+                        currentX < leftGuard -> leftGuard
+                        currentX > rightGuard -> rightGuard
+                        else -> null
+                    }
+                    if (targetX != null) {
+                        val targetScroll = currentViewport.placeTickAtViewportX(currentPlayhead, targetX).scrollTimeTicks
+                        val smoothing = (1.0 - kotlin.math.exp(-dt.toDouble() / 0.065)).toFloat()
+                        val nextScroll = currentScroll + (targetScroll - currentScroll) * smoothing
+                        if (kotlin.math.abs(nextScroll - currentScroll) > 0.05) currentOnScroll(nextScroll)
+                    }
                 }
-                val ticksPerPixel = timebase.ticksPerBar.toDouble() / barWidthPx
-                val nextScroll = (playheadTick.toDouble() - targetX.toDouble() * ticksPerPixel)
-                    .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toFloat()
-                if (kotlin.math.abs(nextScroll - scrollTicks) > 0.5f) currentOnScroll(nextScroll)
             }
         }
         // Keep long-press handling on the background layer so it cannot steal a
@@ -1432,13 +1652,7 @@ private fun TimelineGrid(
                      val beatPixels = beatTicks * canvasViewport.pixelsPerTick
                      // Use a progressive musical grid like FL Studio Mobile: the
                      // horizontal zoom decides which subdivisions are worth drawing.
-                     val subdivision = when {
-                         beatPixels >= 80.0 -> beatTicks / 16L
-                         beatPixels >= 52.0 -> beatTicks / 8L
-                         beatPixels >= 30.0 -> beatTicks / 4L
-                         beatPixels >= 16.0 -> beatTicks / 2L
-                         else -> 0L
-                     }
+                     val subdivision = canvasViewport.gridSubdivisionTicks(beatPixels)
                      for (beat in 0 until timebase.safeNumerator) {
                          val beatTick = bar.toLong() * timebase.ticksPerBar + beat.toLong() * beatTicks
                          val beatX = canvasViewport.timeToViewportX(beatTick)
@@ -1523,14 +1737,26 @@ private fun TimelineGrid(
                     track.clips.forEach { clip ->
                         // Clip geometry is derived only from musical duration and the shared
                         // viewport scale; a fixed visual minimum makes clip lengths jump on zoom.
-                        val clipWidthPx = viewport.tickDeltaToPixels(clip.lengthTicks).coerceIn(0.01f, 1_000_000f)
-                        val clipWidthDp = with(density) { clipWidthPx.toDp().value }.coerceAtLeast(0.01f)
+                        val effectiveClipStart = if (resizingClip == clip.id) liveResizeStart else clip.startTick
+                        val effectiveClipLength = if (resizingClip == clip.id) liveResizeLength else clip.lengthTicks
+                        val arrangementEndTick = maxArrangementTick(timebase)
+                        val boundedClipStart = effectiveClipStart.coerceIn(0L, arrangementEndTick)
+                        val boundedClipLength = effectiveClipLength.coerceAtLeast(1L)
+                            .coerceAtMost((arrangementEndTick - boundedClipStart).coerceAtLeast(1L))
+                        val clipWidthPx = viewport.tickDeltaToPixels(boundedClipLength).coerceAtLeast(1f)
+                        val clipWidthDp = with(density) { clipWidthPx.toDp().value }
                         val resizeGripWidthDp = minOf(18f, clipWidthDp * 0.38f).coerceAtLeast(0.01f)
                         val resizeGripWidthPx = with(density) { resizeGripWidthDp.dp.toPx() }
-                        val displayLeftPx = viewport.timeToViewportX(clip.startTick)
+                        val displayLeftPx = viewport.timeToViewportX(boundedClipStart)
                         // Avoid composing or drawing clips fully outside the viewport.
-                        if (displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
+                        if (boundedClipStart < arrangementEndTick &&
+                            displayLeftPx + clipWidthPx >= 0f && displayLeftPx <= viewportWidthPx) {
                         val accent = Color((clip.colorArgb ?: track.colorArgb).toInt())
+                        val clipFill by androidx.compose.animation.animateColorAsState(
+                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f),
+                            animationSpec = tween(durationMillis = 140),
+                            label = "clipSelectionFill"
+                        )
                         Column(
                             Modifier
                                 .offset(x = with(density) { displayLeftPx.toDp() }, y = 0.dp)
@@ -1539,11 +1765,11 @@ private fun TimelineGrid(
                                     translationY = if (draggingClip == clip.id) dragDy else 0f
                                 }
                                 .padding(top = 7.dp, bottom = 7.dp)
-                                .width(clipWidthDp.dp)
+                                .timelineClipWidthPx(clipWidthPx)
                                 .fillMaxHeight()
-                                .background(accent.copy(alpha = if (selectedClip == clip.id) 0.78f else 0.42f), RoundedCornerShape(5.dp))
+                                .background(clipFill, RoundedCornerShape(5.dp))
                                 .then(if (selectedClip == clip.id) Modifier.padding(1.dp) else Modifier)
-                                .pointerInput(clip.id, trackIndex, zoom, trackHeightPx) {
+                                .pointerInput(clip.id, trackIndex) {
                                     // The trailing grip owns resize gestures. Do not let the clip-body
                                     // drag handler consume those pointer changes first.
                                     var startedOnResizeGrip = false
@@ -1580,7 +1806,7 @@ private fun TimelineGrid(
                                                 startRow.topDp + startRow.heightDp / 2f +
                                                     dragDy / (density.density * currentVerticalZoom.coerceAtLeast(0.1f))
                                             val targetIndex = if (startRow == null || rowLayout.isEmpty()) {
-                                                (startIndex + kotlin.math.round(dragDy / trackHeightPx.coerceAtLeast(1f)).toInt())
+                                                (startIndex + kotlin.math.round(dragDy / currentTrackHeightPx.coerceAtLeast(1f)).toInt())
                                                     .coerceIn(0, currentTracks.lastIndex.coerceAtLeast(0))
                                             } else {
                                                 rowLayout.indices.minByOrNull { index ->
@@ -1588,9 +1814,9 @@ private fun TimelineGrid(
                                                 } ?: startIndex
                                             }
                                             val target = currentTracks.getOrNull(targetIndex)
-                                            val barWidthPx = viewport.effectivePixelsPerBar
+                                            val barWidthPx = currentViewport.effectivePixelsPerBar
                                             val dragViewport = TimelineViewport(
-                                                timebase, barWidthPx, currentScroll.toDouble(),
+                                                timebase, barWidthPx, currentScroll,
                                                 timelineWidthPx, trackHeaderWidthPx
                                             )
                                             // Convert the total gesture delta to ticks from its original anchor.
@@ -1661,26 +1887,51 @@ private fun TimelineGrid(
                                         .width(resizeGripWidthDp.dp)
                                         .height(34.dp)
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
-                                        .pointerInput(clip.id, zoom, clip.startTick, clip.lengthTicks, clip.sourceOffsetTicks) {
+                                        .pointerInput(clip.id) {
+                                            var gestureViewport = currentViewport
+                                            var gestureTimebase = currentTimebase
+                                            var gestureSnapDivision = currentSnapDivision
+                                            var gestureSnapEnabled = currentSnapEnabled
+                                            var sourceOffsetAtStart = clip.sourceOffsetTicks.coerceAtLeast(0L)
                                             detectDragGestures(
-                                                onDragStart = { leftResizeDeltaPx = 0f; onSelectClip(clip.id) },
-                                                onDrag = { change, amount -> change.consume(); leftResizeDeltaPx += amount.x },
-                                                onDragEnd = {
-                                                    val originalEnd = clip.startTick + clip.lengthTicks.coerceAtLeast(1L)
-                                                    val snapStep = snapDivision.ticks(timebase)
-                                                    val minimumLength = if (snapToGrid && snapStep > 0L) snapStep else 1L
-                                                    val earliestStart = (clip.startTick - clip.sourceOffsetTicks.coerceAtLeast(0L)).coerceAtLeast(0L)
+                                                onDragStart = {
+                                                    gestureViewport = currentViewport
+                                                    gestureTimebase = currentTimebase
+                                                    gestureSnapDivision = currentSnapDivision
+                                                    gestureSnapEnabled = currentSnapEnabled
+                                                    sourceOffsetAtStart = clip.sourceOffsetTicks.coerceAtLeast(0L)
+                                                    leftResizeDeltaPx = 0f
+                                                    liveResizeStart = clip.startTick.coerceAtLeast(0L)
+                                                    liveResizeLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    resizingClip = clip.id
+                                                    onSelectClip(clip.id)
+                                                },
+                                                onDrag = { change, amount ->
+                                                    change.consume()
+                                                    leftResizeDeltaPx += amount.x
+                                                    val originalStart = clip.startTick.coerceAtLeast(0L)
+                                                    val originalLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    val originalEnd = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
+                                                    val step = gestureSnapDivision.ticks(gestureTimebase)
+                                                    val minimumLength = if (gestureSnapEnabled && step > 0L) step else 1L
+                                                    val earliestStart = (originalStart - sourceOffsetAtStart).coerceAtLeast(0L)
                                                     val latestStart = (originalEnd - minimumLength).coerceAtLeast(earliestStart)
-                                                    val rawStart = (clip.startTick + viewport.pixelsToTickDelta(leftResizeDeltaPx)).coerceAtLeast(0L)
-                                                    val snappedStart = if (snapToGrid && snapStep > 0L) timebase.snap(rawStart, snapDivision) else rawStart
-                                                    val newStart = snappedStart.coerceIn(earliestStart, latestStart)
-                                                    val newLength = (originalEnd - newStart).coerceAtLeast(minimumLength)
-                                                    if (newStart != clip.startTick && newLength > 0L) {
-                                                        onResizeClip(clip.id, newStart, newLength)
+                                                    val raw = (originalStart.toDouble() + gestureViewport.pixelsToTickDelta(leftResizeDeltaPx).toDouble())
+                                                        .coerceIn(0.0, Long.MAX_VALUE.toDouble()).toLong()
+                                                    liveResizeStart = gestureViewport.snapTick(raw, gestureSnapDivision, gestureSnapEnabled).coerceIn(earliestStart, latestStart)
+                                                    liveResizeLength = (originalEnd - liveResizeStart).coerceAtLeast(minimumLength)
+                                                },
+                                                onDragEnd = {
+                                                    if (resizingClip == clip.id) {
+                                                        onResizeClip(clip.id, liveResizeStart, liveResizeLength)
                                                     }
+                                                    resizingClip = null
                                                     leftResizeDeltaPx = 0f
                                                 },
-                                                onDragCancel = { leftResizeDeltaPx = 0f }
+                                                onDragCancel = {
+                                                    resizingClip = null
+                                                    leftResizeDeltaPx = 0f
+                                                }
                                             )
                                         },
                                     contentAlignment = Alignment.Center
@@ -1692,22 +1943,50 @@ private fun TimelineGrid(
                                     Modifier.align(Alignment.CenterEnd)
                                         .width(resizeGripWidthDp.dp).height(34.dp)
                                         .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
-                                        .pointerInput(clip.id, zoom, clip.lengthTicks) {
+                                        .pointerInput(clip.id) {
+                                            var gestureViewport = currentViewport
+                                            var gestureTimebase = currentTimebase
+                                            var gestureSnapDivision = currentSnapDivision
+                                            var gestureSnapEnabled = currentSnapEnabled
                                             detectDragGestures(
-                                                onDragStart = { resizeDeltaPx = 0f },
-                                                onDrag = { change, amount -> change.consume(); resizeDeltaPx += amount.x },
+                                                onDragStart = {
+                                                    gestureViewport = currentViewport
+                                                    gestureTimebase = currentTimebase
+                                                    gestureSnapDivision = currentSnapDivision
+                                                    gestureSnapEnabled = currentSnapEnabled
+                                                    resizeDeltaPx = 0f
+                                                    liveResizeStart = clip.startTick.coerceAtLeast(0L)
+                                                    liveResizeLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    resizingClip = clip.id
+                                                    onSelectClip(clip.id)
+                                                },
+                                                onDrag = { change, amount ->
+                                                    change.consume()
+                                                    resizeDeltaPx += amount.x
+                                                    val originalStart = clip.startTick.coerceAtLeast(0L)
+                                                    val originalLength = clip.lengthTicks.coerceAtLeast(1L)
+                                                    val originalEnd = if (originalStart > Long.MAX_VALUE - originalLength) Long.MAX_VALUE else originalStart + originalLength
+                                                    val rawEnd = (originalEnd.toDouble() +
+                                                        gestureViewport.pixelsToTickDelta(resizeDeltaPx).toDouble())
+                                                        .coerceIn((originalStart.toDouble() + 1.0).coerceAtMost(Long.MAX_VALUE.toDouble()), Long.MAX_VALUE.toDouble()).toLong()
+                                                    val step = gestureSnapDivision.ticks(gestureTimebase)
+                                                    val minimumLength = if (gestureSnapEnabled && step > 0L) step else 1L
+                                                    val snappedEnd = gestureViewport.snapTick(rawEnd, gestureSnapDivision, gestureSnapEnabled)
+                                                        .coerceAtLeast((originalStart + minimumLength).coerceAtMost(Long.MAX_VALUE))
+                                                    liveResizeStart = originalStart
+                                                    liveResizeLength = (snappedEnd - originalStart).coerceAtLeast(minimumLength)
+                                                },
                                                 onDragEnd = {
-                                                    val originalEndTick = clip.startTick + clip.lengthTicks.coerceAtLeast(1L)
-                                                    val rawEndTick = (originalEndTick.toDouble() +
-                                                        viewport.pixelsToTickDelta(resizeDeltaPx).toDouble())
-                                                        .coerceIn((clip.startTick + 1L).toDouble(), Long.MAX_VALUE.toDouble()).toLong()
-                                                     val snapStep = snapDivision.ticks(timebase)
-                                                     val snappedEndTick = if (snapToGrid && snapStep > 0L) timebase.snap(rawEndTick, snapDivision) else rawEndTick
-                                                     val newLength = (snappedEndTick - clip.startTick).coerceAtLeast(if (snapToGrid && snapStep > 0L) snapStep else 1L)
-                                                    onResizeClip(clip.id, clip.startTick, newLength)
+                                                    if (resizingClip == clip.id) {
+                                                        onResizeClip(clip.id, liveResizeStart, liveResizeLength)
+                                                    }
+                                                    resizingClip = null
                                                     resizeDeltaPx = 0f
                                                 },
-                                                onDragCancel = { resizeDeltaPx = 0f }
+                                                onDragCancel = {
+                                                    resizingClip = null
+                                                    resizeDeltaPx = 0f
+                                                }
                                             )
                                         },
                                     contentAlignment = Alignment.Center
@@ -1973,29 +2252,101 @@ private fun BrowserWorkspace(onImportAudio: () -> Unit) {
 }
 
 @Composable
-private fun DeviceDock(isPlaying: Boolean, onToggle: () -> Unit, onTone: (Float) -> Unit) {
-    Column(Modifier.fillMaxWidth().height(105.dp).background(Raised, RoundedCornerShape(8.dp)).padding(8.dp)) {
+private fun DeviceDock(
+    project: StudioProject,
+    selectedTrackId: String?,
+    onSelectTrack: (String) -> Unit,
+    onProjectChange: (StudioProject) -> Unit,
+    onToggle: () -> Unit
+) {
+    val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
+    Column(
+        Modifier.fillMaxWidth().height(105.dp)
+            .background(Raised, RoundedCornerShape(8.dp)).padding(horizontal = 7.dp, vertical = 5.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("OSCILLATOR TEST", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+            Text("TRACK INSPECTOR", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE4E8EF))
+            Spacer(Modifier.width(8.dp))
+            Text(selectedTrack?.name ?: "NO TRACK", fontSize = 8.sp, color = Mint, maxLines = 1)
             Spacer(Modifier.weight(1f))
-            Text(if (isPlaying) "PLAYBACK ACTIVE" else "READY", fontSize = 8.sp, color = if (isPlaying) Green else MutedText)
             SmallAction("HIDE") { onToggle() }
         }
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("OSC", "FILTER", "DELAY", "REVERB", "DRIVE").forEachIndexed { index, name ->
-                Column(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF202328), RoundedCornerShape(5.dp)).padding(horizontal = 7.dp, vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.SpaceEvenly) {
-                    Text(name, fontSize = 8.sp, fontWeight = FontWeight.Bold, color = if (index == 0) Mint else Color(0xFFD5D9E0))
-                    if (index == 0) {
-                        var amount by remember { mutableFloatStateOf(0.3f) }
+        if (project.tracks.isEmpty()) {
+            Text("Tambahkan track di Arrangement untuk mengatur volume, pan, mute, dan solo.",
+                color = MutedText, fontSize = 8.sp, maxLines = 1)
+        } else {
+            Row(
+                Modifier.fillMaxWidth().height(23.dp).horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                project.tracks.forEach { track ->
+                    val isSelected = selectedTrack?.id == track.id
+                    val chipColor by androidx.compose.animation.animateColorAsState(
+                        targetValue = if (isSelected) Color(0xFF18443F) else Color(0xFF202328),
+                        animationSpec = tween(durationMillis = 120),
+                        label = "trackInspectorSelection"
+                    )
+                    Surface(
+                        color = chipColor,
+                        shape = RoundedCornerShape(5.dp),
+                        modifier = Modifier.clickable { onSelectTrack(track.id) }
+                    ) {
+                        Text(track.name.take(14), color = if (isSelected) Mint else Color(0xFFD5D9E0),
+                            fontSize = 8.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp))
+                    }
+                }
+            }
+            if (selectedTrack != null) {
+                Row(
+                    Modifier.fillMaxWidth().weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                        Text("VOL " + (selectedTrack.volume.coerceIn(0f, 1.5f) * 100).toInt() + "%",
+                            color = MutedText, fontSize = 7.sp, maxLines = 1)
                         Slider(
-                            value = amount,
-                            onValueChange = { amount = it; onTone(110f + it * 880f) },
-                            valueRange = 0f..1f,
-                            modifier = Modifier.height(20.dp)
+                            value = selectedTrack.volume.coerceIn(0f, 1.5f),
+                            onValueChange = { value ->
+                                onProjectChange(project.copy(tracks = project.tracks.map {
+                                    if (it.id == selectedTrack.id) it.copy(volume = value) else it
+                                }))
+                            },
+                            valueRange = 0f..1.5f,
+                            modifier = Modifier.fillMaxWidth().height(21.dp)
                         )
-                    } else {
-                        Text("NOT ACTIVE", color = MutedText, fontSize = 6.sp, maxLines = 1)
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                        val pan = selectedTrack.pan.coerceIn(-1f, 1f)
+                        Text("PAN " + when {
+                            pan <= -0.95f -> "L"
+                            pan >= 0.95f -> "R"
+                            else -> (pan * 100).toInt().toString()
+                        }, color = MutedText, fontSize = 7.sp, maxLines = 1)
+                        Slider(
+                            value = pan,
+                            onValueChange = { value ->
+                                onProjectChange(project.copy(tracks = project.tracks.map {
+                                    if (it.id == selectedTrack.id) it.copy(pan = value) else it
+                                }))
+                            },
+                            valueRange = -1f..1f,
+                            modifier = Modifier.fillMaxWidth().height(21.dp)
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SmallAction(if (selectedTrack.muted) "M✓" else "M") {
+                            onProjectChange(project.copy(tracks = project.tracks.map {
+                                if (it.id == selectedTrack.id) it.copy(muted = !it.muted) else it
+                            }))
+                        }
+                        SmallAction(if (selectedTrack.solo) "S✓" else "S") {
+                            onProjectChange(project.copy(tracks = project.tracks.map {
+                                if (it.id == selectedTrack.id) it.copy(solo = !it.solo) else it
+                            }))
+                        }
                     }
                 }
             }
