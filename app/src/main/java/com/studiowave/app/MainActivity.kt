@@ -503,7 +503,14 @@ private fun StudioWaveApp() {
                 }
                 if (showDock && selectedWorkspace == "ARRANGEMENT") {
                     Box(Modifier.fillMaxWidth().height(104.dp)) {
-                        DeviceDock(playing, { showDock = false }, { freq -> engine.setTone(freq, 0.07f, 0) })
+                        DeviceDock(
+                            project = project,
+                            selectedTrackId = editorTrackId,
+                            onSelectTrack = { editorTrackId = it },
+                            onProjectChange = { changeProject(it) },
+                            onToggle = { showDock = false },
+                            fullScreen = false
+                        )
                     }
                 }
             }
