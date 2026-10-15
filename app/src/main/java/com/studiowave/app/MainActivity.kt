@@ -2019,7 +2019,8 @@ private fun AudioEditorWorkspace(
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
         }
-        Box(Modifier.fillMaxWidth().weight(1f).background(audioPalette.canvas, RoundedCornerShape(5.dp)), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().weight(1f).background(audioPalette.canvas, RoundedCornerShape(1.dp))
+            .border(1.dp, audioPalette.border.copy(alpha = 0.9f), RoundedCornerShape(1.dp)), contentAlignment = Alignment.Center) {
             if (waveform.isNotEmpty()) {
                 Canvas(Modifier.fillMaxSize().padding(12.dp)) {
                     val mid = size.height / 2f
@@ -3964,8 +3965,8 @@ private fun MixerWorkspace(
         }
         Column(
             Modifier.width(126.dp).fillMaxHeight()
-                .background(mixerPalette.panel, RoundedCornerShape(2.dp))
-                .border(1.dp, mixerPalette.border.copy(alpha = 0.9f), RoundedCornerShape(2.dp)).padding(7.dp),
+                .background(mixerPalette.panel, RoundedCornerShape(1.dp))
+                .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp)).padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = mixerPalette.text)
@@ -4902,8 +4903,8 @@ private fun DirectWaveStateButton(
     Surface(
         color = if (active) palette.accent.copy(alpha = 0.18f) else palette.control,
         contentColor = if (active) palette.accent else palette.text,
-        shape = RoundedCornerShape(3.dp),
-        border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
+        shape = RoundedCornerShape(1.dp),
+        border = BorderStroke(1.dp, if (active) palette.orange else palette.border.copy(alpha = 0.95f)),
         modifier = Modifier.height(23.dp).clickable(onClick = onClick)
     ) {
         Box(Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
