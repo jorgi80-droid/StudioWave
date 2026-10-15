@@ -190,3 +190,9 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - Commit `c21131bacaf9c6f365b69936c81e2d3a92fc8f52` aligns the default and Live Mid palettes with the color values from the saved interface HTML: graphite surfaces, #2D2D2D controls, #FF7600 orange, #B2B2B2 text, #707070 muted labels, #2F2F2F grid, and #141414 borders.
 - Live Light and warm/cool/high-contrast options remain available. Browser and Arrangement ruler visual refinements are also on this branch.
 - Latest-head CI must confirm debug APK build, unit tests and APK artifact upload. Physical Android landscape comparison is still required.
+
+
+## Material surface geometry pass — 2026-10-16
+- Commit `493942e4aadb8f56d3aeb055a96d3cb21d614102` sets the Material 3 shape scale (extra-small through extra-large) to the same compact 1 dp radius used by the custom StudioWave controls. This brings default dialogs, cards and other Material components into the same square-edged visual system instead of allowing default rounded components to break the Live-inspired look.
+- This is a shape-only theme change; button actions, navigation, data bindings and timeline/audio behavior are unchanged by intent.
+- Latest-head Android CI must verify compilation, unit tests and APK artifact upload; physical Android landscape validation remains required.
