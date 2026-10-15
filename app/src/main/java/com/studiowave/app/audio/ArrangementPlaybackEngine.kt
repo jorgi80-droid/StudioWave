@@ -678,13 +678,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         if (event.asset.frames <= 0) continue
                         // Loop only inside the clip's selected source window. Wrapping across
                         // the whole file would make playback leak into audio removed by trim.
-                        val sourceFrames = event.asset.frames.toLong()
-                        val sourceStart = event.sourceOffsetFrame.coerceIn(0L, sourceFrames - 1L)
-                        val windowFrames = event.sourceWindowFrames
-                            .coerceAtMost(sourceFrames - sourceStart).coerceAtLeast(1L)
-                        val sourceFrame = (sourceStart +
-                            Math.floorMod(rawSourceFrame - event.sourceOffsetFrame, windowFrames))
-                            .coerceIn(0L, sourceFrames - 1L).toInt()
+                        val sourceFrame = ArrangementTiming.sourceFrameWithinTrim(
+                            rawSourceFrame = rawSourceFrame,
+                            sourceOffsetFrame = event.sourceOffsetFrame,
+                            requestedWindowFrames = event.sourceWindowFrames,
+                            assetFrames = event.asset.frames.toLong()
+                        )?.toInt() ?: continue
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
                         val sourceLeft = event.asset.pcmStereo[sourceIndex] / 32768f * channelMix.volume * leftPan
