@@ -99,3 +99,11 @@
 - Effect device faceplates now ease the active top strip and enabled-state indicator between enabled and disabled colors over 120 ms. The existing ON/OFF control and device model callback are unchanged.
 - These are presentation-only Compose animations. No timeline coordinates, clip drag/resize/snap mapping, audio processing, device enable semantics, parameter persistence, or routing were intentionally changed.
 - Latest-head CI and physical landscape Android validation remain pending. Keep PR #15 as draft until debug APK build, unit tests, artifact upload, and device checks are complete.
+
+
+## Ableton-style Clip View content overview — 2026-10-16
+- Commit [cbb0eae7](https://github.com/jorgi80-droid/StudioWave/commit/cbb0eae71ccfd5520b787077b00f7787f9996d06) adds a compact content overview inside the Arrangement Clip View inspector.
+- MIDI clips render their existing note pitch/time/duration data in a miniature note overview; drum clips render active steps from the existing step array. Audio clips show whether a source is attached and its filename, without fabricating a waveform or implying warp support.
+- The preview is paint-only. Clip start/length controls, editor routing, project persistence, note/step data, timeline mapping, snap, playback, DSP, and the 1,800-bar cap are not intentionally changed.
+- This follows Ableton Live 12's Clip View concept of presenting clip-specific content and properties alongside a dedicated editor, adapted for compact native Android landscape touch use. References: https://www.ableton.com/en/manual/clip-view/ and https://www.ableton.com/en/live-manual/12/editing-midi/
+- Validation remains pending for this source head: check Android debug APK build, unit tests, and APK artifact upload. Physical Android landscape checks are still required. Keep PR #15 as draft.
