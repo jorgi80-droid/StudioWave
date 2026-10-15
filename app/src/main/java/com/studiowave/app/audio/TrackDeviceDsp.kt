@@ -42,6 +42,29 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         }
         if(active.isEmpty()) return
         val gain=masterGain.coerceIn(0f,1f)
+
+        // Tune EQ filters once per block, not once per stereo frame. Keep temporary
+        // list/fold work out of the sample loop to reduce allocations on the audio path.
+        active.forEach { device ->
+            if(device.type == "PARAM_EQ_8") {
+                val st=states.getValue(device.id)
+                val p=device.parameters
+                var signatureValue=1L
+                for(band in 1..8) {
+                    val value=(p["band$band"]?:0f).coerceIn(-18f,18f)
+                    signatureValue=signatureValue*31L+value.toBits()
+                }
+                if(signatureValue!=st.eqSignature) {
+                    val freqs=doubleArrayOf(60.0,120.0,250.0,500.0,1000.0,2200.0,5000.0,10000.0)
+                    for(index in 0 until 8) {
+                        val gainDb=(p["band" + (index + 1)]?:0f).coerceIn(-18f,18f)
+                        st.eq[index].tune(freqs[index],1.1,gainDb.toDouble(),sampleRate)
+                    }
+                    st.eqSignature=signatureValue
+                }
+            }
+        }
+
         for(i in 0 until sampleCount step 2) {
             val dryL=buffer[i].toDouble(); val dryR=buffer[i+1].toDouble()
             var left=dryL; var right=dryR
@@ -59,14 +82,7 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
                         right=st.lowR*lowGain+midR*midGain+hiR*highGain
                     }
                     "PARAM_EQ_8" -> {
-                        val gains=(1..8).map{(p["band$it"]?:0f).coerceIn(-18f,18f)}
-                        val signatureValue=gains.fold(1L){acc,value->acc*31L+value.toBits()}
-                        if(signatureValue!=st.eqSignature) {
-                            val freqs=doubleArrayOf(60.0,120.0,250.0,500.0,1000.0,2200.0,5000.0,10000.0)
-                            st.eq.forEachIndexed{index,filter->filter.tune(freqs[index],1.1,gains[index].toDouble(),sampleRate)}
-                            st.eqSignature=signatureValue
-                        }
-                        st.eq.forEach{filter->left=filter.processL(left);right=filter.processR(right)}
+                        st.eq.forEach { filter -> left=filter.processL(left); right=filter.processR(right) }
                     }
                     "FILTER" -> {
                         val cutoff=(p["cutoffHz"]?:16000f).coerceIn(20f,sampleRate*0.45f)
@@ -103,13 +119,15 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
                             left=left*(1-wet)+dl*wet;right=right*(1-wet)+dr*wet
                         } else {
                             val room=(p["room"]?:0.45f).coerceIn(0.05f,0.95f).toDouble();val wet=(p["wet"]?:0.22f).coerceIn(0f,1f).toDouble()
-                            val taps=intArrayOf(frames,(frames*1.31f).toInt().coerceAtMost(st.delayL.size-1),(frames*1.73f).toInt().coerceAtMost(st.delayL.size-1))
-                            val a=st.delayL[Math.floorMod(st.write-taps[0],st.delayL.size)].toDouble()
-                            val b=st.delayL[Math.floorMod(st.write-taps[1],st.delayL.size)].toDouble()
-                            val c=st.delayL[Math.floorMod(st.write-taps[2],st.delayL.size)].toDouble()
-                            val ar=st.delayR[Math.floorMod(st.write-taps[0],st.delayR.size)].toDouble()
-                            val br=st.delayR[Math.floorMod(st.write-taps[1],st.delayR.size)].toDouble()
-                            val cr=st.delayR[Math.floorMod(st.write-taps[2],st.delayR.size)].toDouble()
+                            val tap1=frames
+                            val tap2=(frames*1.31f).toInt().coerceAtMost(st.delayL.size-1)
+                            val tap3=(frames*1.73f).toInt().coerceAtMost(st.delayL.size-1)
+                            val a=st.delayL[Math.floorMod(st.write-tap1,st.delayL.size)].toDouble()
+                            val b=st.delayL[Math.floorMod(st.write-tap2,st.delayL.size)].toDouble()
+                            val c=st.delayL[Math.floorMod(st.write-tap3,st.delayL.size)].toDouble()
+                            val ar=st.delayR[Math.floorMod(st.write-tap1,st.delayR.size)].toDouble()
+                            val br=st.delayR[Math.floorMod(st.write-tap2,st.delayR.size)].toDouble()
+                            val cr=st.delayR[Math.floorMod(st.write-tap3,st.delayR.size)].toDouble()
                             st.delayL[st.write]=(left+(a+b+c)/3*room).toFloat().coerceIn(-4f,4f)
                             st.delayR[st.write]=(right+(ar+br+cr)/3*room).toFloat().coerceIn(-4f,4f)
                             left=left*(1-wet)+(a+b+c)/3*wet;right=right*(1-wet)+(ar+br+cr)/3*wet
