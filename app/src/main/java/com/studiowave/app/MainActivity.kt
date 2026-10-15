@@ -689,8 +689,14 @@ private fun StudioWaveApp() {
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (failure: Exception) {
-                    returnToAudioEditorAfterImport = false
                     audioError = failure.message ?: "Could not inspect the audio file."
+                    selectedWorkspace = "ARRANGEMENT"
+                } finally {
+                    // Clear every deferred import target on success or failure so a retry
+                    // cannot accidentally reuse an old track or playhead position.
+                    pendingAudioTrackId = null
+                    pendingAudioStartTick = null
+                    returnToAudioEditorAfterImport = false
                 }
             }
         }
@@ -2047,27 +2053,67 @@ private fun AudioEditorWorkspace(
     val context = LocalContext.current
     val clip = track?.clips?.firstOrNull { it.id == selectedClipId }
         ?: track?.clips?.firstOrNull { it.sourceUri != null }
-    val baseLengthTicks = remember(clip?.id) { (clip?.lengthTicks ?: 1L).coerceAtLeast(1L) }
-    val baseSourceOffsetTicks = remember(clip?.id) { (clip?.sourceOffsetTicks ?: 0L).coerceAtLeast(0L) }
+    var sourceDurationTicks by remember(clip?.id, clip?.sourceUri, project.bpm, project.ppq) {
+        mutableLongStateOf(0L)
+    }
     var startFraction by remember(clip?.id) { mutableFloatStateOf(0f) }
     var endFraction by remember(clip?.id) { mutableFloatStateOf(1f) }
+
+    // Reconstruct trim handles from persisted source coordinates whenever a clip is opened.
+    // Fractions are relative to the original source, not to the already-trimmed clip length.
+    LaunchedEffect(clip?.id, clip?.sourceUri, project.bpm, project.ppq) {
+        val source = clip?.sourceUri
+        sourceDurationTicks = 0L
+        if (source.isNullOrBlank()) {
+            startFraction = 0f
+            endFraction = 1f
+            return@LaunchedEffect
+        }
+        try {
+            val durationMs = withContext(Dispatchers.IO) {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, Uri.parse(source))
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                        ?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                } finally {
+                    runCatching { retriever.release() }
+                }
+            }
+            val durationTicks = if (durationMs > 0L) {
+                kotlin.math.ceil(durationMs.toDouble() * project.bpm.coerceAtLeast(1) *
+                    project.ppq.coerceAtLeast(1) / 60_000.0).toLong().coerceAtLeast(1L)
+            } else 0L
+            sourceDurationTicks = durationTicks
+            if (durationTicks > 0L) {
+                val offset = (clip?.sourceOffsetTicks ?: 0L).coerceIn(0L, durationTicks - 1L)
+                val end = (offset + (clip?.lengthTicks ?: 1L).coerceAtLeast(1L))
+                    .coerceAtMost(durationTicks).coerceAtLeast(offset + 1L)
+                startFraction = (offset.toDouble() / durationTicks).toFloat().coerceIn(0f, 0.99f)
+                endFraction = (end.toDouble() / durationTicks).toFloat()
+                    .coerceIn(startFraction + 0.01f, 1f)
+            }
+        } catch (_: Exception) {
+            sourceDurationTicks = 0L
+        }
+    }
 
     fun applyTrim(startFractionValue: Float, endFractionValue: Float) {
         val activeTrack = track ?: return
         val activeClip = clip ?: return
+        val durationTicks = sourceDurationTicks
+        if (durationTicks < 2L) return
         val safeStart = startFractionValue.coerceIn(0f, 0.99f)
         val safeEnd = endFractionValue.coerceIn(safeStart + 0.01f, 1f)
-        val startTicks = (baseLengthTicks.toDouble() * safeStart.toDouble()).toLong()
-            .coerceIn(0L, (baseLengthTicks - 1L).coerceAtLeast(0L))
-        val endTicks = (baseLengthTicks.toDouble() * safeEnd.toDouble()).toLong()
-            .coerceIn(startTicks + 1L, baseLengthTicks)
-        val sourceOffset = if (baseSourceOffsetTicks > Long.MAX_VALUE - startTicks) Long.MAX_VALUE
-            else baseSourceOffsetTicks + startTicks
+        val startTicks = (durationTicks.toDouble() * safeStart.toDouble()).toLong()
+            .coerceIn(0L, durationTicks - 1L)
+        val endTicks = (durationTicks.toDouble() * safeEnd.toDouble()).toLong()
+            .coerceIn(startTicks + 1L, durationTicks)
         val nextLength = (endTicks - startTicks).coerceAtLeast(1L)
         onProjectChange(project.copy(tracks = project.tracks.map { item ->
             if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
                 if (current.id == activeClip.id) current.copy(
-                    sourceOffsetTicks = sourceOffset,
+                    sourceOffsetTicks = startTicks,
                     lengthTicks = nextLength
                 ) else current
             })
@@ -2109,19 +2155,21 @@ private fun AudioEditorWorkspace(
             Spacer(Modifier.weight(1f))
             SmallAction("IMPORT AUDIO") { onImportAudio() }
             SmallAction("RESET RANGE") {
-                startFraction = 0f
-                endFraction = 1f
-                applyTrim(0f, 1f)
+                if (sourceDurationTicks >= 2L && clip?.sourceUri != null) {
+                    startFraction = 0f
+                    endFraction = 1f
+                    applyTrim(0f, 1f)
+                }
             }
         }
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("START", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp)
-            Slider(value = startFraction, enabled = clip?.sourceUri != null, onValueChange = { value ->
+            Slider(value = startFraction, enabled = clip?.sourceUri != null && sourceDurationTicks >= 2L, onValueChange = { value ->
                 startFraction = value.coerceIn(0f, (endFraction - 0.01f).coerceAtLeast(0f))
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
             Text("END", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp)
-            Slider(value = endFraction, enabled = clip?.sourceUri != null, onValueChange = { value ->
+            Slider(value = endFraction, enabled = clip?.sourceUri != null && sourceDurationTicks >= 2L, onValueChange = { value ->
                 endFraction = value.coerceIn((startFraction + 0.01f).coerceAtMost(1f), 1f)
                 applyTrim(startFraction, endFraction)
             }, modifier = Modifier.weight(1f).height(20.dp))
