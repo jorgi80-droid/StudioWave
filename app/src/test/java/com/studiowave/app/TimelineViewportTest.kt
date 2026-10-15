@@ -105,8 +105,12 @@ class TimelineViewportTest {
         val viewport = arrangementPaneViewport(timebase, 148f, 3840.5, 720f)
         val tick = 15360L
         assertEquals(0f, viewport.safeTrackHeaderWidthPx, 0f)
-        assertEquals(((tick.toDouble() - 3840.5) * viewport.pixelsPerTick).toFloat(), viewport.timeToViewportX(tick), 0.001f)
-        assertEquals(tick, viewport.viewportXToTime(viewport.timeToViewportX(tick)))
+        assertEquals(
+            ((tick.toDouble() - 3840.5) * viewport.pixelsPerTick).toFloat(),
+            viewport.timeToViewportX(tick),
+            0.001f
+        )
+        assertEquals(tick, viewport.viewportXToTime(viewport.timeToViewportX(tick)).toLong())
     }
 
     @Test fun arrangementPaneRepeatedZoomRestoresFractionalAnchor() {
