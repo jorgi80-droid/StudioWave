@@ -26,9 +26,9 @@ internal data class StudioWavePalette(
 )
 
 internal val LocalStudioWavePalette = compositionLocalOf {
-    StudioWavePalette(Color(0xFF141517), Color(0xFF1E2024), Color(0xFF282B30), Color(0xFF30343B),
-        Color(0xFF34383F), Color(0xFFE4E8EF), Color(0xFFA4A8B0), Color(0xFF00D2B4), Color(0xFFFF764D),
-        Color(0xFF454950), Color(0xFF3D4148), Color(0xFF22C55E), Color(0xFFE4B45E), Color(0xFFEF4F64))
+    StudioWavePalette(Color(0xFF202124), Color(0xFF2B2D30), Color(0xFF383A3D), Color(0xFF414347),
+        Color(0xFF303236), Color(0xFFE7E7E7), Color(0xFFAAAAAA), Color(0xFF65D9D0), Color(0xFFFF9A76),
+        Color(0xFF4A4C50), Color(0xFF55575B), Color(0xFF6EE7A0), Color(0xFFFFD36E), Color(0xFFFF647C))
 }
 
 internal val LocalStudioWaveGridOpacity = compositionLocalOf { 0.72f }
@@ -36,15 +36,15 @@ internal val LocalStudioWaveGridOpacity = compositionLocalOf { 0.72f }
 internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolean): StudioWavePalette {
     val base = when (theme) {
         // Compact, neutral Live-inspired surface tiers: room > panel > control > canvas.
-        "Live Light" -> StudioWavePalette(Color(0xFFC7C9CC), Color(0xFFF4F4F4), Color(0xFFE3E4E6), Color(0xFFD4D6D9),
-            Color(0xFFBFC2C6), Color(0xFF191A1C), Color(0xFF4D5157), Color(0xFF007C70), Color(0xFFB84C32),
-            Color(0xFFB3B6BA), Color(0xFF858A91), Color(0xFF16754A), Color(0xFF866000), Color(0xFFB11E37))
-        "Live Mid" -> StudioWavePalette(Color(0xFF25272B), Color(0xFF36393E), Color(0xFF41454B), Color(0xFF4A4F56),
-            Color(0xFF565B63), Color(0xFFF2F3F4), Color(0xFFBBC0C7), Color(0xFF2AD7B4), Color(0xFFFF8865),
-            Color(0xFF5A6068), Color(0xFF686F79), Color(0xFF45D88A), Color(0xFFFFCF6A), Color(0xFFFF6178))
-        else -> StudioWavePalette(Color(0xFF17191C), Color(0xFF202226), Color(0xFF2A2D32), Color(0xFF34383E),
-            Color(0xFF3B4047), Color(0xFFE9ECEF), Color(0xFFADB3BC), Color(0xFF00D4B5), Color(0xFFFF825B),
-            Color(0xFF484E56), Color(0xFF3E444C), Color(0xFF23C777), Color(0xFFFFC75E), Color(0xFFF04D67))
+        "Live Light" -> StudioWavePalette(Color(0xFFBFC0C2), Color(0xFFEEEEEE), Color(0xFFDADBDD), Color(0xFFCFD0D2),
+            Color(0xFFC5C6C8), Color(0xFF202124), Color(0xFF55575A), Color(0xFF168F85), Color(0xFFB7654A),
+            Color(0xFFB3B4B6), Color(0xFF8C8D90), Color(0xFF207C55), Color(0xFF8C6A27), Color(0xFFB11E37))
+        "Live Mid" -> StudioWavePalette(Color(0xFF4A4B4D), Color(0xFF58595B), Color(0xFF656669), Color(0xFF727377),
+            Color(0xFF505155), Color(0xFFF6F6F6), Color(0xFFD6D6D6), Color(0xFF75E1D7), Color(0xFFFFA17D),
+            Color(0xFF737478), Color(0xFF87888B), Color(0xFF78E6A0), Color(0xFFFFD570), Color(0xFFFF687E))
+        else -> StudioWavePalette(Color(0xFF202124), Color(0xFF2B2D30), Color(0xFF383A3D), Color(0xFF414347),
+            Color(0xFF303236), Color(0xFFE7E7E7), Color(0xFFAAAAAA), Color(0xFF65D9D0), Color(0xFFFF9A76),
+            Color(0xFF4A4C50), Color(0xFF55575B), Color(0xFF6EE7A0), Color(0xFFFFD36E), Color(0xFFFF647C))
     }
     val toned = when (tone) {
         "Warm" -> base.copy(accent = if (theme == "Live Light") Color(0xFF98602C) else Color(0xFFFFB15E), orange = Color(0xFFFF8B52))
