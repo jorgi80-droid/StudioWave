@@ -7,6 +7,13 @@ import org.junit.Test
 class TimelineViewportTest {
     private val common = TimelineTimebase(120, 4, 4, 960)
 
+    @Test fun preferredRefreshRateSelectsHighestSupportedHighRefreshMode() {
+        assertEquals(120f, choosePreferredRefreshRate(listOf(60f, 90f, 120f, 144f))!!)
+        assertEquals(90f, choosePreferredRefreshRate(listOf(60f, 90f, 144f))!!)
+        assertEquals(null, choosePreferredRefreshRate(listOf(30f, 60f, 144f)))
+        assertEquals(120f, choosePreferredRefreshRate(listOf(Float.NaN, Float.POSITIVE_INFINITY, 120f))!!)
+    }
+
     @Test fun timebaseUsesPpqAndMeter() {
         assertEquals(960L, common.ticksPerBeat)
         assertEquals(3840L, common.ticksPerBar)
