@@ -118,3 +118,10 @@
 - The change does not alter the shared timeline timebase/viewport, audio DSP routing, or 1,800-bar arrangement limit.
 - Validation is pending for the latest source head: verify Android debug APK build, unit tests and artifact upload; then test importing audio from inside Sample Editor, waveform generation, trim persistence after closing/reopening the project, and playback on a physical landscape Android device. Keep PR #15 as draft until validation is complete.
 - Ableton reference: https://www.ableton.com/en/manual/clip-view/ and https://www.ableton.com/en/live-manual/12/audio-clips-tempo-and-warping/.
+
+## Audio trim persistence + failed-import recovery — 2026-10-16
+- Commit [c409c623](https://github.com/jorgi80-droid/StudioWave/commit/c409c623ed2457b03a61c3c5ea566fe00332107c) reconstructs Sample Editor trim handles from persisted `sourceOffsetTicks` and `lengthTicks` against the original audio duration, rather than always opening at 0–100% or calculating offsets relative to an already-trimmed clip.
+- Trim controls stay disabled until source duration metadata is available; Reset Range requires a valid source duration.
+- Audio import now clears pending track/start/editor-return state in a `finally` block, preventing a failed attempt from leaking its target into the next import. Exceptions return to Arrangement and preserve an error message.
+- Static review of the commit diff confirms only Sample Editor trim UI/model updates and the import exception/finally branch changed; the shared timeline mapping, arrangement cap, native DSP implementation and project schema were not intentionally changed.
+- Workflow query for commit `c409c623` returned no associated PR workflow runs. Build, unit tests, APK artifact upload, actual save/reopen trim round-trip, and physical-device playback still require verification; do not mark this fix validated until those checks pass.
