@@ -5,7 +5,7 @@
 - Branch: `ui/ableton-batch-viewport`
 - Draft integration PR: https://github.com/jorgi80-droid/StudioWave/pull/15 — keep it draft until further functional/UI validation. Do not merge solely because CI is green.
 - Latest code baseline with verified green CI: `c61feedbaf83411a7afde5bdac362a5b2a104670` (documentation-only checkpoint commit; the prior implementation baseline `8a2cf36ab8ca200e0fa209a72854845f04fae282` also passed).
-- Latest verified green CI run before the HTML audit documentation commit: https://github.com/jorgi80-droid/StudioWave/actions/runs/38748749046 (commit `c61feedbaf83411a7afde5bdac362a5b2a104670`; Build debug APK, Run unit tests, Upload debug APK all passed). The new documentation commit still needs its own workflow result.
+- Latest verified green CI run before the HTML audit documentation commit: https://github.com/jorgi80-droid/StudioWave/actions/runs/38748749046 (commit `c61feedbaf83411a7afde5bdac362a5b2a104670`; Build debug APK, Run unit tests, Upload debug APK all passed). Documentation and UI commits were followed by additional workflow runs; latest UI implementation run is recorded below.
   - `Build debug APK`: passed
   - `Run unit tests`: passed
   - `Upload debug APK`: passed
@@ -21,6 +21,12 @@
   - `TimelineViewportTest.kt`: `3e1f284d9c0fedffcff7c62269b2b9a5dcce3b1e`
 
 ## 2026-10-16 continuation update
+- HTML reference audit committed: `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` (commit `1d433eb1271e0f66999599669665f0ea0d01bb88`).
+- Compact native rotary controls were added to EQ Three, Reverb and Delay FX cards while preserving their existing parameter keys and update callbacks (implementation commit `b229d7364cc9c0eb76869b64c753e6796d497f26`).
+- PR #15 body was refreshed to reflect the actual integration state; PR remains open/draft.
+- Latest CI run for the rotary-control implementation: `38778727549`, URL https://github.com/jorgi80-droid/StudioWave/actions/runs/38778727549. It was `in_progress` at the checkpoint update; check its final result before claiming the new change passes.
+- Latest known completed-green workflow before these changes: `38748749046` on `c61feedbaf83411a7afde5bdac362a5b2a104670`; debug build, unit tests and APK upload passed.
+
 - Audited the five uploaded HTML references and committed `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` on this branch (commit `1d433eb1271e0f66999599669665f0ea0d01bb88`). It inventories external dependencies, UI elements, interactions, native Compose mapping, and limitations.
 - The latest verified code branch head before this documentation commit is `c61feedbaf83411a7afde5bdac362a5b2a104670`; PR #15 remains open/draft and targets `main`.
 - Re-inspection of the current `MainActivity.kt` confirms `DeviceDock`, `DirectWaveDevicePanel`, `BuiltInStudioSample`, and `TrackEffectDeviceCard` are separate declarations; the helper-inside-sample-list scope regression is not present in the current branch snapshot. The latest green CI validates compilation/tests for the prior head, not the newly added audit docs commit.
