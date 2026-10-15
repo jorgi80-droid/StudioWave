@@ -548,13 +548,15 @@ private fun StudioWaveApp() {
             redoHistory = emptyList()
             project = next
             arrangementPlayback.updateMix(next)
-            StudioWaveDiagnostics.log("INFO", "PROJECT", "Project edit committed: '${next.name}', ${next.tracks.size} tracks, ${next.tracks.sumOf { it.clips.size }} clips")
+            StudioWaveDiagnostics.logThrottled("project-edit", 300L, "INFO", "PROJECT",
+                "Project edit committed: '${next.name}', ${next.tracks.size} tracks, ${next.tracks.sumOf { it.clips.size }} clips")
         }
     }
     fun undoProject() {
         val previous = undoHistory.lastOrNull() ?: return
         redoHistory = redoHistory + project
         undoHistory = undoHistory.dropLast(1)
+        StudioWaveDiagnostics.log("INFO", "EDIT_HISTORY", "Undo project change")
         project = previous
         bpm = previous.bpm
         arrangementPlayback.updateMix(previous)
@@ -563,6 +565,7 @@ private fun StudioWaveApp() {
         val next = redoHistory.lastOrNull() ?: return
         undoHistory = undoHistory + project
         redoHistory = redoHistory.dropLast(1)
+        StudioWaveDiagnostics.log("INFO", "EDIT_HISTORY", "Redo project change")
         project = next
         bpm = next.bpm
         arrangementPlayback.updateMix(next)
@@ -840,7 +843,11 @@ private fun StudioWaveApp() {
                 val fpsLabel = runtime.uiFps?.let { "%.1f fps".format(java.util.Locale.US, it) } ?: "sampling…"
                 val frameLabel = runtime.uiFrameIntervalMs?.let { "%.2f ms".format(java.util.Locale.US, it) } ?: "sampling…"
                 val queueTarget = when (audioProfile) { "LOW_LATENCY" -> 512; "STABLE" -> 2048; else -> 1024 }
+                val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                val deviceSampleRate = audioManager?.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE) ?: "unknown"
+                val deviceBurstFrames = audioManager?.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER) ?: "unknown"
                 audioDiagnosticsLines = listOf(
+                    "DEVICE AUDIO::Android suggested output rate $deviceSampleRate Hz · output burst $deviceBurstFrames frames",
                     "OUTPUT PROFILE::${audioProfile.replace('_', ' ')} · target producer queue $queueTarget frames",
                     "ENGINE STATE::${if (playing) "PLAYING" else if (playbackLoading) "PREPARING" else "STOPPED"} · stereo PCM16 · ${ArrangementPlaybackEngine.OUTPUT_SAMPLE_RATE} Hz",
                     "UNDERRUN MONITOR::${output.underruns} native underruns observed · ${StudioWaveDiagnostics.underrunEvents()} increases logged since session start",
@@ -854,7 +861,7 @@ private fun StudioWaveApp() {
                 )
                 diagnosticLogLines = StudioWaveDiagnostics.snapshot()
             }
-            delay(500)
+            delay(1000)
         }
     }
     LaunchedEffect(showSettings, settingsSection) {
