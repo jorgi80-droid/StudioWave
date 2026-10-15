@@ -2610,6 +2610,29 @@ private fun DeviceDock(
 
 
 @Composable
+private fun DeviceModuleCard(
+    title: String,
+    subtitle: String,
+    palette: StudioWavePalette,
+    body: String
+) {
+    Column(
+        Modifier.width(320.dp).height(160.dp)
+            .background(palette.panel, RoundedCornerShape(2.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(2.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(8.dp).background(palette.orange, RoundedCornerShape(1.dp)))
+            Text(title, color = palette.text, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        }
+        Text(subtitle, color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
+        Text(body, color = palette.muted, fontSize = 9.sp, lineHeight = 13.sp)
+    }
+}
+
+@Composable
 private fun DirectWaveDevicePanel(
     trackId: String,
     trackName: String,
