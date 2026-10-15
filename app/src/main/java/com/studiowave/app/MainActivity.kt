@@ -4719,9 +4719,17 @@ private fun TrackEffectDeviceCard(
         HorizontalDivider(color = palette.border)
         when (device.type) {
             "EQ" -> {
-                DeviceParameterSlider("LOW", p["lowDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("lowDb" to it))) }
-                DeviceParameterSlider("MID", p["midDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("midDb" to it))) }
-                DeviceParameterSlider("HIGH", p["highDb"] ?: 0f, -12f..12f, palette, " dB") { onUpdate(device.copy(parameters = p + ("highDb" to it))) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    DirectWaveKnob("LOW", p["lowDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["lowDb"] ?: 0f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("lowDb" to it)))
+                    }
+                    DirectWaveKnob("MID", p["midDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["midDb"] ?: 0f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("midDb" to it)))
+                    }
+                    DirectWaveKnob("HIGH", p["highDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["highDb"] ?: 0f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("highDb" to it)))
+                    }
+                }
             }
             "PARAM_EQ_8" -> (1..8).forEach { band ->
                 val key = "band$band"
@@ -4739,14 +4747,30 @@ private fun TrackEffectDeviceCard(
                 }
             }
             "REVERB" -> {
-                DeviceParameterSlider("ROOM", p["room"] ?: 0.45f, 0.05f..0.95f, palette) { onUpdate(device.copy(parameters = p + ("room" to it))) }
-                DeviceParameterSlider("DECAY", p["decay"] ?: 1.6f, 0.2f..6f, palette, " s") { onUpdate(device.copy(parameters = p + ("decay" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.22f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    DirectWaveKnob("ROOM", p["room"] ?: 0.45f, 0.05f..0.95f, String.format(java.util.Locale.US, "%.2f", p["room"] ?: 0.45f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("room" to it)))
+                    }
+                    DirectWaveKnob("DECAY", p["decay"] ?: 1.6f, 0.2f..6f, String.format(java.util.Locale.US, "%.1f s", p["decay"] ?: 1.6f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("decay" to it)))
+                    }
+                    DirectWaveKnob("WET", p["wet"] ?: 0.22f, 0f..1f, String.format(java.util.Locale.US, "%.0f%%", (p["wet"] ?: 0.22f) * 100f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("wet" to it)))
+                    }
+                }
             }
             "DELAY" -> {
-                DeviceParameterSlider("TIME", p["timeMs"] ?: 320f, 10f..900f, palette, " ms") { onUpdate(device.copy(parameters = p + ("timeMs" to it))) }
-                DeviceParameterSlider("FEEDBACK", p["feedback"] ?: 0.32f, 0f..0.88f, palette) { onUpdate(device.copy(parameters = p + ("feedback" to it))) }
-                DeviceParameterSlider("WET", p["wet"] ?: 0.2f, 0f..1f, palette) { onUpdate(device.copy(parameters = p + ("wet" to it))) }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    DirectWaveKnob("TIME", p["timeMs"] ?: 320f, 10f..900f, "${(p["timeMs"] ?: 320f).toInt()} ms", palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("timeMs" to it)))
+                    }
+                    DirectWaveKnob("FEEDBACK", p["feedback"] ?: 0.32f, 0f..0.88f, String.format(java.util.Locale.US, "%.0f%%", (p["feedback"] ?: 0.32f) * 100f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("feedback" to it)))
+                    }
+                    DirectWaveKnob("WET", p["wet"] ?: 0.2f, 0f..1f, String.format(java.util.Locale.US, "%.0f%%", (p["wet"] ?: 0.2f) * 100f), palette, Modifier.weight(1f), 43.dp) {
+                        onUpdate(device.copy(parameters = p + ("wet" to it)))
+                    }
+                }
             }
             "COMPRESSOR" -> {
                 DeviceParameterSlider("THRESHOLD", p["thresholdDb"] ?: -18f, -60f..0f, palette, " dB") { onUpdate(device.copy(parameters = p + ("thresholdDb" to it))) }
