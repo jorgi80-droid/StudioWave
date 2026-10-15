@@ -125,3 +125,13 @@
 - Audio import now clears pending track/start/editor-return state in a `finally` block, preventing a failed attempt from leaking its target into the next import. Exceptions return to Arrangement and preserve an error message.
 - Static review of the commit diff confirms only Sample Editor trim UI/model updates and the import exception/finally branch changed; the shared timeline mapping, arrangement cap, native DSP implementation and project schema were not intentionally changed.
 - Workflow query for commit `c409c623` returned no associated PR workflow runs. Build, unit tests, APK artifact upload, actual save/reopen trim round-trip, and physical-device playback still require verification; do not mark this fix validated until those checks pass.
+
+
+## Audio trim logic hardening + regression coverage — 2026-10-16
+- Implementation commit [dbd81ddc](https://github.com/jorgi80-droid/StudioWave/commit/dbd81ddc837f13b75bbcb072c14d6b3c7271c4bf) extracts trim fraction restoration and fraction-to-tick conversion into pure helpers.
+- Restoration now clamps source offset to source duration and caps length to the remaining source range without adding potentially overflowing Long values.
+- Fraction-to-tick conversion rejects unavailable/too-short sources, normalizes NaN/infinite inputs, and guarantees a non-empty source range bounded by duration.
+- Regression tests added in [ad1c85b6](https://github.com/jorgi80-droid/StudioWave/commit/ad1c85b6220bd225f5694f4d64c3e1367f9b728d) for persisted range restoration, out-of-range offsets, overflow-sized lengths, invalid fractions and too-short sources.
+- These changes only harden Sample Editor range calculations and tests. No timeline viewport, arrangement cap, DSP, source URI, project schema, or device routing changes were intended.
+- Validation still required: Android CI debug build, unit tests and APK artifact upload for latest branch head; then physical-device save/reopen and playback tests. Do not claim runtime audio behavior passed based on pure helper tests alone.
+- Next feature work should wait until CI verifies this logic; then audit that playback plan consumes sourceOffsetTicks and lengthTicks consistently, especially after BPM changes and project reload.
