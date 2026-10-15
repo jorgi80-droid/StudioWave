@@ -148,3 +148,13 @@
 - Added pure helper `ArrangementTiming.sourceFrameWithinTrim` and unit regression coverage for window wrapping, end-of-source clamping, and invalid assets.
 - Commits: `4f054f0b`, `93e5bb71`, `dc3f0906`, `db4e36ff`, `95bac3c6`.
 - Validation: source review and test cases added; latest-head GitHub Actions workflow run and combined status returned no results. Gradle build, unit-test execution, APK upload, and physical Android playback validation remain unverified. Do not mark this batch green without a completed CI run.
+
+
+## Playback tick arithmetic follow-up — 2026-10-16
+- Branch HEAD was rechecked before edits: `567f61920602db58105fdbbd671c2f576038e01c`. PR #15 remains open and draft.
+- `ArrangementPlaybackEngine.buildPlan` previously calculated the requested source extent with raw `sourceOffsetTicks + lengthTicks`, then clamped the result. For values near `Long.MAX_VALUE`, the addition could overflow before clamping and produce a negative/incorrect requested decode duration.
+- Added `ArrangementTiming.addTicksSaturated` to perform non-negative, overflow-safe tick addition, added unit tests for negative inputs, ordinary sums, and overflow, and updated playback-plan source extent calculation to use the helper.
+- Changes are limited to arithmetic used to request source duration; they do not change project schema, trim values, shared TimelineViewport, snap/drag/resize mapping, or the 1,800-bar cap.
+- Commits: [37fdd6cb](https://github.com/jorgi80-droid/StudioWave/commit/37fdd6cb008d0c14efb14d48390b0890b632969c), [c8469f47](https://github.com/jorgi80-droid/StudioWave/commit/c8469f47fbda300aa93bd6ddd89bf60e7d200348), [17eea786](https://github.com/jorgi80-droid/StudioWave/commit/17eea786848b09bfa0e427c04bccd93670308758).
+- Important unresolved semantic finding: `sourceOffsetTicks` and `lengthTicks` are musical-tick coordinates, while the Sample Editor converts source duration milliseconds into ticks using the current BPM and the playback engine converts those ticks back to seconds using BPM. Therefore changing BPM can change the absolute source-time represented by an existing trim. Correcting this requires a backward-compatible source-time representation/migration and synchronized updates to the editor, waveform, playback plan, and project JSON; do not attempt a partial one-site conversion.
+- The latest code commits require their own Android CI run. Unit tests, debug APK build/artifact upload for the new head, and physical-device audio behavior are not yet verified. Keep PR #15 as draft.
