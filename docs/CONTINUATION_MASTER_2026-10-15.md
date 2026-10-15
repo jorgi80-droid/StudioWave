@@ -196,3 +196,10 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - Commit `493942e4aadb8f56d3aeb055a96d3cb21d614102` sets the Material 3 shape scale (extra-small through extra-large) to the same compact 1 dp radius used by the custom StudioWave controls. This brings default dialogs, cards and other Material components into the same square-edged visual system instead of allowing default rounded components to break the Live-inspired look.
 - This is a shape-only theme change; button actions, navigation, data bindings and timeline/audio behavior are unchanged by intent.
 - Latest-head Android CI must verify compilation, unit tests and APK artifact upload; physical Android landscape validation remains required.
+
+
+## Continuation update — clip handles, DirectWave and Mixer geometry (2026-10-16)
+- Commit `e0735f8aa93a3d06c5d0cc984874fa01f5bbb8fa` gives both Arrangement clip resize handles a subtle orange fill and square edges; the context menu and action buttons now use the same 1 dp square surface geometry with visible hairline borders.
+- The main Arrangement playhead now uses the same orange as the ruler playhead, avoiding two competing playhead colors.
+- DirectWave device surfaces use the same 1 dp corner treatment as the rest of the DAW. Mixer meter segments, channel fader caps and master rail have tighter geometry to match the graphite hardware-style visual language.
+- No timeline math, clip resize gesture mapping, sample loading, parameter ranges, DSP routing or project serialization was intentionally changed. CI for this exact commit must confirm build, unit tests and APK artifact upload; device visual testing remains outstanding.
