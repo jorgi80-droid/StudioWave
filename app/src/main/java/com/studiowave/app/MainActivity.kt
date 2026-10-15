@@ -2833,7 +2833,7 @@ private fun TimelineGrid(
                                     Modifier.align(Alignment.CenterStart)
                                         .width(resizeGripWidthDp.dp)
                                         .height(34.dp)
-                                        .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topEnd = 6.dp, bottomEnd = 6.dp))
+                                        .background(timelinePalette.orange.copy(alpha = 0.28f), RoundedCornerShape(1.dp))
                                         .pointerInput(clip.id) {
                                             var gestureViewport = currentViewport
                                             var gestureTimebase = currentTimebase
@@ -2889,7 +2889,7 @@ private fun TimelineGrid(
                                 Box(
                                     Modifier.align(Alignment.CenterEnd)
                                         .width(resizeGripWidthDp.dp).height(34.dp)
-                                        .background(Color.White.copy(alpha = 0.22f), RoundedCornerShape(topStart = 6.dp, bottomStart = 6.dp))
+                                        .background(timelinePalette.orange.copy(alpha = 0.28f), RoundedCornerShape(1.dp))
                                         .pointerInput(clip.id) {
                                             var gestureViewport = currentViewport
                                             var gestureTimebase = currentTimebase
@@ -2957,7 +2957,7 @@ private fun TimelineGrid(
             )
             val x = playheadViewport.timeToViewportX(playheadTick)
             if (x >= 0f && x <= size.width) {
-                drawLine(playheadPalette.danger, Offset(x, 0f), Offset(x, size.height), 1.5f)
+                drawLine(playheadPalette.orange, Offset(x, 0f), Offset(x, size.height), 1.5f)
             }
         }
         val menuTrack = project.tracks.firstOrNull { t -> t.clips.any { it.id == clipMenuClipId } }
@@ -2982,8 +2982,8 @@ private fun TimelineGrid(
             Column(
                 Modifier.offset(x = x, y = y)
                     .width(menuWidth)
-                    .background(timelinePalette.panel, RoundedCornerShape(2.dp))
-                    .border(1.dp, timelinePalette.border, RoundedCornerShape(2.dp))
+                    .background(timelinePalette.panel, RoundedCornerShape(1.dp))
+                    .border(1.dp, timelinePalette.border, RoundedCornerShape(1.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -2997,7 +2997,8 @@ private fun TimelineGrid(
                             val label = when (action) { "Open editor" -> "Edit"; "Duplicate" -> "Dup"; "Rename" -> "Name"; "Delete" -> "Del"; else -> action }
                             Surface(
                                 color = if (action == "Open editor") timelinePalette.accent.copy(alpha = 0.18f) else timelinePalette.room,
-                                shape = RoundedCornerShape(2.dp),
+                                shape = RoundedCornerShape(1.dp),
+                                border = BorderStroke(1.dp, timelinePalette.border.copy(alpha = 0.75f)),
                                 modifier = Modifier.weight(1f).height(29.dp).clickable {
                                     if (action == "×") onDismissClipMenu() else onClipAction(action, clipMenuClipId)
                                 }
@@ -3881,7 +3882,7 @@ private fun MixerWorkspace(
                                     }
                                     drawRoundRect(color, Offset((size.width - lane) / 2f, y + 0.5f),
                                         Size(lane, (segmentHeight - 1f).coerceAtLeast(1f)),
-                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(lane / 3f))
+                                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(0.7f))
                                 }
                                 drawLine(mixerPalette.text.copy(alpha = 0.84f),
                                     Offset((size.width - lane) / 2f, size.height * (1f - channelRms).coerceIn(0f, 1f)),
@@ -3948,9 +3949,9 @@ private fun MixerWorkspace(
                         val capLeft = size.width * 0.08f
                         val capWidth = size.width * 0.84f
                         drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 9f),
-                            Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                            Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
                         drawRoundRect(mixerPalette.border, Offset(capLeft, thumbY - 9f),
-                            Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f),
+                            Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f),
                             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
                         drawLine(mixerPalette.text, Offset(capLeft + 3f, thumbY),
                             Offset(capLeft + capWidth - 3f, thumbY), 2f)
@@ -4015,7 +4016,7 @@ private fun MixerWorkspace(
                 val railWidth = size.width * 0.24f
                 val railLeft = (size.width - railWidth) / 2f
                 drawRoundRect(mixerPalette.room, Offset(railLeft, 0f), Size(railWidth, size.height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(4f))
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
                 listOf(0.0, -6.0, -12.0, -24.0, -48.0).forEach { db ->
                     val fraction = ((db + 60.0) / 60.0).toFloat()
                     val y = size.height * (1f - fraction)
@@ -4029,9 +4030,9 @@ private fun MixerWorkspace(
                 val capLeft = size.width * 0.08f
                 val capWidth = size.width * 0.84f
                 drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 9f),
-                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f))
+                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
                 drawRoundRect(mixerPalette.border, Offset(capLeft, thumbY - 9f),
-                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(2f),
+                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f),
                     style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
                 drawLine(mixerPalette.text, Offset(capLeft + 3f, thumbY),
                     Offset(capLeft + capWidth - 3f, thumbY), 2f)
@@ -4655,7 +4656,7 @@ private fun DirectWaveDevicePanel(
                 Modifier.fillMaxWidth()
                     .heightIn(max = 65.dp)
                     .verticalScroll(rememberScrollState())
-                    .background(palette.panel, RoundedCornerShape(2.dp))
+                    .background(palette.panel, RoundedCornerShape(1.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -4668,7 +4669,7 @@ private fun DirectWaveDevicePanel(
                 filtered.forEach { sample ->
                     Row(
                         Modifier.fillMaxWidth()
-                            .background(if (sampleUri?.contains(sample.assetName) == true) palette.raised else palette.room, RoundedCornerShape(2.dp))
+                            .background(if (sampleUri?.contains(sample.assetName) == true) palette.raised else palette.room, RoundedCornerShape(1.dp))
                             .clickable { loadFactoryPreset(sample) }
                             .padding(horizontal = 6.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -4692,7 +4693,7 @@ private fun DirectWaveDevicePanel(
         ) {
             Column(
                 Modifier.weight(1.1f).fillMaxHeight()
-                    .background(palette.panel, RoundedCornerShape(2.dp)).padding(4.dp),
+                    .background(palette.panel, RoundedCornerShape(1.dp)).padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -4711,7 +4712,7 @@ private fun DirectWaveDevicePanel(
             }
             Column(
                 Modifier.weight(1f).fillMaxHeight()
-                    .background(palette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+                    .background(palette.panel, RoundedCornerShape(1.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 Text("TUNE / OUTPUT", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Black)
@@ -4734,7 +4735,7 @@ private fun DirectWaveDevicePanel(
 
         Column(
             Modifier.fillMaxWidth().weight(1f)
-                .background(palette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
+                .background(palette.panel, RoundedCornerShape(1.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -4768,7 +4769,7 @@ private fun DirectWaveDevicePanel(
                 val label = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")[note % 12]
                 Surface(
                     color = if (note % 12 in setOf(1, 3, 6, 8, 10)) palette.control else palette.raised,
-                    contentColor = palette.text, shape = RoundedCornerShape(2.dp),
+                    contentColor = palette.text, shape = RoundedCornerShape(1.dp),
                     border = BorderStroke(1.dp, palette.border),
                     modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(note, sampleReady) {
                         detectTapGestures(onPress = {
@@ -4800,8 +4801,8 @@ private fun TrackEffectDeviceCard(
     val p = device.parameters
     Column(
         Modifier.width(242.dp).height(250.dp).verticalScroll(rememberScrollState())
-            .background(palette.panel, RoundedCornerShape(2.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(2.dp))
+            .background(palette.panel, RoundedCornerShape(1.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(7.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
@@ -5153,7 +5154,7 @@ private fun DirectWaveDeviceWaveform(
     }
     Column(
         Modifier.fillMaxWidth().height(if (compact) 26.dp else 55.dp)
-            .background(palette.canvas, RoundedCornerShape(2.dp)).padding(2.dp),
+            .background(palette.canvas, RoundedCornerShape(1.dp)).padding(2.dp),
         verticalArrangement = Arrangement.spacedBy(1.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -5234,7 +5235,7 @@ private fun DirectWaveSampleWaveform(
         } catch (_: Exception) { peaks = emptyList() }
     }
     Column(Modifier.fillMaxWidth().height(if (sampleReady) 60.dp else 56.dp)
-        .background(palette.panel, RoundedCornerShape(2.dp)).padding(3.dp),
+        .background(palette.panel, RoundedCornerShape(1.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("SAMPLE WAVEFORM", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
