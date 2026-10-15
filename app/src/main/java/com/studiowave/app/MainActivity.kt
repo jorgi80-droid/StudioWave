@@ -408,10 +408,10 @@ private fun StudioWaveApp() {
     var themeName by remember {
         mutableStateOf(
             if (preferences.getBoolean("ui_theme_selected_manually", false)) {
-                preferences.getString("ui_theme", "Live Dark") ?: "Live Dark"
+                preferences.getString("ui_theme", "Live Mid") ?: "Live Mid"
             } else {
-                // Use a neutral Live-inspired dark palette by default; other themes remain available in Settings.
-                "Live Dark"
+                // Use Live Mid graphite surfaces by default; other themes remain available in Settings.
+                "Live Mid"
             }
         )
     }
@@ -3630,7 +3630,6 @@ private fun MixerWorkspace(
     BoxWithConstraints(
         Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(7.dp)).padding(4.dp)
     ) {
-        val trackCount = project.tracks.size.coerceAtLeast(1)
         // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
         val channelWidth = 164.dp
         Row(
@@ -3640,14 +3639,14 @@ private fun MixerWorkspace(
         project.tracks.forEach { track ->
             Column(
                 Modifier.width(channelWidth).fillMaxHeight()
-                    .background(mixerPalette.panel, RoundedCornerShape(4.dp))
-                    .border(1.dp, mixerPalette.border.copy(alpha = 0.78f), RoundedCornerShape(4.dp))
+                    .background(mixerPalette.panel, RoundedCornerShape(2.dp))
+                    .border(1.dp, mixerPalette.border.copy(alpha = 0.9f), RoundedCornerShape(2.dp))
                     .padding(horizontal = 7.dp, vertical = 5.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
                     Modifier.fillMaxWidth().height(26.dp)
-                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.92f), RoundedCornerShape(3.dp))
+                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.96f), RoundedCornerShape(2.dp))
                         .padding(horizontal = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -3806,9 +3805,9 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(112.dp).fillMaxHeight()
-                .background(mixerPalette.raised, RoundedCornerShape(5.dp))
-                .border(1.dp, mixerPalette.border, RoundedCornerShape(5.dp)).padding(7.dp),
+            Modifier.width(126.dp).fillMaxHeight()
+                .background(mixerPalette.panel, RoundedCornerShape(2.dp))
+                .border(1.dp, mixerPalette.border.copy(alpha = 0.9f), RoundedCornerShape(2.dp)).padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = mixerPalette.text)
@@ -4225,11 +4224,11 @@ private fun DirectWaveDevicePanel(
 
     val isBuiltIn = sampleUri?.startsWith("android.resource://${context.packageName}/") == true
     Column(
-        (if (fullHeight) Modifier.width(430.dp).fillMaxHeight()
-            else Modifier.width(430.dp).height(188.dp))
-            .background(palette.room, RoundedCornerShape(4.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(4.dp)).padding(3.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+        (if (fullHeight) Modifier.width(420.dp).fillMaxHeight()
+            else Modifier.width(420.dp).height(188.dp))
+            .background(palette.canvas, RoundedCornerShape(3.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(3.dp)).padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(if (fullHeight) 4.dp else 3.dp)
     ) {
         // Device-strip header: status light, device title and a clear sample picker like Ableton.
         Row(
@@ -4317,27 +4316,37 @@ private fun DirectWaveDevicePanel(
             onImport = { launcher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/mpeg", "audio/*")) }
         )
 
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            DirectWaveReadout("PITCH", "${pitch.toInt()} st", palette, Modifier.width(65.dp))
+        Row(
+            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(3.dp))
+                .padding(horizontal = 5.dp, vertical = 1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            DirectWaveReadout("PITCH", "${pitch.toInt()} st", palette, Modifier.width(52.dp))
             Slider(value = pitch, onValueChange = {
                 pitch = it; sampler.pitchSemitones = it.toInt()
             }, onValueChangeFinished = { preferences.edit().putInt("pitch.$trackId", pitch.toInt()).apply() },
-                valueRange = -12f..12f, modifier = Modifier.weight(1f))
-            DirectWaveReadout("FINE", "${fineTune.toInt()} ct", palette, Modifier.width(65.dp))
+                valueRange = -12f..12f, modifier = Modifier.weight(1f).height(26.dp))
+            DirectWaveReadout("FINE", "${fineTune.toInt()} ct", palette, Modifier.width(52.dp))
             Slider(value = fineTune, onValueChange = {
                 fineTune = it; sampler.fineTuneCents = it.toInt()
             }, onValueChangeFinished = { preferences.edit().putInt("fineTune.$trackId", fineTune.toInt()).apply() },
-                valueRange = -100f..100f, modifier = Modifier.weight(1f))
+                valueRange = -100f..100f, modifier = Modifier.weight(1f).height(26.dp))
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Column(Modifier.weight(0.9f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Row(
+            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(3.dp))
+                .padding(horizontal = 3.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(0.82f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("OUT", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                 Text("${(outputGain * 100).toInt()}%", color = palette.text, fontSize = 8.sp)
                 Slider(value = outputGain, onValueChange = {
                     outputGain = it.coerceIn(0f, 1f); sampler.outputGain = outputGain
                 }, onValueChangeFinished = { preferences.edit().putFloat("outputGain.$trackId", outputGain).apply() },
-                    valueRange = 0f..1f, modifier = Modifier.height(24.dp))
+                    valueRange = 0f..1f, modifier = Modifier.fillMaxWidth().height(25.dp))
             }
             DirectWaveEnvelopeControl("A", attack, 0f..2000f, palette, Modifier.weight(1f)) {
                 attack = it; sampler.attackMs = it.toInt()
@@ -4373,11 +4382,13 @@ private fun DirectWaveDevicePanel(
                 ) { Box(contentAlignment = Alignment.Center) { Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold) } }
             }
         }
-        Text(
-            if (sampleReady) "16 VOICES · PER-TRACK INSTRUMENT · ARRANGEMENT MIDI ROUTE"
-            else "WAV/MP3 and bundled presets use Android audio decoding. FL Studio .dwp/.instr and multisample maps are not supported.",
-            color = palette.muted, fontSize = 8.sp
-        )
+        if (!fullHeight) {
+            Text(
+                if (sampleReady) "16 VOICES · PER-TRACK INSTRUMENT · MIDI ROUTE"
+                else "WAV/MP3 + bundled samples · DWP maps unsupported",
+                color = palette.muted, fontSize = 8.sp, maxLines = 1
+            )
+        }
     }
 }
 
@@ -4438,7 +4449,8 @@ private fun DirectWaveSampleWaveform(
             }
         } catch (_: Exception) { peaks = emptyList() }
     }
-    Column(Modifier.fillMaxWidth().height(48.dp).background(palette.panel, RoundedCornerShape(4.dp)).padding(4.dp),
+    Column(Modifier.fillMaxWidth().height(if (sampleReady) 58.dp else 54.dp)
+        .background(palette.panel, RoundedCornerShape(3.dp)).padding(4.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("SAMPLE WAVEFORM", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
