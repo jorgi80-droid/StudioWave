@@ -845,7 +845,7 @@ private fun StudioWaveApp() {
             } else {
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 3.dp)) {
                 if (audioError != null) {
-                    Surface(color = LocalStudioWavePalette.current.danger.copy(alpha = 0.22f), shape = RoundedCornerShape(5.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
+                    Surface(color = LocalStudioWavePalette.current.danger.copy(alpha = 0.22f), shape = RoundedCornerShape(2.dp), modifier = Modifier.fillMaxWidth().clickable { audioError = null }) {
                         Text(audioError!!, color = LocalStudioWavePalette.current.text, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), maxLines = 2)
                     }
                 }
@@ -892,7 +892,7 @@ private fun StudioWaveApp() {
                         if (selectedWorkspace != "ARRANGEMENT" && selectedWorkspace !in setOf("PIANO ROLL", "AUDIO EDITOR", "DRUM SEQUENCER")) {
                             Row(
                                 Modifier.fillMaxWidth().height(22.dp)
-                                    .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(5.dp))
+                                    .background(LocalStudioWavePalette.current.panel, RoundedCornerShape(2.dp))
                                     .padding(horizontal = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -1613,8 +1613,8 @@ private fun ArrangementWorkspace(
         // becoming a separate Column child that could steal timeline height.
         Row(
             Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = 8.dp)
-                .background(LocalStudioWavePalette.current.panel.copy(alpha = 0.98f), RoundedCornerShape(3.dp))
-                .border(1.dp, LocalStudioWavePalette.current.border, RoundedCornerShape(3.dp))
+                .background(LocalStudioWavePalette.current.panel.copy(alpha = 0.98f), RoundedCornerShape(2.dp))
+                .border(1.dp, LocalStudioWavePalette.current.border, RoundedCornerShape(2.dp))
                 .padding(horizontal = 3.dp, vertical = 3.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1670,11 +1670,11 @@ private fun ArrangementWorkspace(
                     fontWeight = FontWeight.Bold, maxLines = 1)
                 Text(inspectorTrack.name, color = arrangementPalette.muted, fontSize = 8.sp, maxLines = 1)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Column(Modifier.weight(1f).background(arrangementPalette.room, RoundedCornerShape(4.dp)).padding(5.dp)) {
+                    Column(Modifier.weight(1f).background(arrangementPalette.room, RoundedCornerShape(2.dp)).padding(5.dp)) {
                         Text("START", color = arrangementPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                         Text("BAR $barNumber", color = arrangementPalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
-                    Column(Modifier.weight(1f).background(arrangementPalette.room, RoundedCornerShape(4.dp)).padding(5.dp)) {
+                    Column(Modifier.weight(1f).background(arrangementPalette.room, RoundedCornerShape(2.dp)).padding(5.dp)) {
                         Text("END", color = arrangementPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                         Text("BAR $endBarNumber", color = arrangementPalette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
@@ -3093,7 +3093,7 @@ private fun PianoRollWorkspace(
         return names[Math.floorMod(pitch, 12)] + (pitch / 12 - 1)
     }
 
-    Column(Modifier.fillMaxSize().background(pianoPalette.room).padding(2.dp)) {
+    Column(Modifier.fillMaxSize().background(pianoPalette.room).border(1.dp, pianoPalette.border, RoundedCornerShape(1.dp)).padding(2.dp)) {
         // Clip identity and editing actions share one shallow strip so the note grid wins height.
         Row(
             Modifier.fillMaxWidth().height(28.dp)
@@ -3204,7 +3204,7 @@ private fun PianoRollWorkspace(
         if (editToolsExpanded) {
             Row(
                 Modifier.fillMaxWidth().height(26.dp)
-                    .background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(horizontal = 3.dp),
+                    .background(pianoPalette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 3.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -3724,13 +3724,13 @@ private fun PianoRollWorkspace(
                 "G" to 55, "A" to 57, "B" to 59, "C5" to 60
             )
             Row(
-                Modifier.fillMaxWidth().height(44.dp).background(pianoPalette.panel, RoundedCornerShape(4.dp)).padding(3.dp),
+                Modifier.fillMaxWidth().height(44.dp).background(pianoPalette.panel, RoundedCornerShape(2.dp)).padding(3.dp),
                 horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 keyboardNotes.forEach { (label, pitch) ->
                     Surface(
                         color = pianoPalette.control,
-                        shape = RoundedCornerShape(3.dp),
+                        shape = RoundedCornerShape(2.dp),
                         border = BorderStroke(1.dp, pianoPalette.border),
                         modifier = Modifier.weight(1f).fillMaxHeight().clickable {
                             val activeTrack = track
@@ -4060,8 +4060,8 @@ private fun BrowserWorkspace(
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Column(
                 Modifier.width(150.dp).fillMaxHeight()
-                    .background(p.canvas, RoundedCornerShape(4.dp))
-                    .border(1.dp, p.border, RoundedCornerShape(4.dp)).padding(6.dp),
+                    .background(p.canvas, RoundedCornerShape(2.dp))
+                    .border(1.dp, p.border, RoundedCornerShape(2.dp)).padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(Modifier.fillMaxWidth().height(27.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -4076,7 +4076,7 @@ private fun BrowserWorkspace(
                     val active = category == item
                     Surface(
                         color = if (active) p.accent.copy(alpha = 0.16f) else Color.Transparent,
-                        shape = RoundedCornerShape(3.dp),
+                        shape = RoundedCornerShape(2.dp),
                         border = BorderStroke(1.dp, if (active) p.accent.copy(alpha = 0.65f) else Color.Transparent),
                         modifier = Modifier.fillMaxWidth().height(34.dp).clickable { category = item }
                     ) {
@@ -4104,7 +4104,7 @@ private fun BrowserWorkspace(
                 Text("PLACES", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black,
                     modifier = Modifier.padding(start = 4.dp))
                 Row(Modifier.fillMaxWidth().height(29.dp)
-                    .background(p.panel, RoundedCornerShape(3.dp)).padding(horizontal = 7.dp),
+                    .background(p.panel, RoundedCornerShape(2.dp)).padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("▣", color = p.accent, fontSize = 11.sp)
@@ -4118,12 +4118,12 @@ private fun BrowserWorkspace(
 
             Column(
                 Modifier.weight(1f).fillMaxHeight()
-                    .background(p.canvas, RoundedCornerShape(4.dp))
-                    .border(1.dp, p.border, RoundedCornerShape(4.dp)).padding(6.dp),
+                    .background(p.canvas, RoundedCornerShape(2.dp))
+                    .border(1.dp, p.border, RoundedCornerShape(2.dp)).padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
                 Row(Modifier.fillMaxWidth().height(28.dp)
-                    .background(p.panel, RoundedCornerShape(3.dp)).padding(horizontal = 7.dp),
+                    .background(p.panel, RoundedCornerShape(2.dp)).padding(horizontal = 7.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         when (category) {
@@ -4156,7 +4156,7 @@ private fun BrowserWorkspace(
                             onClick = onImportAudio, modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = p.accent.copy(alpha = 0.18f), contentColor = p.accent),
-                            shape = RoundedCornerShape(3.dp)
+                            shape = RoundedCornerShape(2.dp)
                         ) {
                             Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(13.dp))
                             Spacer(Modifier.width(5.dp)); Text("IMPORT AUDIO", fontSize = 8.sp, fontWeight = FontWeight.Black)
@@ -4166,7 +4166,7 @@ private fun BrowserWorkspace(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentPadding = PaddingValues(horizontal = 7.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text),
-                            shape = RoundedCornerShape(3.dp)
+                            shape = RoundedCornerShape(2.dp)
                         ) { Text("OPEN ARRANGEMENT", fontSize = 8.sp, fontWeight = FontWeight.Black) }
                     }
                 }
@@ -4183,8 +4183,8 @@ private fun BrowserWorkspace(
                             val selected = track.id == selectedTrackId
                             Row(
                                 Modifier.fillMaxWidth()
-                                    .background(if (selected) p.raised else p.panel, RoundedCornerShape(3.dp))
-                                    .border(1.dp, if (selected) p.accent else p.border.copy(alpha = 0.55f), RoundedCornerShape(3.dp))
+                                    .background(if (selected) p.raised else p.panel, RoundedCornerShape(2.dp))
+                                    .border(1.dp, if (selected) p.accent else p.border.copy(alpha = 0.55f), RoundedCornerShape(2.dp))
                                     .clickable { onSelectTrack(track.id) }
                                     .padding(horizontal = 7.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -4633,7 +4633,7 @@ private fun DirectWaveDevicePanel(
                 Modifier.fillMaxWidth()
                     .heightIn(max = 65.dp)
                     .verticalScroll(rememberScrollState())
-                    .background(palette.panel, RoundedCornerShape(3.dp))
+                    .background(palette.panel, RoundedCornerShape(2.dp))
                     .padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
@@ -4670,7 +4670,7 @@ private fun DirectWaveDevicePanel(
         ) {
             Column(
                 Modifier.weight(1.1f).fillMaxHeight()
-                    .background(palette.panel, RoundedCornerShape(3.dp)).padding(4.dp),
+                    .background(palette.panel, RoundedCornerShape(2.dp)).padding(4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -4689,7 +4689,7 @@ private fun DirectWaveDevicePanel(
             }
             Column(
                 Modifier.weight(1f).fillMaxHeight()
-                    .background(palette.panel, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+                    .background(palette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
                 verticalArrangement = Arrangement.Center
             ) {
                 Text("TUNE / OUTPUT", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Black)
@@ -4712,7 +4712,7 @@ private fun DirectWaveDevicePanel(
 
         Column(
             Modifier.fillMaxWidth().weight(1f)
-                .background(palette.panel, RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
+                .background(palette.panel, RoundedCornerShape(2.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
             Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -5716,7 +5716,7 @@ internal fun TransportAction(label: String, onClick: () -> Unit) {
     Surface(
         color = p.control,
         contentColor = p.text,
-        shape = RoundedCornerShape(4.dp),
+        shape = RoundedCornerShape(2.dp),
         border = BorderStroke(1.dp, p.border.copy(alpha = 0.65f)),
         modifier = Modifier.height(23.dp).clickable(onClick = onClick)
     ) {
