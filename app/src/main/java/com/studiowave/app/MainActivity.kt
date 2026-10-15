@@ -4159,7 +4159,7 @@ private fun DirectWaveDevicePanel(
 
     val isBuiltIn = sampleUri?.startsWith("android.resource://${context.packageName}/") == true
     Column(
-        Modifier.width(430.dp).height(188.dp).verticalScroll(rememberScrollState())
+        Modifier.width(430.dp).height(188.dp)
             .background(palette.room, RoundedCornerShape(4.dp))
             .border(1.dp, palette.border, RoundedCornerShape(4.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
