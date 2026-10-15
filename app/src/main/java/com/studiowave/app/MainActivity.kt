@@ -3085,7 +3085,8 @@ private fun PianoRollWorkspace(
         // Clip identity and editing actions share one shallow strip so the note grid wins height.
         Row(
             Modifier.fillMaxWidth().height(28.dp)
-                .background(pianoPalette.panel, RoundedCornerShape(4.dp))
+                .background(pianoPalette.panel, RoundedCornerShape(1.dp))
+                .border(1.dp, pianoPalette.border, RoundedCornerShape(1.dp))
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -3186,7 +3187,6 @@ private fun PianoRollWorkspace(
                     })
                 }
             }
-            SmallAction("×", onBack)
 
         }
         if (editToolsExpanded) {
