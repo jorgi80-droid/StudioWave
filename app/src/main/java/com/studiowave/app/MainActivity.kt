@@ -4159,8 +4159,8 @@ private fun DirectWaveDevicePanel(
     val isBuiltIn = sampleUri?.startsWith("android.resource://${context.packageName}/") == true
     Column(
         Modifier.width(430.dp).height(188.dp).verticalScroll(rememberScrollState())
-            .background(palette.room, RoundedCornerShape(5.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(5.dp)).padding(4.dp),
+            .background(palette.room, RoundedCornerShape(4.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(4.dp)).padding(3.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
         // Device-strip header: status light, device title and a clear sample picker like Ableton.
@@ -4201,16 +4201,22 @@ private fun DirectWaveDevicePanel(
                         Row(
                             Modifier.fillMaxWidth().background(palette.room, RoundedCornerShape(3.dp))
                                 .clickable {
-                                    val resourceId = context.resources.getIdentifier(sample.assetName, "raw", context.packageName)
-                                    if (resourceId != 0) {
-                                        val uri = Uri.parse("android.resource://${context.packageName}/$resourceId")
+                                                                        val presetIndex = com.studiowave.app.audio.FactorySampleLibrary.presets.indexOfFirst {
+                                        it.fileName.substringBeforeLast('.') == sample.assetName
+                                    }
+                                    if (presetIndex >= 0) {
+                                        val target = java.io.File(context.cacheDir, sample.assetName + ".wav")
+                                        runCatching { target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex)) }
+                                            .onFailure { Toast.makeText(context, "Gagal membuat sampel bawaan", Toast.LENGTH_SHORT).show() }
+                                        val uri = Uri.fromFile(target)
                                         sampleUri = uri.toString()
                                         sampleLabel = sample.title
                                         sampleReady = false
-                                        preferences.edit().putString("sample.$trackId", uri.toString()).apply()
+                                        preferences.edit().putString("sample.$trackId", uri.toString())
+                                            .putString("sampleName.$trackId", sample.title).apply()
                                         sampler.load(uri) { ready -> sampleReady = ready }
                                     } else {
-                                        Toast.makeText(context, "Preset WAV tidak ada dalam APK.", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Preset belum tersedia.", Toast.LENGTH_SHORT).show()
                                     }
                                 }.padding(horizontal = 6.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -4219,7 +4225,7 @@ private fun DirectWaveDevicePanel(
                                 Text(sample.title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 Text(sample.description, color = palette.muted, fontSize = 8.sp)
                             }
-                            Text(if (context.resources.getIdentifier(sample.assetName, "raw", context.packageName).let { it != 0 && sampleUri == "android.resource://${context.packageName}/$it" }) "SELECTED" else "LOAD",
+                            Text(if (context.resources.sampleUri?.endsWith("/${sample.assetName}.wav") == true || sampleLabel == sample.title) "SELECTED" else "LOAD",
                                 color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
                         }
                     }
