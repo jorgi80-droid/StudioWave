@@ -3825,16 +3825,23 @@ private fun MixerWorkspace(
             ) {
                 Row(
                     Modifier.fillMaxWidth().height(26.dp)
-                        .background(Color(track.colorArgb.toInt()).copy(alpha = 0.96f), RoundedCornerShape(1.dp))
+                        .background(mixerPalette.canvas, RoundedCornerShape(1.dp))
+                        .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp))
                         .padding(horizontal = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
+                    // Keep track identity visible without turning the entire header into a saturated block.
+                    // This mirrors the restrained Live-style surface hierarchy while preserving track colors.
+                    Box(
+                        Modifier.width(3.dp).fillMaxHeight()
+                            .background(Color(track.colorArgb.toInt()))
+                    )
                     Text(track.name, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1,
-                        color = if (Color(track.colorArgb.toInt()).luminance() > 0.52f) Color(0xFF17191C) else Color.White,
+                        color = mixerPalette.text,
                         modifier = Modifier.weight(1f))
                     Text(track.kind.uppercase(), fontSize = 6.sp, fontWeight = FontWeight.Bold,
-                        color = if (Color(track.colorArgb.toInt()).luminance() > 0.52f) Color(0xFF17191C).copy(alpha = 0.75f) else Color.White.copy(alpha = 0.8f),
+                        color = mixerPalette.muted,
                         maxLines = 1)
                 }
                 Spacer(Modifier.height(4.dp))
