@@ -1904,7 +1904,7 @@ private fun DrumSequencerWorkspace(
                 val isBeat = step % 4 == 0
                 Surface(
                     color = if (isActive) palette.accent else if (isBeat) palette.control else palette.room,
-                    shape = RoundedCornerShape(if (isBeat) 4.dp else 3.dp),
+                    shape = RoundedCornerShape(2.dp),
                     border = BorderStroke(1.dp, if (isActive) palette.accent else palette.border.copy(alpha = 0.8f)),
                     modifier = Modifier.width(34.dp).fillMaxHeight().clickable {
                         if (track != null && clip != null) {
