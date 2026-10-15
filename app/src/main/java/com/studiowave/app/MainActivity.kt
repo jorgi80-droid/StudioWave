@@ -4846,6 +4846,11 @@ private fun TrackEffectDeviceCard(
                 val frequencyHz = (20.0 * Math.pow(1000.0, freqNorm.toDouble())).toInt()
                 val q = (p[qKey] ?: 1.1f).coerceIn(0.25f, 8f)
                 val gains = (1..8).map { band -> (p["band$band"] ?: 0f).coerceIn(-18f, 18f) }
+                // Place each band at its actual logarithmic frequency position. Equally spaced
+                // band indices distort the response overview when users move a band's frequency.
+                val bandFreqNorms = (1..8).map { band ->
+                    (p["band${band}FreqNorm"] ?: defaultFreqNorms[band - 1]).coerceIn(0f, 1f)
+                }
                 Canvas(
                     Modifier.fillMaxWidth().height(58.dp)
                         .background(palette.canvas, RoundedCornerShape(1.dp))
@@ -4860,19 +4865,20 @@ private fun TrackEffectDeviceCard(
                             if (line == 2) 1.dp.toPx() else 0.6.dp.toPx()
                         )
                     }
-                    for (band in 0..7) {
-                        val x = size.width * band / 7f
+                    // Log-frequency grid divisions (20 Hz to 20 kHz).
+                    for (division in 0..6) {
+                        val x = size.width * division / 6f
                         drawLine(palette.border.copy(alpha = 0.42f), Offset(x, 0f), Offset(x, size.height), 0.6.dp.toPx())
                     }
                     val curve = androidx.compose.ui.graphics.Path()
                     gains.forEachIndexed { index, bandGain ->
-                        val x = size.width * index / (gains.size - 1).toFloat()
+                        val x = size.width * bandFreqNorms[index]
                         val y = midY - (bandGain / 18f) * (size.height * 0.44f)
                         if (index == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
                     }
                     drawPath(curve, palette.orange, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
                     gains.forEachIndexed { index, bandGain ->
-                        val x = size.width * index / (gains.size - 1).toFloat()
+                        val x = size.width * bandFreqNorms[index]
                         val y = midY - (bandGain / 18f) * (size.height * 0.44f)
                         drawCircle(if (index + 1 == selectedBand) palette.orange else palette.text,
                             radius = if (index + 1 == selectedBand) 3.dp.toPx() else 2.dp.toPx(), center = Offset(x, y))
