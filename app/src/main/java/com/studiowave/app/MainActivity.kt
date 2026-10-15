@@ -4154,60 +4154,86 @@ private fun DeviceDock(
     var expanded by remember { mutableStateOf(true) }
     Column(
         (if (fullScreen) Modifier.fillMaxWidth().fillMaxHeight()
-            else Modifier.fillMaxWidth().height(if (expanded) 220.dp else 42.dp))
-            .background(palette.canvas, RoundedCornerShape(2.dp)).padding(horizontal = 6.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
+            else Modifier.fillMaxWidth().height(if (expanded) 328.dp else 42.dp))
+            .background(palette.room, RoundedCornerShape(5.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(5.dp))
+            .padding(horizontal = 6.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Row(Modifier.fillMaxWidth().height(29.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("DEVICE VIEW", color = palette.orange, fontSize = 10.sp, fontWeight = FontWeight.Black)
-            Spacer(Modifier.width(8.dp))
+        Row(
+            Modifier.fillMaxWidth().height(31.dp)
+                .background(palette.panel, RoundedCornerShape(3.dp))
+                .padding(horizontal = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Box(Modifier.size(7.dp).background(palette.orange, RoundedCornerShape(1.dp)))
+            Text("DEVICE VIEW", color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black)
+            Text(" / ", color = palette.muted, fontSize = 9.sp)
             if (project.tracks.isNotEmpty()) {
-                Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(
+                    Modifier.weight(1f).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     project.tracks.forEach { track ->
                         val active = selectedTrack?.id == track.id
                         Surface(
-                            color = if (active) palette.accent.copy(alpha = 0.15f) else palette.control,
+                            color = if (active) palette.accent.copy(alpha = 0.16f) else palette.control,
                             border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
-                            shape = RoundedCornerShape(2.dp),
-                            modifier = Modifier.height(25.dp).clickable { onSelectTrack(track.id) }
+                            shape = RoundedCornerShape(3.dp),
+                            modifier = Modifier.height(24.dp).clickable { onSelectTrack(track.id) }
                         ) {
-                            Row(Modifier.padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Box(Modifier.size(5.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
-                                Text(track.name, color = if (active) palette.accent else palette.text,
-                                    fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            Row(
+                                Modifier.padding(horizontal = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(Modifier.size(6.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
+                                Text(
+                                    track.name.uppercase(),
+                                    color = if (active) palette.accent else palette.text,
+                                    fontSize = 7.sp,
+                                    fontWeight = FontWeight.Black,
+                                    maxLines = 1
+                                )
                             }
                         }
                     }
                 }
             } else Spacer(Modifier.weight(1f))
-            SmallAction(if (expanded) "FOLD" else "UNFOLD") { expanded = !expanded }
-            SmallAction("×") { onToggle() }
+            DirectWaveStateButton(if (expanded) "FOLD" else "UNFOLD", expanded, palette) { expanded = !expanded }
+            DirectWaveStateButton("×", false, palette, onToggle)
         }
         if (expanded) {
             if (selectedTrack == null) {
-                Text("Add a track in Arrangement to see its devices.", color = palette.muted, fontSize = 9.sp)
+                DeviceModuleCard(
+                    title = "NO DEVICE",
+                    subtitle = "TRACK DEVICE CHAIN",
+                    palette = palette,
+                    body = "Create a track in Arrangement to open its instrument or audio device."
+                )
             } else {
-                Row(
-                    Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    when (selectedTrack.kind) {
-                        "midi" -> DirectWaveDevicePanel(
-                            trackId = selectedTrack.id, trackName = selectedTrack.name,
-                            trackKind = selectedTrack.kind, palette = palette,
-                            fullHeight = fullScreen
-                        )
-                        "drum" -> DeviceModuleCard(
-                            title = "DRUM RACK", subtitle = "STEP SEQUENCER", palette = palette,
-                            body = "No drum device is loaded. Step editing remains in the Drum Sequencer."
-                        )
-                        else -> DeviceModuleCard(
-                            title = "AUDIO SOURCE", subtitle = "CLIP / SAMPLE", palette = palette,
-                            body = "No audio effect is loaded. Source waveform and trim controls live in Audio Clip View."
-                        )
-                    }
+                when (selectedTrack.kind) {
+                    "midi" -> DirectWaveDevicePanel(
+                        trackId = selectedTrack.id,
+                        trackName = selectedTrack.name,
+                        trackKind = selectedTrack.kind,
+                        palette = palette,
+                        fullHeight = fullScreen
+                    )
+                    "drum" -> DeviceModuleCard(
+                        title = "DRUM RACK",
+                        subtitle = "STEP SEQUENCER",
+                        palette = palette,
+                        body = "The current drum track uses the native step sequencer. Select a MIDI track to open DirectWave."
+                    )
+                    else -> DeviceModuleCard(
+                        title = "AUDIO TRACK",
+                        subtitle = "CLIP / SAMPLE SOURCE",
+                        palette = palette,
+                        body = "Audio source editing and trim remain in Clip View. An effect insert is shown only when a real processor is available."
+                    )
                 }
             }
         }
@@ -4222,19 +4248,19 @@ private fun DeviceModuleCard(
     body: String
 ) {
     Column(
-        Modifier.width(156.dp).height(176.dp)
+        Modifier.width(320.dp).height(160.dp)
             .background(palette.panel, RoundedCornerShape(4.dp))
-            .border(1.dp, palette.border.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-            .padding(7.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
+            .border(1.dp, palette.border, RoundedCornerShape(4.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            Box(Modifier.size(7.dp).background(palette.orange, RoundedCornerShape(50)))
-            Text(title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(8.dp).background(palette.orange, RoundedCornerShape(1.dp)))
+            Text(title, color = palette.text, fontSize = 10.sp, fontWeight = FontWeight.Black, maxLines = 1)
         }
-        Text(subtitle, color = palette.accent, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-        Divider(color = palette.border)
-        Text(body, color = palette.muted, fontSize = 8.sp, lineHeight = 11.sp)
+        Text(subtitle, color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Black)
+        HorizontalDivider(color = palette.border)
+        Text(body, color = palette.muted, fontSize = 9.sp, lineHeight = 13.sp)
     }
 }
 
@@ -4251,23 +4277,17 @@ private fun DirectWaveDevicePanel(
         context.getSharedPreferences("studiowave_directwave", android.content.Context.MODE_PRIVATE)
     }
     if (trackKind != "midi") {
-        Column(
-            Modifier.fillMaxWidth().fillMaxHeight()
-                .background(palette.room, RoundedCornerShape(5.dp)).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
-        ) {
-            Text("DEVICE CHAIN  /  TRACK", color = palette.orange,
-                fontSize = 10.sp, fontWeight = FontWeight.Black)
-            Text(if (trackKind == "audio") "Audio track · audio processors" else "Drum track · drum devices",
-                color = palette.text, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("Device state is scoped to this track. DirectWave is an instrument for MIDI tracks; it is not shown as an audio insert.",
-                color = palette.muted, fontSize = 9.sp)
-        }
+        DeviceModuleCard(
+            title = "TRACK DEVICE CHAIN",
+            subtitle = "DIRECTWAVE IS AN INSTRUMENT",
+            palette = palette,
+            body = "DirectWave is available on MIDI tracks. Audio processors are not faked as active devices."
+        )
         return
     }
 
     val sampler = remember(trackId) { DirectWaveSampler(context) }
-    var sampleLabel by remember(trackId) { mutableStateOf("NO SAMPLE LOADED") }
+    var sampleLabel by remember(trackId) { mutableStateOf("ONE SHOT.WAV") }
     var sampleUri by remember(trackId) { mutableStateOf<String?>(null) }
     var sampleReady by remember(trackId) { mutableStateOf(false) }
     var pitch by remember(trackId) { mutableFloatStateOf(0f) }
@@ -4281,9 +4301,51 @@ private fun DirectWaveDevicePanel(
     var category by remember(trackId) { mutableStateOf("ALL") }
     var showSamples by remember(trackId) { mutableStateOf(false) }
     val samples = remember {
-        com.studiowave.app.audio.FactorySampleLibrary.presets.map { preset ->
-            BuiltInStudioSample(preset.category.uppercase(), preset.name, preset.fileName.substringBeforeLast('.'), preset.description)
+        listOf(
+            BuiltInStudioSample("SAMPLES", "One Shot.wav", "one_shot", "Bundled starter one-shot · offline")
+        ) + com.studiowave.app.audio.FactorySampleLibrary.presets.map { preset ->
+            BuiltInStudioSample(
+                preset.category.uppercase(),
+                preset.name,
+                preset.fileName.substringBeforeLast('.'),
+                preset.description
+            )
         }
+    }
+    fun loadBundledOneShot() {
+        val uri = Uri.parse("android.resource://${context.packageName}/${R.raw.one_shot}")
+        sampleUri = uri.toString()
+        sampleLabel = "One Shot.wav"
+        sampleReady = false
+        preferences.edit().putString("sample.$trackId", uri.toString())
+            .putString("sampleName.$trackId", "One Shot.wav").apply()
+        sampler.load(uri) { ready -> sampleReady = ready }
+    }
+    fun loadFactoryPreset(sample: BuiltInStudioSample) {
+        if (sample.assetName == "one_shot") {
+            loadBundledOneShot()
+            return
+        }
+        val presetIndex = com.studiowave.app.audio.FactorySampleLibrary.presets.indexOfFirst {
+            it.fileName.substringBeforeLast('.') == sample.assetName
+        }
+        if (presetIndex < 0) {
+            Toast.makeText(context, "Preset belum tersedia.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val target = java.io.File(context.cacheDir, sample.assetName + ".wav")
+        runCatching { target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex)) }
+            .onFailure {
+                Toast.makeText(context, "Gagal membuat sampel bawaan", Toast.LENGTH_SHORT).show()
+                return
+            }
+        val uri = Uri.fromFile(target)
+        sampleUri = uri.toString()
+        sampleLabel = sample.title
+        sampleReady = false
+        preferences.edit().putString("sample.$trackId", uri.toString())
+            .putString("sampleName.$trackId", sample.title).apply()
+        sampler.load(uri) { ready -> sampleReady = ready }
     }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -4295,7 +4357,8 @@ private fun DirectWaveDevicePanel(
             sampleUri = uri.toString()
             sampleLabel = uri.lastPathSegment?.substringAfterLast('/')?.takeLast(36) ?: "Imported sample"
             sampleReady = false
-            preferences.edit().putString("sample.$trackId", uri.toString()).apply()
+            preferences.edit().putString("sample.$trackId", uri.toString())
+                .putString("sampleName.$trackId", sampleLabel).apply()
             sampler.load(uri) { ready -> sampleReady = ready }
         }
     }
@@ -4310,187 +4373,350 @@ private fun DirectWaveDevicePanel(
         loop = preferences.getBoolean("loop.$trackId", false)
         outputGain = preferences.getFloat("outputGain.$trackId", 0.85f).coerceIn(0f, 1f)
         sampler.outputGain = outputGain
-        sampler.pitchSemitones = pitch.toInt().coerceIn(-12, 12)
+        sampler.pitchSemitones = pitch.toInt()
         sampler.fineTuneCents = fineTune.toInt()
         sampler.attackMs = attack.toInt()
         sampler.decayMs = decay.toInt()
         sampler.sustain = sustain
         sampler.releaseMs = release.toInt()
         sampler.looping = loop
-        preferences.getString("sample.$trackId", null)?.let { saved ->
+        val saved = preferences.getString("sample.$trackId", null)
+        if (!saved.isNullOrBlank()) {
             sampleUri = saved
-            val uri = Uri.parse(saved)
-            sampleLabel = uri.lastPathSegment?.substringAfterLast('/')?.takeLast(36) ?: "Saved sample"
-            sampler.load(uri) { ready -> sampleReady = ready }
+            sampleLabel = preferences.getString("sampleName.$trackId", null)
+                ?: Uri.parse(saved).lastPathSegment?.substringAfterLast('/')?.takeLast(36)
+                ?: "Saved sample"
+            sampler.load(Uri.parse(saved)) { ready -> sampleReady = ready }
+        } else {
+            loadBundledOneShot()
         }
     }
 
+    val compact = !fullHeight
+    val knobSize = if (compact) 48.dp else 62.dp
+    val waveformHeight = if (compact) 45.dp else 76.dp
+    val panelHeight = if (compact) 287.dp else 410.dp
     val isBuiltIn = sampleUri?.startsWith("android.resource://${context.packageName}/") == true
+    val statusText = when {
+        sampleReady && isBuiltIn -> "FACTORY SAMPLE · READY"
+        sampleReady -> "USER SAMPLE · READY"
+        sampleUri != null -> "LOADING SAMPLE"
+        else -> "NO SAMPLE"
+    }
+
     Column(
-        (if (fullHeight) Modifier.width(420.dp).fillMaxHeight()
-            else Modifier.width(420.dp).height(188.dp))
-            .background(palette.canvas, RoundedCornerShape(3.dp))
-            .border(1.dp, palette.border, RoundedCornerShape(3.dp)).padding(4.dp),
-        verticalArrangement = Arrangement.spacedBy(if (fullHeight) 4.dp else 3.dp)
+        Modifier.width(if (fullHeight) 650.dp else 610.dp)
+            .height(if (fullHeight) panelHeight else 287.dp)
+            .background(palette.canvas, RoundedCornerShape(4.dp))
+            .border(1.dp, palette.border, RoundedCornerShape(4.dp))
+            .padding(4.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
     ) {
-        // Device-strip header: status light, device title and a clear sample picker like Ableton.
+        // Ableton-inspired device shell: narrow title strip, activated state, grouped macro controls.
         Row(
-            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(4.dp)).padding(5.dp),
+            Modifier.fillMaxWidth().height(30.dp)
+                .background(palette.panel, RoundedCornerShape(3.dp))
+                .padding(horizontal = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Box(Modifier.size(7.dp).background(if (sampleReady) palette.accent else palette.orange, RoundedCornerShape(50)))
-            Column(Modifier.weight(1f)) {
-                Text("DIRECTWAVE", color = palette.text, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                Text("$trackName · ${if (sampleReady) "READY" else sampleLabel}", color = palette.muted, fontSize = 8.sp, maxLines = 1)
+            Box(Modifier.size(7.dp).background(if (sampleReady) palette.accent else palette.orange, RoundedCornerShape(1.dp)))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+                Text("DIRECTWAVE", color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                Text("SAMPLER  ·  ${trackName.uppercase()}", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            SmallAction("SELECT SAMPLE ▾") { showSamples = !showSamples }
-            SmallAction(if (loop) "LOOP ●" else "LOOP ○") {
+            Text(statusText, color = if (sampleReady) palette.accent else palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+            DirectWaveStateButton("SAMPLE ▾", showSamples, palette) { showSamples = !showSamples }
+            DirectWaveStateButton(if (loop) "LOOP ON" else "LOOP OFF", loop, palette) {
                 loop = !loop
                 sampler.looping = loop
                 preferences.edit().putBoolean("loop.$trackId", loop).apply()
+            }
+            DirectWaveStateButton("LOAD WAV", false, palette) {
+                launcher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/mpeg", "audio/*"))
             }
         }
 
         if (showSamples) {
             Column(
                 Modifier.fillMaxWidth()
-                    .heightIn(max = if (fullHeight) 112.dp else 64.dp)
+                    .heightIn(max = 65.dp)
                     .verticalScroll(rememberScrollState())
-                    .background(palette.panel, RoundedCornerShape(3.dp)).padding(5.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                    .background(palette.panel, RoundedCornerShape(3.dp))
+                    .padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Text("STUDIOWAVE SAMPLE LIBRARY", color = palette.orange, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("ALL", "ARP", "BASS", "LEAD", "KEYBOARD", "ORCHESTRA", "SYNTH", "PAD").forEach { item ->
-                        SmallAction(if (category == item) "• $item" else item) { category = item }
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    listOf("ALL", "SAMPLES", "ARP", "BASS", "LEAD", "KEYBOARD", "ORCHESTRA", "SYNTH", "PAD").forEach { item ->
+                        DirectWaveStateButton(item, category == item, palette) { category = item }
                     }
                 }
                 val filtered = samples.filter { category == "ALL" || it.category == category }
-                if (filtered.isEmpty()) {
-                    Text("No samples in this category.", color = palette.muted, fontSize = 8.sp)
-                } else {
-                    filtered.forEach { sample ->
-                        Row(
-                            Modifier.fillMaxWidth().background(palette.room, RoundedCornerShape(3.dp))
-                                .clickable {
-                                                                        val presetIndex = com.studiowave.app.audio.FactorySampleLibrary.presets.indexOfFirst {
-                                        it.fileName.substringBeforeLast('.') == sample.assetName
-                                    }
-                                    if (presetIndex >= 0) {
-                                        val target = java.io.File(context.cacheDir, sample.assetName + ".wav")
-                                        runCatching { target.writeBytes(com.studiowave.app.audio.FactorySampleLibrary.wavBytes(presetIndex)) }
-                                            .onFailure { Toast.makeText(context, "Gagal membuat sampel bawaan", Toast.LENGTH_SHORT).show() }
-                                        val uri = Uri.fromFile(target)
-                                        sampleUri = uri.toString()
-                                        sampleLabel = sample.title
-                                        sampleReady = false
-                                        preferences.edit().putString("sample.$trackId", uri.toString())
-                                            .putString("sampleName.$trackId", sample.title).apply()
-                                        sampler.load(uri) { ready -> sampleReady = ready }
-                                    } else {
-                                        Toast.makeText(context, "Preset belum tersedia.", Toast.LENGTH_SHORT).show()
-                                    }
-                                }.padding(horizontal = 6.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(sample.title, color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                Text(sample.description, color = palette.muted, fontSize = 8.sp)
-                            }
-                            Text(if (sampleUri == Uri.fromFile(java.io.File(context.cacheDir, sample.assetName + ".wav")).toString()) "SELECTED" else "LOAD",
-                                color = palette.accent, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                filtered.forEach { sample ->
+                    Row(
+                        Modifier.fillMaxWidth()
+                            .background(if (sampleUri?.contains(sample.assetName) == true) palette.raised else palette.room, RoundedCornerShape(2.dp))
+                            .clickable { loadFactoryPreset(sample) }
+                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.width(3.dp).height(23.dp).background(palette.orange, RoundedCornerShape(1.dp)))
+                        Spacer(Modifier.width(7.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(sample.title.uppercase(), color = palette.text, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                            Text(sample.description, color = palette.muted, fontSize = 7.sp, maxLines = 1)
                         }
+                        Text(if (sampleUri?.contains(sample.assetName) == true) "LOADED" else "LOAD", color = palette.accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
                     }
                 }
-                SmallAction("IMPORT WAV / MP3…") {
-                    showSamples = false
-                    launcher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/mpeg", "audio/*"))
+            }
+        }
+
+        Row(
+            Modifier.fillMaxWidth().height(if (compact) 55.dp else 89.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                Modifier.weight(1.1f).fillMaxHeight()
+                    .background(palette.panel, RoundedCornerShape(3.dp)).padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("SAMPLE", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.weight(1f))
+                    Text(if (sampleReady) "READY" else "SOURCE", color = palette.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(sampleLabel.uppercase(), color = palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                DirectWaveSampleWaveform(
+                    sampleUri = sampleUri,
+                    sampleReady = sampleReady,
+                    palette = palette,
+                    compact = compact,
+                    onImport = { launcher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/mpeg", "audio/*")) }
+                )
+            }
+            Column(
+                Modifier.weight(1f).fillMaxHeight()
+                    .background(palette.panel, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text("TUNE / OUTPUT", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                    DirectWaveKnob("PITCH", pitch, -12f..12f, "${pitch.toInt()} st", palette, Modifier.weight(1f), knobSize) {
+                        pitch = it; sampler.pitchSemitones = it.toInt()
+                        preferences.edit().putInt("pitch.$trackId", it.toInt()).apply()
+                    }
+                    DirectWaveKnob("FINE", fineTune, -100f..100f, "${fineTune.toInt()} ct", palette, Modifier.weight(1f), knobSize) {
+                        fineTune = it; sampler.fineTuneCents = it.toInt()
+                        preferences.edit().putInt("fineTune.$trackId", it.toInt()).apply()
+                    }
+                    DirectWaveKnob("LEVEL", outputGain, 0f..1f, "${(outputGain * 100).toInt()}%", palette, Modifier.weight(1f), knobSize) {
+                        outputGain = it; sampler.outputGain = it
+                        preferences.edit().putFloat("outputGain.$trackId", it).apply()
+                    }
                 }
             }
         }
 
-        // Wave display is deliberately compact but real: the bundled/imported file is previewed
-        // via peaks decoded on IO, instead of using an arbitrary static waveform.
-        DirectWaveSampleWaveform(
-            sampleUri = sampleUri,
-            sampleReady = sampleReady,
-            palette = palette,
-            onImport = { launcher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/mpeg", "audio/*")) }
-        )
-
-        Row(
-            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(2.dp))
-                .padding(horizontal = 5.dp, vertical = 0.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        Column(
+            Modifier.fillMaxWidth().weight(1f)
+                .background(palette.panel, RoundedCornerShape(3.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(1.dp)
         ) {
-            DirectWaveReadout("PITCH", "${pitch.toInt()} st", palette, Modifier.width(52.dp))
-            Slider(value = pitch, onValueChange = {
-                pitch = it; sampler.pitchSemitones = it.toInt()
-            }, onValueChangeFinished = { preferences.edit().putInt("pitch.$trackId", pitch.toInt()).apply() },
-                valueRange = -12f..12f, modifier = Modifier.weight(1f).height(26.dp))
-            DirectWaveReadout("FINE", "${fineTune.toInt()} ct", palette, Modifier.width(52.dp))
-            Slider(value = fineTune, onValueChange = {
-                fineTune = it; sampler.fineTuneCents = it.toInt()
-            }, onValueChangeFinished = { preferences.edit().putInt("fineTune.$trackId", fineTune.toInt()).apply() },
-                valueRange = -100f..100f, modifier = Modifier.weight(1f).height(26.dp))
+            Row(Modifier.fillMaxWidth().height(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("AMP ENVELOPE", color = palette.orange, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.weight(1f))
+                Text("ADSR", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold)
+            }
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                DirectWaveKnob("ATTACK", attack, 0f..2000f, "${attack.toInt()} ms", palette, Modifier.weight(1f), knobSize) {
+                    attack = it; sampler.attackMs = it.toInt()
+                    preferences.edit().putInt("attack.$trackId", it.toInt()).apply()
+                }
+                DirectWaveKnob("DECAY", decay, 0f..2000f, "${decay.toInt()} ms", palette, Modifier.weight(1f), knobSize) {
+                    decay = it; sampler.decayMs = it.toInt()
+                    preferences.edit().putInt("decay.$trackId", it.toInt()).apply()
+                }
+                DirectWaveKnob("SUSTAIN", sustain, 0f..1f, "${(sustain * 100).toInt()}%", palette, Modifier.weight(1f), knobSize) {
+                    sustain = it; sampler.sustain = it
+                    preferences.edit().putInt("sustain.$trackId", (it * 100).toInt()).apply()
+                }
+                DirectWaveKnob("RELEASE", release, 0f..2000f, "${release.toInt()} ms", palette, Modifier.weight(1f), knobSize) {
+                    release = it; sampler.releaseMs = it.toInt()
+                    preferences.edit().putInt("release.$trackId", it.toInt()).apply()
+                }
+            }
         }
 
-        Row(
-            Modifier.fillMaxWidth().background(palette.panel, RoundedCornerShape(2.dp))
-                .padding(horizontal = 3.dp, vertical = 0.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(Modifier.weight(0.82f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("OUT", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
-                Text("${(outputGain * 100).toInt()}%", color = palette.text, fontSize = 8.sp)
-                Slider(value = outputGain, onValueChange = {
-                    outputGain = it.coerceIn(0f, 1f); sampler.outputGain = outputGain
-                }, onValueChangeFinished = { preferences.edit().putFloat("outputGain.$trackId", outputGain).apply() },
-                    valueRange = 0f..1f, modifier = Modifier.fillMaxWidth().height(25.dp))
-            }
-            DirectWaveEnvelopeControl("A", attack, 0f..2000f, palette, Modifier.weight(1f)) {
-                attack = it; sampler.attackMs = it.toInt()
-                preferences.edit().putInt("attack.$trackId", it.toInt()).apply()
-            }
-            DirectWaveEnvelopeControl("D", decay, 0f..2000f, palette, Modifier.weight(1f)) {
-                decay = it; sampler.decayMs = it.toInt()
-                preferences.edit().putInt("decay.$trackId", it.toInt()).apply()
-            }
-            DirectWaveEnvelopeControl("S", sustain, 0f..1f, palette, Modifier.weight(1f)) {
-                sustain = it; sampler.sustain = it
-                preferences.edit().putInt("sustain.$trackId", (it * 100).toInt()).apply()
-            }
-            DirectWaveEnvelopeControl("R", release, 0f..2000f, palette, Modifier.weight(1f)) {
-                release = it; sampler.releaseMs = it.toInt()
-                preferences.edit().putInt("release.$trackId", it.toInt()).apply()
-            }
-        }
-        Row(Modifier.fillMaxWidth().height(if (fullHeight) 25.dp else 23.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Row(Modifier.fillMaxWidth().height(23.dp), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("KEYBOARD", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Black)
             listOf(48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67).forEach { note ->
                 val label = listOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")[note % 12]
                 Surface(
-                    color = if (note % 12 in setOf(1, 3, 6, 8, 10)) palette.control else palette.panel,
-                    contentColor = palette.text, shape = RoundedCornerShape(3.dp),
+                    color = if (note % 12 in setOf(1, 3, 6, 8, 10)) palette.control else palette.raised,
+                    contentColor = palette.text, shape = RoundedCornerShape(2.dp),
                     border = BorderStroke(1.dp, palette.border),
-                    modifier = Modifier.weight(1f).height(23.dp).pointerInput(note, sampleReady) {
+                    modifier = Modifier.weight(1f).fillMaxHeight().pointerInput(note, sampleReady) {
                         detectTapGestures(onPress = {
                             if (sampleReady) sampler.noteOn(note)
                             tryAwaitRelease()
                             sampler.noteOff(note)
                         })
                     }
-                ) { Box(contentAlignment = Alignment.Center) { Text(label, fontSize = 8.sp, fontWeight = FontWeight.Bold) } }
+                ) { Box(contentAlignment = Alignment.Center) { Text(label, fontSize = 7.sp, fontWeight = FontWeight.Bold) } }
             }
         }
-        if (!fullHeight) {
-            Text(
-                if (sampleReady) "16 VOICES · PER-TRACK INSTRUMENT · MIDI ROUTE"
-                else "WAV/MP3 + bundled samples · DWP maps unsupported",
-                color = palette.muted, fontSize = 8.sp, maxLines = 1
+    }
+}
+
+private data class BuiltInStudioSample(
+    val category: String,
+    val title: String,
+    val assetName: String,
+    val description: String
+)
+
+@Composable
+private fun DirectWaveStateButton(
+    label: String,
+    active: Boolean,
+    palette: StudioWavePalette,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (active) palette.accent.copy(alpha = 0.18f) else palette.control,
+        contentColor = if (active) palette.accent else palette.text,
+        shape = RoundedCornerShape(3.dp),
+        border = BorderStroke(1.dp, if (active) palette.accent else palette.border),
+        modifier = Modifier.height(23.dp).clickable(onClick = onClick)
+    ) {
+        Box(Modifier.padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+            Text(label, fontSize = 7.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun DirectWaveKnob(
+    label: String,
+    value: Float,
+    range: ClosedFloatingPointRange<Float>,
+    valueLabel: String,
+    palette: StudioWavePalette,
+    modifier: Modifier = Modifier,
+    knobSize: androidx.compose.ui.unit.Dp = 56.dp,
+    onValueChange: (Float) -> Unit
+) {
+    val latestValue = rememberUpdatedState(value)
+    val latestOnChange = rememberUpdatedState(onValueChange)
+    val fraction = ((value - range.start) / (range.endInclusive - range.start).coerceAtLeast(0.0001f)).coerceIn(0f, 1f)
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Canvas(
+            Modifier.size(knobSize)
+                .pointerInput(range.start, range.endInclusive) {
+                    var accumulated = 0f
+                    var startValue = latestValue.value
+                    detectDragGestures(
+                        onDragStart = { accumulated = 0f; startValue = latestValue.value },
+                        onDrag = { change, drag ->
+                            change.consume()
+                            accumulated += drag.y
+                            val span = range.endInclusive - range.start
+                            // A vertical drag is reliable on compact mobile device controls and keeps the knob touch-sized.
+                            val next = (startValue - accumulated / 105f * span).coerceIn(range.start, range.endInclusive)
+                            latestOnChange.value(next)
+                        }
+                    )
+                }
+        ) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            val radius = size.minDimension * 0.34f
+            val ringRadius = radius + size.minDimension * 0.105f
+            val rectTop = Offset(center.x - ringRadius, center.y - ringRadius)
+            val rectSize = Size(ringRadius * 2f, ringRadius * 2f)
+            drawCircle(palette.room.copy(alpha = 0.72f), radius * 1.15f, center)
+            drawCircle(palette.control, radius, center)
+            drawCircle(palette.border, radius, center, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
+            drawArc(
+                palette.border.copy(alpha = 0.92f), 135f, 270f, false, rectTop, rectSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
             )
+            drawArc(
+                palette.accent, 135f, 270f * fraction, false, rectTop, rectSize,
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            )
+            for (tick in 0..10) {
+                val angle = Math.toRadians((135.0 + tick / 10.0 * 270.0))
+                val inner = ringRadius + size.minDimension * 0.015f
+                val outer = inner + if (tick % 5 == 0) size.minDimension * 0.045f else size.minDimension * 0.025f
+                drawLine(
+                    palette.muted.copy(alpha = if (tick % 5 == 0) 0.85f else 0.48f),
+                    Offset(center.x + kotlin.math.cos(angle).toFloat() * inner, center.y + kotlin.math.sin(angle).toFloat() * inner),
+                    Offset(center.x + kotlin.math.cos(angle).toFloat() * outer, center.y + kotlin.math.sin(angle).toFloat() * outer),
+                    if (tick % 5 == 0) 1.dp.toPx() else 0.65.dp.toPx()
+                )
+            }
+            val angle = Math.toRadians((135.0 + fraction * 270.0))
+            drawLine(
+                palette.text, center,
+                Offset(center.x + kotlin.math.cos(angle).toFloat() * radius * 0.7f, center.y + kotlin.math.sin(angle).toFloat() * radius * 0.7f),
+                2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
+            drawCircle(palette.muted.copy(alpha = 0.55f), radius * 0.09f, center)
+        }
+        Text(label, color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(valueLabel, color = palette.text, fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun DirectWaveSampleWaveform(
+    sampleUri: String?,
+    sampleReady: Boolean,
+    palette: StudioWavePalette,
+    compact: Boolean = false,
+    onImport: () -> Unit
+) {
+    val context = LocalContext.current
+    var peaks by remember(sampleUri) { mutableStateOf<List<Float>>(emptyList()) }
+    LaunchedEffect(sampleUri) {
+        peaks = emptyList()
+        if (sampleUri.isNullOrBlank()) return@LaunchedEffect
+        try {
+            peaks = withContext(Dispatchers.IO) {
+                decodeWaveformPeaks(context, Uri.parse(sampleUri), if (compact) 80 else 180)
+            }
+        } catch (_: Exception) { peaks = emptyList() }
+    }
+    Column(
+        Modifier.fillMaxWidth().height(if (compact) 26.dp else 55.dp)
+            .background(palette.canvas, RoundedCornerShape(2.dp)).padding(2.dp),
+        verticalArrangement = Arrangement.spacedBy(1.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("WAVEFORM", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.weight(1f))
+            Text(if (sampleReady) "PCM READY" else "LOADING", color = if (sampleReady) palette.accent else palette.muted, fontSize = 5.sp)
+            SmallAction("IMPORT") { onImport() }
+        }
+        Canvas(Modifier.fillMaxSize()) {
+            val mid = size.height / 2f
+            drawLine(palette.grid, Offset.Zero.copy(y = mid), Offset(size.width, mid), 0.7f)
+            if (peaks.isNotEmpty()) {
+                val dx = size.width / peaks.size
+                peaks.forEachIndexed { index, peak ->
+                    val amp = peak.coerceIn(0.015f, 1f) * size.height * 0.46f
+                    val x = (index + 0.5f) * dx
+                    drawLine(palette.accent, Offset(x, mid - amp), Offset(x, mid + amp), (dx * 0.7f).coerceAtLeast(0.7f))
+                }
+            } else {
+                for (index in 0 until 48) {
+                    val x = size.width * index / 48f
+                    val h = size.height * (0.07f + (index % 7) / 20f)
+                    drawLine(palette.grid, Offset(x, mid - h), Offset(x, mid + h), 1f)
+                }
+            }
         }
     }
 }
