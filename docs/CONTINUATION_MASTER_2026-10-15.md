@@ -89,3 +89,12 @@ Implementation baseline `c61feedbaf83411a7afde5bdac362a5b2a104670` passed debug 
 - This is a rendering-only adjustment; musical ticks, viewport mapping, clip positions, snap, gestures, and the 1,800-bar cap are unchanged.
 - Commit: `0a7bc028dbcbb104d9e7f434549003f0ca1807f9`.
 - Validation: check the commit's Android CI result before treating it as verified; physical-device comparison is still pending.
+
+
+## Integrated Arrangement + Piano Roll visual pass — 2026-10-16
+- Source changes on `ui/ableton-batch-viewport`:
+  - `de9461f73b542befccd0883c1dc1df638b1750a4`: tightened Arrangement clip body/outline geometry to square Live-inspired edges; MIDI clip thumbnails now include a bar line at tick zero and stronger bar guides; Piano Roll notes use flat rectangular geometry and velocity-dependent opacity while selected notes remain orange.
+  - `45f7932659c367b3003b0377d31cd067a4ee7ece`: added regression coverage for zoom after horizontal scroll, fractional anchor preservation, tick/pixel round trips, clip width invariance, and playhead visibility near arrangement endpoints.
+- The changes do not modify clip musical positions/durations, PPQ, snap math, hit testing, the shared viewport transform, or the 1,800-bar limit.
+- CI must be checked for the latest branch head before reporting build/tests/artifact success. Physical Android landscape checks remain required for clip visual fit, touch interactions, playback-follow and Piano Roll note editing.
+- Current scope remains an Ableton Live-inspired native implementation, not a claim of pixel-identical proprietary UI. Do not copy Ableton code/assets or claim unsupported DSP/instruments as complete.
