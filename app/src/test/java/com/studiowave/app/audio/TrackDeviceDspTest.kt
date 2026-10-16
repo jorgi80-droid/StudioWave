@@ -63,6 +63,26 @@ class TrackDeviceDspTest {
         assertTrue(masterA.indices.any { abs(masterA[it] - masterB[it]) > 0.00001f })
     }
 
+    @Test fun compressorPublishesActualBlockGainReduction() {
+        val engine = TrackDeviceDsp(44100)
+        val compressor = TrackDevice(
+            type = "COMPRESSOR",
+            name = "Compressor",
+            parameters = defaultDeviceParameters("COMPRESSOR") + mapOf(
+                "thresholdDb" to -18f, "ratio" to 4f, "attackMs" to 0.1f, "releaseMs" to 120f
+            )
+        )
+        val input = FloatArray(16_384) { 0.95f }
+        val master = FloatArray(input.size)
+        engine.process(input, master, input.size, 1f, listOf(compressor))
+        assertTrue("gain reduction should follow actual compressed signal", engine.gainReductionDbSnapshot() > 3f)
+        assertTrue(engine.gainReductionDbSnapshot() <= 60f)
+
+        engine.process(FloatArray(input.size), FloatArray(input.size), input.size, 1f,
+            listOf(compressor.copy(enabled = false)))
+        assertTrue("bypassing the compressor clears its GR display", engine.gainReductionDbSnapshot() == 0f)
+    }
+
     @Test fun disabledEffectIsBypassed() {
         val engine=TrackDeviceDsp(44100);val input=impulse(64);val original=input.copyOf();val master=FloatArray(input.size)
         engine.process(input,master,input.size,1f,listOf(TrackDevice(type="SATURATOR",name="Off",enabled=false,parameters=defaultDeviceParameters("SATURATOR"))))

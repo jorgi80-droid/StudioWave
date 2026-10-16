@@ -169,7 +169,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val peakLeft: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
         val peakRight: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
         val rmsLeft: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
-        val rmsRight: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
+        val rmsRight: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f)),
+        val compressorGainReductionDb: java.util.concurrent.atomic.AtomicInteger = java.util.concurrent.atomic.AtomicInteger(java.lang.Float.floatToRawIntBits(0f))
     )
     private val trackMeterBits = java.util.concurrent.ConcurrentHashMap<String, TrackMeterBits>()
     @Volatile private var liveMix = MixSnapshot(emptyMap(), false)
@@ -191,7 +192,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val peakLeft: Float,
         val peakRight: Float,
         val rmsLeft: Float,
-        val rmsRight: Float
+        val rmsRight: Float,
+        val compressorGainReductionDb: Float = 0f
     ) {
         val peak: Float get() = maxOf(peakLeft, peakRight)
         val rms: Float get() = maxOf(rmsLeft, rmsRight)
@@ -204,18 +206,23 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             java.lang.Float.intBitsToFloat(meter.peakLeft.get()).coerceIn(0f, 1f),
             java.lang.Float.intBitsToFloat(meter.peakRight.get()).coerceIn(0f, 1f),
             java.lang.Float.intBitsToFloat(meter.rmsLeft.get()).coerceIn(0f, 1f),
-            java.lang.Float.intBitsToFloat(meter.rmsRight.get()).coerceIn(0f, 1f)
+            java.lang.Float.intBitsToFloat(meter.rmsRight.get()).coerceIn(0f, 1f),
+            java.lang.Float.intBitsToFloat(meter.compressorGainReductionDb.get()).coerceIn(0f, 60f)
         )
     }
 
     private fun publishTrackMeter(
-        trackId: String, peakLeft: Float, peakRight: Float, rmsLeft: Float, rmsRight: Float
+        trackId: String, peakLeft: Float, peakRight: Float, rmsLeft: Float, rmsRight: Float,
+        compressorGainReductionDb: Float = 0f
     ) {
         val meter = trackMeterBits.computeIfAbsent(trackId) { TrackMeterBits() }
         meter.peakLeft.set(java.lang.Float.floatToRawIntBits(peakLeft.coerceIn(0f, 1f)))
         meter.peakRight.set(java.lang.Float.floatToRawIntBits(peakRight.coerceIn(0f, 1f)))
         meter.rmsLeft.set(java.lang.Float.floatToRawIntBits(rmsLeft.coerceIn(0f, 1f)))
         meter.rmsRight.set(java.lang.Float.floatToRawIntBits(rmsRight.coerceIn(0f, 1f)))
+        meter.compressorGainReductionDb.set(java.lang.Float.floatToRawIntBits(
+            compressorGainReductionDb.takeIf { it.isFinite() }?.coerceIn(0f, 60f) ?: 0f
+        ))
     }
 
     /** Snapshot of the real post-master PCM spectrum, calculated on a worker thread. */
@@ -1505,8 +1512,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 // Apply enabled track inserts in chain order to the per-track bus.
                 perTrackMix.forEach { (trackId, channel) ->
                     val trackState = mixState.tracks[trackId] ?: return@forEach
+                    val processor = deviceDsp[trackId]
                     if (trackState.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
-                        deviceDsp[trackId]?.process(channel, mix, sampleCount, liveMasterGain, trackState.devices)
+                        processor?.process(channel, mix, sampleCount, liveMasterGain, trackState.devices)
+                    } else {
+                        processor?.resetGainReductionDbSnapshot()
                     }
                 }
                 // Per-channel meters are calculated from each track's summed pre-master stereo bus.
@@ -1526,7 +1536,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat(), momentaryLufs)
                 perTrackMix.forEach { (id, channel) ->
                     val levels = measureStereoMeterLevels(channel, sampleCount)
-                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight)
+                    val gainReductionDb = deviceDsp[id]?.gainReductionDbSnapshot() ?: 0f
+                    publishTrackMeter(id, levels.peakLeft, levels.peakRight, levels.rmsLeft, levels.rmsRight, gainReductionDb)
                 }
                 // A silent/muted channel should not leave an old level stuck on screen.
                 mixState.tracks.keys.forEach { id ->

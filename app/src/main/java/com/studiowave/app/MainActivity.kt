@@ -1434,7 +1434,8 @@ private fun StudioWaveApp() {
                             onProjectChange = { changeProject(it) },
                             onToggle = { selectedWorkspace = "ARRANGEMENT" },
                             fullScreen = true,
-                            spectrumValues = analyzerValues
+                            spectrumValues = analyzerValues,
+                            trackMeterReadings = trackMeterReadings
                         )
                         "MIXER" -> MixerWorkspace(
                             project,
@@ -5273,7 +5274,8 @@ private fun DeviceDock(
     onProjectChange: (StudioProject) -> Unit,
     onToggle: () -> Unit,
     fullScreen: Boolean = false,
-    spectrumValues: FloatArray = FloatArray(PcmSpectrumAnalyzer.BAND_COUNT)
+    spectrumValues: FloatArray = FloatArray(PcmSpectrumAnalyzer.BAND_COUNT),
+    trackMeterReadings: Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot> = emptyMap()
 ) {
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     val palette = LocalStudioWavePalette.current
@@ -5389,7 +5391,14 @@ private fun DeviceDock(
                     val effects = track.devices.filter { it.type in EFFECT_DEVICE_TYPES }
                     effects.forEachIndexed { index, device ->
                         DeviceChainSlotMarker(number = index + 2, palette = palette)
-                        TrackEffectDeviceCard(device = device, palette = palette, onUpdate = { changed -> applyDeviceList(track.devices.map { if (it.id == changed.id) changed else it }) }, onRemove = { applyDeviceList(track.devices.filterNot { it.id == device.id }) })
+                        TrackEffectDeviceCard(
+                            device = device,
+                            palette = palette,
+                            gainReductionDb = if (device.type == "COMPRESSOR")
+                                trackMeterReadings[track.id]?.compressorGainReductionDb ?: 0f else 0f,
+                            onUpdate = { changed -> applyDeviceList(track.devices.map { if (it.id == changed.id) changed else it }) },
+                            onRemove = { applyDeviceList(track.devices.filterNot { it.id == device.id }) }
+                        )
                     }
                     if (effects.isEmpty()) DeviceModuleCard("NO INSERT FX", "EMPTY EFFECT CHAIN", palette, "Tap + ADD FX to insert an audio processor. Values are saved with this project.")
                 }
@@ -5824,10 +5833,23 @@ private data class BuiltInStudioSample(
 private fun TrackEffectDeviceCard(
     device: TrackDevice,
     palette: StudioWavePalette,
+    gainReductionDb: Float = 0f,
     onUpdate: (TrackDevice) -> Unit,
     onRemove: () -> Unit
 ) {
     val p = device.parameters
+    val latestDevice by rememberUpdatedState(device)
+    val latestDeviceUpdate by rememberUpdatedState(onUpdate)
+    val eqDefaults = remember { defaultDeviceParameters("PARAM_EQ_8") }
+    val eqResponseParameters = remember(device.id, p) { eqDefaults + p }
+    val eqResponse = remember(device.id, p, device.enabled) {
+        List(97) { index ->
+            val norm = index / 96f
+            ParametricEqMath.responseDbAt(
+                ParametricEqMath.frequencyHzForNorm(norm), 44_100, eqResponseParameters, enabled = device.enabled
+            ).toFloat().coerceIn(-18f, 18f)
+        }
+    }
     val enabledAccent by androidx.compose.animation.animateColorAsState(
         targetValue = if (device.enabled) palette.orange else palette.border,
         animationSpec = tween(durationMillis = 120),
@@ -5893,41 +5915,75 @@ private fun TrackEffectDeviceCard(
                     (p["band${band}FreqNorm"] ?: defaultFreqNorms[band - 1]).coerceIn(0f, 1f)
                 }
                 Canvas(
-                    Modifier.fillMaxWidth().height(58.dp)
+                    Modifier.fillMaxWidth().height(86.dp)
                         .background(palette.canvas, RoundedCornerShape(1.dp))
                         .border(1.dp, palette.border, RoundedCornerShape(1.dp))
+                        .pointerInput(device.id, device.enabled) {
+                            var dragBand = selectedBand
+                            detectDragGestures(
+                                onDragStart = { start ->
+                                    val current = latestDevice
+                                    val defaults = defaultDeviceParameters("PARAM_EQ_8")
+                                    dragBand = (1..8).minByOrNull { band ->
+                                        val key = "band${band}FreqNorm"
+                                        val norm = (current.parameters[key] ?: defaults[key] ?: 0.5f).coerceIn(0f, 1f)
+                                        kotlin.math.abs(norm - (start.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f))
+                                    } ?: 1
+                                    selectedBand = dragBand
+                                },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    val current = latestDevice
+                                    val norm = (change.position.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                                    val gainDb = ((0.5f - change.position.y / size.height.coerceAtLeast(1f)) * 36f)
+                                        .coerceIn(-18f, 18f)
+                                    latestDeviceUpdate(current.copy(parameters = current.parameters + mapOf(
+                                        "band${dragBand}FreqNorm" to norm,
+                                        "band$dragBand" to gainDb
+                                    )))
+                                }
+                            )
+                        }
                 ) {
-                    val midY = size.height / 2f
+                    // dB grid: +18, +9, 0, -9 and -18 dB.
                     for (line in 0..4) {
                         val y = size.height * line / 4f
                         drawLine(
-                            palette.border.copy(alpha = if (line == 2) 0.95f else 0.48f),
+                            palette.border.copy(alpha = if (line == 2) 0.92f else 0.45f),
                             Offset(0f, y), Offset(size.width, y),
                             if (line == 2) 1.dp.toPx() else 0.6.dp.toPx()
                         )
                     }
-                    // Log-frequency grid divisions (20 Hz to 20 kHz).
+                    // Seven divisions on a logarithmic 20 Hz–20 kHz scale.
                     for (division in 0..6) {
                         val x = size.width * division / 6f
                         drawLine(palette.border.copy(alpha = 0.42f), Offset(x, 0f), Offset(x, size.height), 0.6.dp.toPx())
                     }
-                    // This is a band-gain overview, not a measured FFT or summed filter response.
-                    // Sort by frequency before connecting points so moving bands cannot make the
-                    // overview double back across the graph.
-                    val curveOrder = (0..7).sortedBy { bandFreqNorms[it] }
-                    val curve = androidx.compose.ui.graphics.Path()
-                    curveOrder.forEachIndexed { orderIndex, bandIndex ->
-                        val x = size.width * bandFreqNorms[bandIndex]
-                        val y = midY - (gains[bandIndex] / 18f) * (size.height * 0.44f)
-                        if (orderIndex == 0) curve.moveTo(x, y) else curve.lineTo(x, y)
+                    val responseCurve = androidx.compose.ui.graphics.Path()
+                    eqResponse.forEachIndexed { index, db ->
+                        val x = size.width * index / (eqResponse.size - 1f)
+                        val y = (18f - db) / 36f * size.height
+                        if (index == 0) responseCurve.moveTo(x, y) else responseCurve.lineTo(x, y)
                     }
-                    drawPath(curve, palette.orange, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
-                    gains.forEachIndexed { index, bandGain ->
-                        val x = size.width * bandFreqNorms[index]
-                        val y = midY - (bandGain / 18f) * (size.height * 0.44f)
-                        drawCircle(if (index + 1 == selectedBand) palette.orange else palette.text,
-                            radius = if (index + 1 == selectedBand) 3.dp.toPx() else 2.dp.toPx(), center = Offset(x, y))
+                    drawPath(responseCurve, palette.text, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.8.dp.toPx()))
+                    // Each orange/white node is a draggable EQ band's stored center frequency and gain.
+                    for (band in 1..8) {
+                        val norm = bandFreqNorms[band - 1]
+                        val bandGain = gains[band - 1].coerceIn(-18f, 18f)
+                        val x = size.width * norm
+                        val y = (18f - bandGain) / 36f * size.height
+                        drawCircle(if (band == selectedBand) palette.orange else palette.text,
+                            radius = if (band == selectedBand) 4.dp.toPx() else 2.7.dp.toPx(), center = Offset(x, y))
+                        if (band == selectedBand) {
+                            drawCircle(palette.orange, radius = 6.dp.toPx(), center = Offset(x, y),
+                                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()))
+                        }
                     }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("20 Hz", color = palette.muted, fontSize = 6.sp)
+                    Text("1 kHz", color = palette.muted, fontSize = 6.sp)
+                    Text("20 kHz", color = palette.muted, fontSize = 6.sp)
                 }
                 Text("PARAMETRIC EQ · SELECT BAND TO EDIT", color = palette.orange, fontSize = 6.sp, fontWeight = FontWeight.Black)
                 Row(
@@ -5991,6 +6047,68 @@ private fun TrackEffectDeviceCard(
                 }
             }
             "COMPRESSOR" -> {
+                val thresholdDb = (p["thresholdDb"] ?: -18f).coerceIn(-60f, 0f)
+                val ratio = (p["ratio"] ?: 3f).coerceIn(1f, 20f)
+                Text("INPUT dB → OUTPUT dB · LIVE GAIN REDUCTION", color = palette.muted,
+                    fontSize = 6.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                Row(Modifier.fillMaxWidth().height(105.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Canvas(
+                        Modifier.weight(1f).fillMaxHeight()
+                            .background(palette.canvas, RoundedCornerShape(1.dp))
+                            .border(1.dp, palette.border, RoundedCornerShape(1.dp))
+                    ) {
+                        val left = 3.dp.toPx()
+                        val top = 3.dp.toPx()
+                        val plotWidth = (size.width - left * 2f).coerceAtLeast(1f)
+                        val plotHeight = (size.height - top * 2f).coerceAtLeast(1f)
+                        fun xForDb(db: Float) = left + ((db.coerceIn(-60f, 0f) + 60f) / 60f) * plotWidth
+                        fun yForDb(db: Float) = top + ((0f - db.coerceIn(-60f, 0f)) / 60f) * plotHeight
+                        for (db in listOf(-60f, -45f, -30f, -15f, 0f)) {
+                            drawLine(palette.border.copy(alpha = if (db == -30f) 0.78f else 0.40f),
+                                Offset(left, yForDb(db)), Offset(left + plotWidth, yForDb(db)), 0.7.dp.toPx())
+                            drawLine(palette.border.copy(alpha = 0.26f),
+                                Offset(xForDb(db), top), Offset(xForDb(db), top + plotHeight), 0.6.dp.toPx())
+                        }
+                        // Reference 1:1 line before compression.
+                        drawLine(palette.muted.copy(alpha = 0.75f),
+                            Offset(xForDb(-60f), yForDb(-60f)), Offset(xForDb(0f), yForDb(0f)),
+                            1.dp.toPx())
+                        val transfer = androidx.compose.ui.graphics.Path()
+                        for (sample in 0..120) {
+                            val inputDb = -60f + sample / 2f
+                            val outputDb = if (inputDb > thresholdDb)
+                                thresholdDb + (inputDb - thresholdDb) / ratio else inputDb
+                            val pt = Offset(xForDb(inputDb), yForDb(outputDb))
+                            if (sample == 0) transfer.moveTo(pt.x, pt.y) else transfer.lineTo(pt.x, pt.y)
+                        }
+                        drawPath(transfer, palette.orange,
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+                        drawLine(palette.warning, Offset(xForDb(thresholdDb), top),
+                            Offset(xForDb(thresholdDb), top + plotHeight), 1.dp.toPx())
+                        drawCircle(palette.orange, radius = 3.dp.toPx(),
+                            center = Offset(xForDb(thresholdDb), yForDb(thresholdDb)))
+                    }
+                    Column(Modifier.width(35.dp).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("GR", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                        Canvas(Modifier.fillMaxWidth().weight(1f).padding(vertical = 2.dp)) {
+                            drawRect(palette.room, size = size)
+                            for (step in 0..4) {
+                                val y = size.height * step / 4f
+                                drawLine(palette.border, Offset(0f, y), Offset(size.width, y), 0.6.dp.toPx())
+                            }
+                            val reduction = if (device.enabled) gainReductionDb.coerceIn(0f, 24f) else 0f
+                            val height = size.height * reduction / 24f
+                            if (height > 0f) {
+                                drawRect(palette.orange, Offset(size.width * 0.22f, size.height - height),
+                                    Size(size.width * 0.56f, height))
+                            }
+                        }
+                        Text(String.format(java.util.Locale.US, "%.1f", if (device.enabled) gainReductionDb.coerceIn(0f, 60f) else 0f),
+                            color = if (gainReductionDb >= 12f) palette.warning else palette.text,
+                            fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Text("dB", color = palette.muted, fontSize = 5.sp)
+                    }
+                }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     DirectWaveKnob("THRESH", p["thresholdDb"] ?: -18f, -60f..0f,
                         String.format(java.util.Locale.US, "%.1f dB", p["thresholdDb"] ?: -18f), palette, Modifier.weight(1f), 39.dp) {

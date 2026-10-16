@@ -50,6 +50,15 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
     private val states = HashMap<String, State>()
     @Volatile private var activeChain: List<ActiveDevice> = emptyList()
     @Volatile private var preparedForRealtime = false
+    @Volatile private var compressorGainReductionDb = 0f
+
+    /** Actual maximum gain reduction observed in the most recently processed audio block. */
+    fun gainReductionDbSnapshot(): Float = compressorGainReductionDb.coerceIn(0f, 60f)
+
+    /** Clear a stale display value when the track has no enabled inserts. */
+    fun resetGainReductionDbSnapshot() {
+        compressorGainReductionDb = 0f
+    }
 
     private fun active(device: TrackDevice): Boolean = device.enabled && device.type in EFFECTS
 
@@ -179,7 +188,11 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
             preparedForRealtime = true
         }
         val active = activeChain
-        if (active.isEmpty()) return
+        if (active.isEmpty()) {
+            compressorGainReductionDb = 0f
+            return
+        }
+        var blockMaxGainReductionDb = 0.0
         // Expensive parameter transforms run only when a module's parameter map changes.
         active.forEach { prepareParameters(it) }
 
@@ -246,6 +259,8 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
                         st.envL=la*st.envL+(1-la)*absL;st.envR=lr*st.envR+(1-lr)*absR
                         val detector=max(st.envL,st.envR).coerceAtLeast(1e-7);val inDb=20*log10(detector)
                         val outDb=if(inDb>st.compressorThreshold)st.compressorThreshold+(inDb-st.compressorThreshold)/st.compressorRatio else inDb
+                        val gainReductionDb = (inDb - outDb).coerceAtLeast(0.0)
+                        if (gainReductionDb > blockMaxGainReductionDb) blockMaxGainReductionDb = gainReductionDb
                         val reduction=db((outDb-inDb).toFloat())*st.compressorMakeup
                         left*=reduction;right*=reduction
                     }
@@ -280,6 +295,7 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
             master[i]+=(buffer[i]-dryL.toFloat())*masterGain
             master[i+1]+=(buffer[i+1]-dryR.toFloat())*masterGain
         }
+        compressorGainReductionDb = blockMaxGainReductionDb.coerceIn(0.0, 60.0).toFloat()
     }
     companion object {
         // Log-normalized 20 Hz–20 kHz starting points for the eight EQ bands.
