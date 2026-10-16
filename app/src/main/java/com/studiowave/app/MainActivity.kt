@@ -840,6 +840,7 @@ private fun StudioWaveApp() {
                 val javaUsedMb = runtime.javaHeapUsedBytes / (1024.0 * 1024.0)
                 val javaMaxMb = runtime.javaHeapMaxBytes / (1024.0 * 1024.0)
                 val nativeMb = runtime.nativeHeapUsedBytes / (1024.0 * 1024.0)
+                val pssMb = runtime.processPssBytes / (1024.0 * 1024.0)
                 val cpuLabel = runtime.cpuPercent?.let { "%.1f%%".format(java.util.Locale.US, it) } ?: "sampling…"
                 val fpsLabel = runtime.uiFps?.let { "%.1f fps".format(java.util.Locale.US, it) } ?: "sampling…"
                 val frameLabel = runtime.uiFrameIntervalMs?.let { "%.2f ms".format(java.util.Locale.US, it) } ?: "sampling…"
@@ -854,7 +855,7 @@ private fun StudioWaveApp() {
                     "UNDERRUN MONITOR::${output.underruns} native underruns observed · ${StudioWaveDiagnostics.underrunEvents()} increases logged since session start",
                     "OUTPUT QUEUE::${output.queuedFrames} frames queued · ${output.playedFrames} frames consumed",
                     "PROCESS CPU::$cpuLabel · ${runtime.availableProcessors} logical processors reported by Android",
-                    "MEMORY::Java heap %.1f / %.1f MB · native heap %.1f MB".format(java.util.Locale.US, javaUsedMb, javaMaxMb, nativeMb),
+                    "MEMORY::Process PSS %.1f MB · Java heap %.1f / %.1f MB · native heap %.1f MB".format(java.util.Locale.US, pssMb, javaUsedMb, javaMaxMb, nativeMb),
                     "RENDER PACING::${fpsLabel} estimated UI frame rate · ${frameLabel} mean smoothed frame interval",
                     "PROJECT LOAD::${project.tracks.size} tracks · ${project.tracks.sumOf { it.clips.size }} clips · BPM ${project.bpm}",
                     "MIXER CONFIG::256-frame render blocks · ${if (parallelPreparation) "parallel source preparation ON" else "sequential source preparation"} · realtime mix worker single-threaded",
