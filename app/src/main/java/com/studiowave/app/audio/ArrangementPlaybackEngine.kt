@@ -752,9 +752,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val pcmFile = File.createTempFile("asset-", ".pcm", pcmDirectory)
         var keepPcmFile = false
         var pcmRandomAccess: RandomAccessFile? = null
-        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
+        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
         try {
             extractor.setDataSource(appContext, uri, null)
             var selected = -1
