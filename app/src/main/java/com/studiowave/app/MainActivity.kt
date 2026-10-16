@@ -781,11 +781,11 @@ private fun StudioWaveApp() {
                             }
                         }
                     }
-                    val currentProject = latestProject
+                    var currentProject = latestProject
                     val requestedTrackId = pendingAudioTrackId ?: editorTrackId
-                    val audioTrack = currentProject.tracks.firstOrNull { it.id == requestedTrackId && it.kind == "audio" }
+                    var audioTrack = currentProject.tracks.firstOrNull { it.id == requestedTrackId && it.kind == "audio" }
                         ?: currentProject.tracks.firstOrNull { it.kind == "audio" }
-                    val target = audioTrack ?: StudioTrack(name = "AUDIO 1", colorArgb = 0xFF3B82F6L, kind = "audio")
+                    var target = audioTrack ?: StudioTrack(name = "AUDIO 1", colorArgb = 0xFF3B82F6L, kind = "audio")
                     when {
                         audioTrack == null && currentProject.tracks.size >= StudioProject.MAX_TRACKS -> {
                             audioError = "Track limit reached (${StudioProject.MAX_TRACKS}); remove a track before importing."
@@ -805,6 +805,18 @@ private fun StudioWaveApp() {
                                 (durationMs.coerceAtLeast(50L) / 1000.0)
                                     .coerceIn(0.05, ArrangementPlaybackEngine.MAX_SOURCE_SECONDS.toDouble())
                             )
+                            // Import may take time while transport keeps running. Merge the new
+                            // clip into the latest project snapshot instead of overwriting edits
+                            // that happened during background decoding.
+                            currentProject = latestProject
+                            audioTrack = currentProject.tracks.firstOrNull { it.id == target.id && it.kind == "audio" }
+                            if (audioTrack == null && currentProject.tracks.size >= StudioProject.MAX_TRACKS) {
+                                error("Track limit reached (${StudioProject.MAX_TRACKS}); remove a track before importing.")
+                            }
+                            target = audioTrack ?: target.copy(clips = emptyList())
+                            if (target.clips.size >= StudioProject.MAX_CLIPS_PER_TRACK) {
+                                error("Clip limit reached for the audio track.")
+                            }
                             val timebase = TimelineTimebase(
                                 currentProject.bpm, currentProject.numerator,
                                 currentProject.denominator, currentProject.ppq
