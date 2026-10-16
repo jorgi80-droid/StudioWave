@@ -864,6 +864,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
                             ?.takeIf { it.frames >= request.requestedFrames || it.complete }
                         if (cached == null || (!cached.complete && cached.frames < request.requestedFrames)) {
+                            val decodeStartedNanos = System.nanoTime()
+                            var firstPcmLogged = false
                             val decoded = decodeSemaphore.withPermit {
                                 decodeAudioAsset(
                                     Uri.parse(request.uriString), request.sourceSeconds, token,
@@ -871,6 +873,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                     onPartialAsset = { partial ->
                                         if (!closed.get() && generation.get() == token) {
                                             synchronized(audioAssetCache) { audioAssetCache.put(request.cacheKey, partial) }
+                                            if (!firstPcmLogged) {
+                                                firstPcmLogged = true
+                                                val firstPcmMs = (System.nanoTime() - decodeStartedNanos).coerceAtLeast(0L) / 1_000_000L
+                                                android.util.Log.i(
+                                                    "StudioWaveAudio",
+                                                    "First PCM ready in ${firstPcmMs}ms; frames=${partial.frames}; source=${request.uriString}"
+                                                )
+                                            }
                                             refreshPlanRequests.trySend(Unit)
                                         }
                                     }
@@ -878,6 +888,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             }
                             if (!closed.get() && generation.get() == token) {
                                 synchronized(audioAssetCache) { audioAssetCache.put(request.cacheKey, decoded) }
+                                val totalDecodeMs = (System.nanoTime() - decodeStartedNanos).coerceAtLeast(0L) / 1_000_000L
+                                android.util.Log.i(
+                                    "StudioWaveAudio",
+                                    "PCM source ready in ${totalDecodeMs}ms; frames=${decoded.frames}; complete=${decoded.complete}; source=${request.uriString}"
+                                )
                                 refreshPlanRequests.trySend(Unit)
                             } else {
                                 runCatching { decoded.pcmFile?.delete() }
