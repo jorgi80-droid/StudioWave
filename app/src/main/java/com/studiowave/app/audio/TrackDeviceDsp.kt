@@ -168,10 +168,12 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
     fun process(buffer: FloatArray, master: FloatArray, sampleCount: Int, masterGain: Float, devices: List<TrackDevice>) {
         if (!sameActiveStructure(devices)) {
             // A topology change must be prepared and published with a new render plan.
-            // Never allocate delay lines or rebuild the chain on the realtime audio worker.
-            if (preparedForRealtime) return
-            ensureActiveChain(devices) // Test/standalone fallback before realtime preparation.
-            preparedForRealtime = true
+            // Keep the last prepared chain alive until that snapshot arrives; never allocate
+            // delay lines or rebuild the chain on the realtime audio worker.
+            if (!preparedForRealtime) {
+                ensureActiveChain(devices) // Test/standalone fallback before realtime preparation.
+                preparedForRealtime = true
+            }
         } else {
             ensureActiveChain(devices) // Same topology: only refresh parameter references.
         }
