@@ -991,7 +991,7 @@ private fun StudioWaveApp() {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    CircularProgressIndicator(color = swatch.accent)
+                    androidx.compose.material3.CircularProgressIndicator(color = swatch.accent)
                     Spacer(Modifier.height(12.dp))
                     Text("RESTORING PROJECT", color = swatch.text, fontSize = 12.sp, fontWeight = FontWeight.Black)
                     Text("Loading session off the UI thread…", color = swatch.muted, fontSize = 10.sp)
