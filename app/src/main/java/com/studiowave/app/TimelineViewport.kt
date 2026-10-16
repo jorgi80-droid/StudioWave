@@ -39,6 +39,10 @@ fun maxArrangementTick(timebase: TimelineTimebase): Long {
     else timebase.ticksPerBar * bars
 }
 
+/** Clamp transport and edit positions to the same musical extent used by Arrangement rendering. */
+fun clampArrangementTick(tick: Long, timebase: TimelineTimebase): Long =
+    tick.coerceIn(0L, maxArrangementTick(timebase))
+
 enum class SnapDivision(val label: String) {
     BAR("BAR"),
     BEAT("1/4"),

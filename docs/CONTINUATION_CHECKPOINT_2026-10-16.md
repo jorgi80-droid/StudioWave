@@ -203,3 +203,12 @@
 - Repeated compile failures in [38892317613](https://github.com/jorgi80-droid/StudioWave/actions/runs/38892317613) were separate source errors: an invalid explicit Compose `weight` import in `StudioWaveTutorial.kt`; `currentCoroutineContext()` invoked inside `synchronized` in `ArrangementPlaybackEngine.kt`; and two unresolved `gain` references in `TrackDeviceDsp.kt` where the function parameter is `masterGain`.
 - Integrated repairs prepared: remove the invalid scoped extension import; read the current coroutine Job before entering the monitor; use `masterGain` for both master-send channels; restore explicit SDK/NDK provisioning; run `testDebugUnitTest` before APK packaging so compile/test failures block artifact creation.
 - Validation status at checkpoint update: source/workflow repair candidate committed, but fresh CI is required to establish build, unit-test, and APK-artifact results. Physical Android playback, save/reopen, memory/latency and underrun measurements remain outstanding. Keep PR #15 Draft.
+
+
+## Integrated P0 transport and project-recovery batch — 2026-10-16
+- Shared `clampArrangementTick` now gives transport seek/start/progress a single 1,800-bar endpoint matching the Arrangement viewport.
+- Progress updates within the active playback session are no longer blocked by a monotonic-only guard. This prevents the playhead freezing when a live arrangement edit shortens the scheduled content; session IDs continue to reject stale events from older sessions.
+- Opening a project invalidates the previous playback session and resets the cursor to bar 1, preventing queued progress from the old project from moving the new project's playhead.
+- Autosave restore/write now uses the bounded `.sdaw` codec, applying the same 16 MiB limit and schema validation to private autosaves as portable project files.
+- Added regression coverage for negative, in-range, and over-limit transport ticks.
+- Validation gate: run Android CI on this exact commit. Source changes do not replace physical-device checks for seek while playing, live edits that shorten an arrangement, and cold-launch save/reopen.

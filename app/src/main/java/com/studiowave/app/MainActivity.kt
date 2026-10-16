@@ -469,7 +469,10 @@ private fun StudioWaveApp() {
                     activeProject.bpm, activeProject.numerator, activeProject.denominator, activeProject.ppq
                 ))
                 val boundedTick = tick.coerceIn(0L, limit)
-                if (boundedTick >= playheadTick) playheadTick = boundedTick
+                // Session IDs reject stale callbacks after seek/stop/project-open. Within
+                // one session, always accept the latest render position: a live arrangement
+                // edit can shorten the schedule, so a monotonic-only guard can freeze the cursor.
+                playheadTick = boundedTick
             }
         }
     }
@@ -480,7 +483,7 @@ private fun StudioWaveApp() {
             withContext(Dispatchers.IO) {
                 preferences.getString("project_json", null)
                     ?.takeIf { it.isNotBlank() }
-                    ?.let { StudioProject.fromJson(JSONObject(it)) }
+                    ?.let { StudioProjectFile.decode(it.toByteArray(Charsets.UTF_8)) }
             }
         } catch (failure: Exception) {
             StudioWaveDiagnostics.log("ERROR", "PROJECT_LOAD", "Autosaved project restore failed: ${failure.javaClass.simpleName}: ${failure.message}")
@@ -669,7 +672,8 @@ private fun StudioWaveApp() {
         val snapshot = projectSnapshot
         StudioWaveDiagnostics.log("INFO", "TRANSPORT", "Playback preparation requested at tick $tick for project '${snapshot.name}'")
         val gain = master.coerceIn(0f, 1f)
-        val startTick = tick.coerceAtLeast(0L)
+        val startTimebase = TimelineTimebase(snapshot.bpm, snapshot.numerator, snapshot.denominator, snapshot.ppq)
+        val startTick = clampArrangementTick(tick, startTimebase)
         playheadTick = startTick
         playbackLoading = true
         audioError = null
@@ -684,12 +688,21 @@ private fun StudioWaveApp() {
                                 // Live edits may extend the arrangement while playback runs.
                                 // Resolve the completion point from the latest project, not the
                                 // stale snapshot that originally started transport.
-                                playheadTick = project.tracks.asSequence().flatMap { it.clips.asSequence() }
+                                val completedProject = project
+                                val completedTimebase = TimelineTimebase(
+                                    completedProject.bpm, completedProject.numerator,
+                                    completedProject.denominator, completedProject.ppq
+                                )
+                                val arrangementLimit = maxArrangementTick(completedTimebase)
+                                val projectEnd = completedProject.tracks.asSequence()
+                                    .flatMap { it.clips.asSequence() }
                                     .maxOfOrNull { clip ->
                                         val start = clip.startTick.coerceAtLeast(0L)
                                         val length = clip.lengthTicks.coerceAtLeast(1L)
                                         if (start > Long.MAX_VALUE - length) Long.MAX_VALUE else start + length
-                                    } ?: playheadTick
+                                    }
+                                playheadTick = clampArrangementTick(projectEnd ?: playheadTick, completedTimebase)
+                                    .coerceAtMost(arrangementLimit)
                                 playing = false
                                 playbackLoading = false
                                 playbackJob = null
@@ -748,7 +761,8 @@ private fun StudioWaveApp() {
     }
     restartPendingPlayback = { updated -> startPlaybackAt(playheadTick, updated) }
     fun seekToTick(tick: Long) {
-        val target = tick.coerceAtLeast(0L)
+        val timebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+        val target = clampArrangementTick(tick, timebase)
         // Match DAW transport semantics: seeking while the transport is active is a
         // discontinuity, not an implicit STOP. Rebuild playback from the requested
         // musical position so the audio and playhead remain together.
@@ -927,6 +941,10 @@ private fun StudioWaveApp() {
                             ?: error("Tidak dapat membuka file proyek")
                         input.use { StudioProjectFile.read(it) }
                     }
+                    // Invalidate queued progress/completion callbacks from the previous
+                    // project before stopping its output; otherwise an old tick can overwrite
+                    // the newly opened session's cursor.
+                    playbackSession += 1L
                     playbackJob?.cancel()
                     playbackJob = null
                     arrangementPlayback.stop()
@@ -934,6 +952,7 @@ private fun StudioWaveApp() {
                     playbackLoading = false
                     changeProject(imported)
                     bpm = imported.bpm
+                    playheadTick = 0L
                     scrollTicks = 0.0
                     scrollTracks = 0f
                     zoom = 1f
@@ -1026,7 +1045,9 @@ private fun StudioWaveApp() {
         delay(350)
         val snapshot = project
         try {
-            val serialized = withContext(Dispatchers.Default) { snapshot.toJson().toString() }
+            val serialized = withContext(Dispatchers.Default) {
+                String(StudioProjectFile.encode(snapshot), Charsets.UTF_8)
+            }
             if (latestProject === snapshot) {
                 withContext(Dispatchers.IO) {
                     preferences.edit().putString("project_json", serialized).apply()

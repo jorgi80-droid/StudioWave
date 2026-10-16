@@ -14,6 +14,14 @@ class TimelineViewportTest {
         assertEquals(120f, choosePreferredRefreshRate(listOf(Float.NaN, Float.POSITIVE_INFINITY, 120f))!!)
     }
 
+    @Test fun transportTickClampMatchesThe1800BarViewportLimit() {
+        val limit = maxArrangementTick(common)
+        assertEquals(0L, clampArrangementTick(-1L, common))
+        assertEquals(12_345L, clampArrangementTick(12_345L, common))
+        assertEquals(limit, clampArrangementTick(Long.MAX_VALUE, common))
+        assertEquals(limit, clampArrangementTick(limit, common))
+    }
+
     @Test fun timebaseUsesPpqAndMeter() {
         assertEquals(960L, common.ticksPerBeat)
         assertEquals(3840L, common.ticksPerBar)
