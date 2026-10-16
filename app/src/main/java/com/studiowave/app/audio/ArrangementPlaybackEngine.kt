@@ -873,7 +873,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         if (event.endFrame > position) playingAudio.add(event)
                     }
                     while (noteCursor < scheduledNotes.size && scheduledNotes[noteCursor].startFrame < position) {
-                        val event = scheduledNotes[audioCursor - 1]
+                        val event = scheduledNotes[noteCursor++]
                         if (event.endFrame > position) playingNotes.add(event)
                     }
                     while (drumCursor < scheduledDrums.size && scheduledDrums[drumCursor].startFrame < position) {
