@@ -51,10 +51,21 @@ internal object AudioPerformanceProfile {
         return if (safe == "AUTO") recommendedProfile(capabilities(context)) else safe
     }
 
-    fun queueTargetFrames(context: Context, requested: String): Int = when (effectiveProfile(context, requested)) {
-        "LOW_LATENCY" -> 512
-        "STABLE" -> 2048
-        else -> 1024
+    fun queueTargetFrames(context: Context, requested: String): Int {
+        val device = capabilities(context)
+        return queueTargetFrames(effectiveProfile(context, requested), device.outputBurstFrames)
+    }
+
+    internal fun queueTargetFrames(profile: String, outputBurstFrames: Int?): Int {
+        val profileTarget = when (profile) {
+            "LOW_LATENCY" -> 512
+            "STABLE" -> 2048
+            else -> 1024
+        }
+        // Respect the device's reported output quantum; request at least two bursts when
+        // the hardware requires a larger quantum, but keep a hard practical upper bound.
+        val hardwareMinimum = outputBurstFrames?.let { it.coerceIn(16, 8192) * 2 } ?: 0
+        return max(profileTarget, hardwareMinimum).coerceIn(256, 4096)
     }
 
     fun decoderParallelism(context: Context, requested: String, parallelPreparation: Boolean): Int {
@@ -73,6 +84,8 @@ internal object AudioPerformanceProfile {
         val ram = if (device.lowRamDevice) "low-RAM device" else "standard memory class"
         val rate = device.outputSampleRateHz?.let { "${it} Hz" } ?: "unknown"
         val burst = device.outputBurstFrames?.toString() ?: "unknown"
-        return "Profile $requested → $effective · CPU ${device.cpuCores} cores · memory class ${device.memoryClassMb} MiB ($ram) · Android output ${rate} · burst ${burst} frames"
+        val queue = queueTargetFrames(effective, device.outputBurstFrames)
+        val decoders = decoderParallelism(context, requested, parallelPreparation = true)
+        return "Profile $requested → $effective · CPU ${device.cpuCores} cores · memory class ${device.memoryClassMb} MiB ($ram) · Android output ${rate} · burst ${burst} frames · producer queue ${queue} frames · decoder workers ${decoders}"
     }
 }
