@@ -6098,9 +6098,15 @@ private object WaveformPeakCache {
     // One canonical source envelope is shared by Arrangement, Sample Editor and DirectWave.
     // The old per-resolution cache let all three screens decode the same URI simultaneously.
     private const val CANONICAL_PEAK_COUNT = 240
-    private val cache = android.util.LruCache<String, List<Float>>(12)
-    private val durationCache = android.util.LruCache<String, Double>(12)
+    // Waveform envelopes are tiny (240 floats each). Keep enough entries for a large
+    // arrangement so scrolling between 50+ tracks does not evict and re-decode sources.
+    private const val CACHE_ENTRIES = 128
+    private val cache = android.util.LruCache<String, List<Float>>(CACHE_ENTRIES)
+    private val durationCache = android.util.LruCache<String, Double>(CACHE_ENTRIES)
     private val inFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
+    // MediaCodec instances compete heavily for CPU/memory on phones. Bound simultaneous
+    // first-time decodes instead of starting dozens of codec pipelines during project open.
+    private val decodePermits = java.util.concurrent.Semaphore(2, true)
 
     suspend fun getOrDecode(
         context: android.content.Context,
@@ -6114,7 +6120,15 @@ private object WaveformPeakCache {
         mutex.lock()
         try {
             val canonical = synchronized(this) { cache.get(key) }
-                ?: decodeWaveformPeaks(context, uri, CANONICAL_PEAK_COUNT, ensureActive).also { decoded ->
+                ?: run {
+                    decodePermits.acquire()
+                    try {
+                        ensureActive()
+                        decodeWaveformPeaks(context, uri, CANONICAL_PEAK_COUNT, ensureActive)
+                    } finally {
+                        decodePermits.release()
+                    }
+                }.also { decoded ->
                     synchronized(this) { cache.put(key, decoded) }
                 }
             if (requestedPeakCount == canonical.size) return canonical
@@ -6140,6 +6154,24 @@ private object WaveformPeakCache {
     }
 
     @Synchronized fun getDurationSeconds(uri: String): Double? = durationCache.get(uri)
+
+    /** Deduplicate metadata reads too: many clips can point at the same source URI. */
+    suspend fun getOrReadDurationSeconds(context: android.content.Context, uri: Uri): Double? {
+        val key = uri.toString()
+        val mutex = inFlight.computeIfAbsent(key) { kotlinx.coroutines.sync.Mutex() }
+        mutex.lock()
+        try {
+            synchronized(this) { durationCache.get(key) }?.let { return it }
+            val duration = readAudioSourceDurationSeconds(context, uri)
+            if (duration != null && duration.isFinite() && duration > 0.0) {
+                synchronized(this) { durationCache.put(key, duration) }
+            }
+            return duration
+        } finally {
+            mutex.unlock()
+        }
+    }
+
     @Synchronized fun putDurationSeconds(uri: String, durationSeconds: Double) {
         if (durationSeconds.isFinite() && durationSeconds > 0.0) {
             durationCache.put(uri, durationSeconds)
@@ -6288,11 +6320,9 @@ private fun AudioClipWaveform(
         try {
             val loaded = withContext(Dispatchers.IO) {
                 val decodeJob = currentCoroutineContext()[Job]
-                val duration = WaveformPeakCache.getDurationSeconds(sourceUri)
-                    ?: readAudioSourceDurationSeconds(context, Uri.parse(sourceUri))?.also {
-                        WaveformPeakCache.putDurationSeconds(sourceUri, it)
-                    }
-                val cachedPeaks = WaveformPeakCache.getOrDecode(context, Uri.parse(sourceUri), 240) {
+                val source = Uri.parse(sourceUri)
+                val duration = WaveformPeakCache.getOrReadDurationSeconds(context, source)
+                val cachedPeaks = WaveformPeakCache.getOrDecode(context, source, 240) {
                     decodeJob?.ensureActive()
                 }
                 duration to cachedPeaks
