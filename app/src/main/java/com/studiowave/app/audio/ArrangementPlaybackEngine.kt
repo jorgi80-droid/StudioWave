@@ -31,6 +31,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
+import java.io.OutputStream
 import java.io.RandomAccessFile
 import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
@@ -266,6 +267,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     @Volatile private var latestProjectForPlayback: StudioProject? = null
     @Volatile private var worker: Thread? = null
     @Volatile private var output: NativeAudioEngine? = null
+    @Volatile private var wavRecorder: PlaybackWavRecorder? = null
     // Render reads an immutable plan snapshot per block; edits publish replacements atomically.
     @Volatile private var activePlanRef: java.util.concurrent.atomic.AtomicReference<Plan>? = null
     // Supersedes stale background schedule builds when many clips/tracks are added rapidly.
@@ -421,6 +423,23 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val tracks: Map<String, TrackMix>,
         val soloActive: Boolean
     )
+
+    /** Begin capturing the master PCM stream to a WAV destination. Call before start(). */
+    fun beginWavCapture(destination: OutputStream) {
+        check(!closed.get()) { "Playback engine is closed" }
+        endWavCapture()
+        val temporary = File(appContext.cacheDir, "studiowave-wav-${System.nanoTime()}.pcm")
+        wavRecorder = PlaybackWavRecorder(temporary, destination, OUTPUT_SAMPLE_RATE) {
+            StudioWaveDiagnostics.log("WARN", "EXPORT", "WAV capture queue overflow; one block was dropped")
+        }
+    }
+
+    /** Finalize the WAV header and close its destination. */
+    fun endWavCapture() {
+        val recorder = wavRecorder
+        wavRecorder = null
+        recorder?.close()
+    }
 
     suspend fun start(
         project: StudioProject,
@@ -1453,6 +1472,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val blockBudget = (frames.toLong() * 1_000_000_000L / sampleRate.toLong()).coerceAtLeast(1L)
                 renderBudgetNanos.set(blockBudget)
                 if (renderNanos > blockBudget) renderOverrunBlocks.incrementAndGet()
+                wavRecorder?.offer(pcm, sampleCount)
                 if (!track.queuePcm(pcm, sampleCount) { running.get() && generation.get() == token }) {
                     if (running.get() && generation.get() == token) {
                         error("Audio output stopped unexpectedly while rendering")
@@ -1614,6 +1634,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         activePlanRef = null
         scratchOffsetsMs.clear()
         stopOutputOnly()
+        endWavCapture()
         trackMeterBits.keys.forEach { id -> publishTrackMeter(id, 0f, 0f, 0f, 0f) }
     }
 

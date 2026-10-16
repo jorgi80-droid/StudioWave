@@ -929,6 +929,30 @@ private fun StudioWaveApp() {
             }
         }
     }
+    val exportWavLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("audio/wav")
+    ) { uri ->
+        if (uri != null) {
+            playbackScope.launch {
+                try {
+                    val destination = withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri, "wt")
+                            ?: error("Tidak dapat membuka tujuan ekspor WAV")
+                    }
+                    arrangementPlayback.beginWavCapture(destination)
+                    startPlaybackAt(playheadTick)
+                    Toast.makeText(context, "Bounce WAV dimulai — tekan Stop untuk menyelesaikan file", Toast.LENGTH_LONG).show()
+                    StudioWaveDiagnostics.log("INFO", "EXPORT", "WAV capture started for project")
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    arrangementPlayback.endWavCapture()
+                    audioError = failure.message ?: "Ekspor WAV gagal"
+                    StudioWaveDiagnostics.log("ERROR", "EXPORT", "WAV capture failed: ${failure.message}")
+                }
+            }
+        }
+    }
     val importProjectLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -1246,6 +1270,7 @@ private fun StudioWaveApp() {
                         if (playing || playbackLoading) stopPlayback() else startPlaybackAt(playheadTick)
                     },
                     onStop = { stopPlayback() },
+                    onExportWav = { exportWavLauncher.launch(project.name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80) + ".wav") },
                     onUndo = { undoProject() },
                     onRedo = { redoProject() },
                     onSaveProject = {
@@ -1394,7 +1419,7 @@ private fun TransportBar(
     positionLabel: String, timeSignatureLabel: String, onSettings: () -> Unit, onNewProject: () -> Unit,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
     onUndo: () -> Unit, onRedo: () -> Unit,
-    onSaveProject: () -> Unit, onOpenProject: () -> Unit
+    onSaveProject: () -> Unit, onOpenProject: () -> Unit, onExportWav: () -> Unit
 ) {
     val p = LocalStudioWavePalette.current
     val edge = RoundedCornerShape(2.dp)
