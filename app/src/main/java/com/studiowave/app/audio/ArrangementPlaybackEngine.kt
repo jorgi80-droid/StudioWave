@@ -231,7 +231,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private data class AudioAsset(
         val sampleRate: Int,
         val pcmStereo: ShortArray,
-        val frames: Int
+        val frames: Int,
+        // True when the decoder reached source EOS before the requested PCM window ended.
+        val complete: Boolean
     )
 
     private data class AudioEvent(
@@ -450,7 +452,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             val cacheKey = "$uriString|$sampleRate"
             // Check the PCM cache before opening a metadata retriever. This removes repeated
             // content-provider/metadata work on play, pause, seek, and clip edits.
-            val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }?.takeIf { it.frames >= requestedFrames }
+            val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }?.takeIf { it.frames >= requestedFrames || it.complete }
             // The clip's persisted source range already tells us the maximum PCM window
             // needed for playback. Do not synchronously probe every media file with
             // MediaMetadataRetriever before decoding: providers/codecs can make that probe
@@ -474,7 +476,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         suspend fun prepareSource(request: SourceRequest): Pair<String, AudioAsset?> {
             ensureCurrent()
             val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
-                ?.takeIf { it.frames >= request.requestedFrames }
+                ?.takeIf { it.frames >= request.requestedFrames || it.complete }
             if (cached != null) return request.uriString to cached
             val decoded = try {
                 decodeSemaphore.withPermit {
@@ -768,7 +770,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 if (stagnant > 500) error("Audio decoder stopped making progress")
             }
             check(framesWritten > 0) { "No PCM audio samples could be decoded from $uri" }
-            return AudioAsset(OUTPUT_SAMPLE_RATE, pcmOut, framesWritten)
+            return AudioAsset(OUTPUT_SAMPLE_RATE, pcmOut, framesWritten, outputDone)
         } finally {
             runCatching { decoder?.stop() }
             runCatching { decoder?.release() }
@@ -1157,6 +1159,41 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 worker = null
             }
         }
+    }
+
+    /**
+     * Decode an imported source before committing its clip to the project. Once the user
+     * sees the clip in Arrangement, normal Play can reuse prepared PCM instead of starting
+     * a cold MediaCodec decode. During active playback this work stays off the render thread.
+     */
+    suspend fun prepareAudioSource(uriString: String, durationSeconds: Double) {
+        check(!closed.get()) { "Playback engine is closed" }
+        require(uriString.isNotBlank()) { "Audio source URI is empty" }
+        require(durationSeconds.isFinite() && durationSeconds > 0.0) { "Audio duration is invalid" }
+        val token = generation.get()
+        val seconds = durationSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
+        val requestedFrames = ceil(seconds * OUTPUT_SAMPLE_RATE).toLong()
+            .coerceIn(1L, OUTPUT_SAMPLE_RATE.toLong() * MAX_SOURCE_SECONDS).toInt()
+        val key = "$uriString|$OUTPUT_SAMPLE_RATE"
+        val cached = synchronized(audioAssetCache) { audioAssetCache.get(key) }
+        if (cached != null && (cached.frames >= requestedFrames || cached.complete)) return
+
+        val decoded = withContext(Dispatchers.IO) {
+            decodeSemaphore.withPermit {
+                val secondLook = synchronized(audioAssetCache) { audioAssetCache.get(key) }
+                if (secondLook != null && (secondLook.frames >= requestedFrames || secondLook.complete)) {
+                    secondLook
+                } else {
+                    decodeAudioAsset(Uri.parse(uriString), seconds, token)
+                }
+            }
+        }
+        check(!closed.get() && generation.get() == token) { "Audio preparation was cancelled" }
+        synchronized(audioAssetCache) { audioAssetCache.put(key, decoded) }
+        android.util.Log.i(
+            "StudioWaveAudio",
+            "Source prepared: frames=\${decoded.frames}, complete=\${decoded.complete}, cacheKiB=\${audioAssetCache.size()}"
+        )
     }
 
     /**
