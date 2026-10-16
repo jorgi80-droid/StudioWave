@@ -396,11 +396,16 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             // Check the PCM cache before opening a metadata retriever. This removes repeated
             // content-provider/metadata work on play, pause, seek, and clip edits.
             val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
+            // The clip's persisted source range already tells us the maximum PCM window
+            // needed for playback. Do not synchronously probe every media file with
+            // MediaMetadataRetriever before decoding: providers/codecs can make that probe
+            // surprisingly slow, and the decoder itself safely stops at this frame limit.
+            // If the file is shorter than the requested range, decodeAudioAsset returns the
+            // frames that actually exist and clips outside that range are ignored.
             val sourceSeconds = if (cached != null) {
                 cached.frames.toDouble() / sampleRate.toDouble()
             } else {
-                val sourceDuration = readSourceDurationSeconds(Uri.parse(uriString))
-                boundedAudioDecodeDurationSeconds(requiredSeconds, sourceDuration, MAX_SOURCE_SECONDS.toDouble())
+                requiredSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
             }
             val allocationBytes = cached?.let { it.pcmStereo.size.toLong() * 2L }
                 ?: ceil(sourceSeconds * sampleRate).toLong().coerceAtLeast(1L) * 4L
