@@ -255,6 +255,15 @@ internal fun pianoRollVisibleSteps(stepsPerBar: Int, zoomX: Float): Int {
     return (safeBarSteps.toFloat() * 2f / safeZoom).roundToInt().coerceIn(4, 4096)
 }
 
+/** Centers the first Piano Roll viewport on active notes; empty clips open around middle C. */
+internal fun initialPianoRollTopPitch(notePitches: List<Int>, visiblePitchRows: Int = 28): Int {
+    val visibleRows = visiblePitchRows.coerceIn(1, 128)
+    if (notePitches.isEmpty()) return 72.coerceIn(visibleRows - 1, 127)
+    val pitches = notePitches.map { it.coerceIn(0, 127) }
+    val middlePitch = (pitches.minOrNull()!! + pitches.maxOrNull()!!) / 2
+    return (middlePitch + visibleRows / 2).coerceIn(visibleRows - 1, 127)
+}
+
 /**
  * Keep note events inside a clip's relative musical duration.
  * Notes fully beyond the new end are removed; crossing notes are shortened.
@@ -1595,48 +1604,31 @@ private fun TransportBar(
         SmallIconButton(Icons.Default.Save, p.muted, onSaveProject)
         TransportAction("WAV", heightDp = 25, onClick = onExportWav)
         Box(Modifier.width(1.dp).height(19.dp).background(p.border))
-        Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black)
-        val latestMasterChange by rememberUpdatedState(onMaster)
-        Canvas(
-            Modifier.width(54.dp).height(24.dp)
-                .pointerInput(Unit) {
-                    fun updateFromX(x: Float) {
-                        latestMasterChange((x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f))
-                    }
-                    detectDragGestures(
-                        onDragStart = { updateFromX(it.x) },
-                        onDrag = { change, _ -> change.consume(); updateFromX(change.position.x) }
-                    )
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = { position ->
-                        latestMasterChange((position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f))
-                    })
-                }
-        ) {
-            val left = 4f
-            val right = (size.width - 4f).coerceAtLeast(left + 1f)
-            val centerY = size.height * 0.5f
-            val thumbX = left + (right - left) * master.coerceIn(0f, 1f)
-            drawLine(p.border, Offset(left, centerY), Offset(right, centerY), strokeWidth = 4f)
-            drawLine(p.accent.copy(alpha = 0.62f), Offset(left, centerY), Offset(thumbX, centerY), strokeWidth = 2.2f)
-            for (tick in 0..4) {
-                val x = left + (right - left) * tick / 4f
-                drawLine(p.muted.copy(alpha = 0.72f), Offset(x, centerY - 4.5f), Offset(x, centerY + 4.5f), strokeWidth = 0.8f)
-            }
-            drawRect(p.panel, Offset(thumbX - 3f, centerY - 7f), Size(6f, 14f))
-            drawRect(p.accent, Offset(thumbX - 3f, centerY - 7f), Size(6f, 14f),
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f))
-        }
+        Text("OUT", color = p.muted, fontSize = 6.sp, fontWeight = FontWeight.Black)
         Column(Modifier.width(if (compact) 64.dp else 78.dp), verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("PK ${peakDbfs.toInt()}", color = p.text, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 Text("${momentaryLufs.toInt()} LUFS", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            Canvas(Modifier.fillMaxWidth().height(5.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(6.dp)) {
                 drawRect(p.control, size = size)
-                val peak = (peakHistory.lastOrNull() ?: 0f).takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
-                drawRect(p.accent, size = Size(size.width * peak, size.height))
+                val history = peakHistory.takeLast(48)
+                if (history.isNotEmpty()) {
+                    val slotWidth = size.width / history.size.toFloat()
+                    history.forEachIndexed { index, raw ->
+                        val level = raw.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
+                        if (level > 0.002f) {
+                            val ink = when {
+                                level >= 0.98f -> p.danger
+                                level >= 0.78f -> p.warning
+                                else -> p.accent
+                            }
+                            val barHeight = (size.height * level).coerceAtLeast(1f)
+                            drawRect(ink, Offset(index * slotWidth, size.height - barHeight),
+                                Size((slotWidth - 0.65f).coerceAtLeast(0.7f), barHeight))
+                        }
+                    }
+                }
             }
         }
     }
@@ -3606,7 +3598,12 @@ private fun TimelineGrid(
                                     // Miniature piano roll: pitch is vertically ordered and each
                                     // note is placed from the same clip-relative musical tick ratio.
                                     val duration = clip.lengthTicks.coerceAtLeast(1L).toDouble()
-                                    val rowHeight = (size.height / 16f).coerceAtLeast(2f)
+                                    val lowestNote = clip.midiNotes.minOfOrNull { it.pitch.coerceIn(0, 127) } ?: 48
+                                    val highestNote = clip.midiNotes.maxOfOrNull { it.pitch.coerceIn(0, 127) } ?: 72
+                                    val pitchFloor = (lowestNote - 4).coerceAtLeast(0)
+                                    val pitchCeiling = (highestNote + 4).coerceAtMost(127)
+                                    val pitchSpan = (pitchCeiling - pitchFloor).coerceAtLeast(1)
+                                    val rowHeight = (size.height / (pitchSpan + 1f)).coerceAtLeast(2f)
                                     val beatTicks = (project.ppq.toLong() * 4L /
                                         project.denominator.coerceAtLeast(1).toLong()).coerceAtLeast(1L)
                                     val barTicks = beatTicks * project.numerator.coerceAtLeast(1).toLong()
@@ -3639,7 +3636,8 @@ private fun TimelineGrid(
                                         val left = rawLeft.coerceIn(0f, size.width)
                                         val right = rawRight.coerceIn(left, size.width)
                                         val noteWidth = right - left
-                                        val normalizedPitch = (note.pitch.coerceIn(0, 127).toFloat() / 127f)
+                                        val normalizedPitch = ((note.pitch.coerceIn(0, 127) - pitchFloor).toFloat() /
+                                            pitchSpan.toFloat()).coerceIn(0f, 1f)
                                         val y = (1f - normalizedPitch) * (size.height - rowHeight)
                                         if (rawLeft < size.width && rawRight > 0f && noteWidth > 0f) {
                                             drawRoundRect(
@@ -3876,7 +3874,7 @@ private fun PianoRollWorkspace(
     var zoomY by remember(track?.id) { mutableFloatStateOf(1.0f) }
     var startStep by remember(track?.id, clip?.id) { mutableIntStateOf(0) }
     var lastViewportWidthPx by remember(track?.id, clip?.id) { mutableFloatStateOf(0f) }
-    var topPitch by remember(track?.id) { mutableIntStateOf(108) } // Start near C8; all 128 standard MIDI pitches remain reachable
+    var topPitch by remember(track?.id, clip?.id) { mutableIntStateOf(initialPianoRollTopPitch(notes.map { it.pitch })) }
     var selectedNoteId by remember(track?.id, clip?.id) { mutableStateOf<String?>(null) }
     var selectedNoteIds by remember(track?.id, clip?.id) { mutableStateOf<Set<String>>(emptySet()) }
     var selectionMode by remember(track?.id, clip?.id) { mutableStateOf(false) }
@@ -4220,7 +4218,7 @@ private fun PianoRollWorkspace(
         Row(Modifier.fillMaxWidth().weight(1f)) {
             if (keyboardVisible) {
                 Column(Modifier.width(54.dp).fillMaxHeight().background(pianoPalette.panel)) {
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
+                    BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
                         val keyRowHeightPx = with(pianoDensity) { rowHeight.dp.toPx() }
                         val keyVisibleRows = (constraints.maxHeight.toFloat() / keyRowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
                         val keyTopPitch = clampPianoRollTopPitch(topPitch, keyVisibleRows)
@@ -4256,12 +4254,18 @@ private fun PianoRollWorkspace(
                             }
                         }
                     }
+                    Box(Modifier.fillMaxWidth().height(62.dp).background(pianoPalette.panel)
+                        .border(1.dp, pianoPalette.border), contentAlignment = Alignment.Center) {
+                        Text("VEL", color = pianoPalette.accent, fontSize = 7.sp, fontWeight = FontWeight.Black)
+                    }
                 }
             }
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 BoxWithConstraints(Modifier.fillMaxSize().background(pianoPalette.canvas)) {
                     val viewportWidthPx = with(pianoDensity) { maxWidth.toPx() }
                     val viewportHeightPx = with(pianoDensity) { maxHeight.toPx() }
+                    val velocityLaneHeightPx = with(pianoDensity) { 62.dp.toPx() }.coerceAtMost(viewportHeightPx * 0.30f)
+                    val noteGridHeightPx = (viewportHeightPx - velocityLaneHeightPx).coerceAtLeast(1f)
                     LaunchedEffect(viewportWidthPx, clipLengthSteps, stepsPerBar, zoomX) {
                         if (lastViewportWidthPx > 0f && viewportWidthPx > 0f &&
                             kotlin.math.abs(viewportWidthPx - lastViewportWidthPx) > 1f) {
@@ -4276,7 +4280,7 @@ private fun PianoRollWorkspace(
                     val currentStepsOnScreen = pianoRollVisibleSteps(gridStepsPerBar, gestureZoomX.value)
                     val currentRowHeight = (18f * gestureZoomY.value).coerceIn(10f, 44f)
                     val rowHeightPx = with(pianoDensity) { currentRowHeight.dp.toPx() }
-                    val visiblePitchRows = (viewportHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
+                    val visiblePitchRows = (noteGridHeightPx / rowHeightPx.coerceAtLeast(1f)).roundToInt().coerceIn(12, 128)
                     val currentTopPitch = clampPianoRollTopPitch(gestureTopPitch.value, visiblePitchRows)
                     val colWidthPx = (viewportWidthPx / currentStepsOnScreen.toFloat()).coerceAtLeast(2f)
                     val currentStart = gestureStartStep.value.coerceIn(0, (clipLengthSteps - currentStepsOnScreen).coerceAtLeast(0))
@@ -4320,7 +4324,7 @@ private fun PianoRollWorkspace(
                                                 .coerceAtMost(1_000_000.0).toInt().coerceAtLeast(newSteps)
                                             val newStart = (anchorStep - midpoint.x / newColWidth).roundToInt()
                                                 .coerceIn(0, (newClipSteps - newSteps).coerceAtLeast(0))
-                                            val visibleRowsAfterZoom = (viewportHeightPx / newRowHeight).roundToInt().coerceIn(12, 128)
+                                            val visibleRowsAfterZoom = (noteGridHeightPx / newRowHeight).roundToInt().coerceIn(12, 128)
                                             val newTop = clampPianoRollTopPitch(
                                                 (anchorPitch + midpoint.y / newRowHeight).roundToInt(),
                                                 visibleRowsAfterZoom
@@ -4347,6 +4351,33 @@ private fun PianoRollWorkspace(
                                     val clickedPitch = (currentTopPitch -
                                         (down.position.y / gestureRowHeight).toInt()).coerceIn(0, 127)
                                     val notesAtDown = gestureNotes.value
+                                    if (keyboardVisible && down.position.y >= noteGridHeightPx && clip != null) {
+                                        var finalPosition = down.position
+                                        do {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                                            if (change.pressed) {
+                                                finalPosition = change.position
+                                                change.consume()
+                                            }
+                                        } while (event.changes.any { it.pressed })
+                                        val nearest = notesAtDown.minByOrNull { note ->
+                                            kotlin.math.abs(note.startTick.toDouble() / stepTicks.toDouble() - clickedStep.toDouble())
+                                        }
+                                        if (nearest != null) {
+                                            val fraction = ((finalPosition.y - noteGridHeightPx) /
+                                                velocityLaneHeightPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                                            val velocity = (127f * (1f - fraction)).roundToInt().coerceIn(1, 127)
+                                            selectedNoteId = nearest.id
+                                            gestureNoteWriter.value(notesAtDown.map { note ->
+                                                if (note.id == nearest.id) note.copy(velocity = velocity) else note
+                                            })
+                                            editMessage = "Velocity $velocity"
+                                        } else {
+                                            editMessage = "Add notes before editing velocity"
+                                        }
+                                        return@awaitEachGesture
+                                    }
                                     val noteHitSlop = with(pianoDensity) { 8.dp.toPx() }
                                     val touchedNote = if (keyboardVisible && !velocityMode && !panMode) notesAtDown.firstOrNull { note ->
                                         val noteLeftPx = ((note.startTick.toDouble() / stepTicks.toDouble()) - visibleStartStep) * gestureColWidth
@@ -4522,7 +4553,9 @@ private fun PianoRollWorkspace(
                             }
                         }
                     Box(contentModifier) {
-                        Canvas(Modifier.fillMaxSize()) {
+                        Canvas(Modifier.fillMaxWidth()
+                            .height(with(pianoDensity) { noteGridHeightPx.toDp() })
+                            .align(Alignment.TopStart)) {
                             val localRowHeight = rowHeightPx
                             val localColWidth = size.width / currentStepsOnScreen.toFloat()
                             val rowsVisible = (size.height / localRowHeight).toInt().coerceAtLeast(1)
@@ -4629,6 +4662,33 @@ private fun PianoRollWorkspace(
                                             Offset(x.toFloat() + width - 5f, y + 3f),
                                             Offset(x.toFloat() + width - 5f, y + noteHeight - 3f), 1.2f)
                                     }
+                                }
+                            }
+                        }
+                        Canvas(Modifier.align(Alignment.BottomStart).fillMaxWidth()
+                            .height(with(pianoDensity) { velocityLaneHeightPx.toDp() })
+                            .background(pianoPalette.panel)) {
+                            drawLine(pianoPalette.border, Offset(0f, 0.5f), Offset(size.width, 0.5f), 1f)
+                            val localColWidth = size.width / currentStepsOnScreen.toFloat()
+                            for (column in 0..currentStepsOnScreen) {
+                                val x = column * localColWidth
+                                val step = pageStartStep + column
+                                val isBar = step % stepsPerBar == 0
+                                drawLine(
+                                    if (isBar) pianoPalette.accent.copy(alpha = 0.55f) else pianoPalette.grid.copy(alpha = 0.7f),
+                                    Offset(x, 1f), Offset(x, size.height), if (isBar) 1.15f else 0.55f
+                                )
+                            }
+                            val bottom = size.height - 4f
+                            val usableHeight = (size.height - 10f).coerceAtLeast(1f)
+                            notes.forEach { note ->
+                                val relativeStep = note.startTick.toDouble() / stepTicks.toDouble() - pageStartStep.toDouble()
+                                val x = ((relativeStep + 0.5) * localColWidth).toFloat()
+                                val velocity = note.velocity.coerceIn(1, 127) / 127f
+                                if (x.isFinite() && x >= 0f && x <= size.width) {
+                                    val top = bottom - usableHeight * velocity
+                                    drawLine(pianoPalette.accent, Offset(x, bottom), Offset(x, top), strokeWidth = 1.8f)
+                                    drawCircle(pianoPalette.accent, radius = 2f, center = Offset(x, top))
                                 }
                             }
                         }
@@ -6480,10 +6540,10 @@ private fun decodeWaveformPeaks(
 }
 
 private object WaveformPeakCache {
-    // One canonical source envelope is shared by Arrangement, Sample Editor and DirectWave.
-    // The old per-resolution cache let all three screens decode the same URI simultaneously.
-    private const val CANONICAL_PEAK_COUNT = 240
-    // Waveform envelopes are tiny (240 floats each). Keep enough entries for a large
+    // A 1024-bin canonical envelope preserves transient detail in landscape Arrangement clips.
+    // Lower-resolution screens are derived from these bins without a second media decode.
+    private const val CANONICAL_PEAK_COUNT = 1024
+    // Waveform envelopes are tiny (1024 floats each). Keep enough entries for a large
     // arrangement so scrolling between 50+ tracks does not evict and re-decode sources.
     private const val CACHE_ENTRIES = 128
     private val cache = android.util.LruCache<String, List<Float>>(CACHE_ENTRIES)
@@ -6696,7 +6756,7 @@ private fun AudioClipWaveform(
     var sourceDurationSeconds by remember(sourceUri) { mutableStateOf<Double?>(null) }
     var waveformLoading by remember(sourceUri) { mutableStateOf(false) }
     LaunchedEffect(sourceUri) {
-        // Decode the bounded 240-peak preview on IO. Keying this to transport state used to
+        // Decode a detailed waveform envelope on IO. Keying this to transport state used to
         // cancel the waveform as soon as Play was pressed, leaving clips visually blank.
         sourceDurationSeconds = null
         waveformLoading = !sourceUri.isNullOrBlank()
@@ -6711,7 +6771,7 @@ private fun AudioClipWaveform(
                 val decodeJob = currentCoroutineContext()[Job]
                 val source = Uri.parse(sourceUri)
                 val duration = WaveformPeakCache.getOrReadDurationSeconds(context, source)
-                val cachedPeaks = WaveformPeakCache.getOrDecode(context, source, 240) {
+                val cachedPeaks = WaveformPeakCache.getOrDecode(context, source, 1024) {
                     decodeJob?.ensureActive()
                 }
                 duration to cachedPeaks
@@ -6734,8 +6794,33 @@ private fun AudioClipWaveform(
     Canvas(modifier.fillMaxSize()) {
         val accentColor = accent
         val mid = size.height / 2f
+        drawLine(accentColor.copy(alpha = 0.18f), Offset(0f, mid), Offset(size.width, mid), 0.7f)
+
+        fun drawEnvelope(points: List<Pair<Float, Float>>) {
+            if (points.isEmpty()) return
+            val first = points.first()
+            val last = points.last()
+            val filled = androidx.compose.ui.graphics.Path().apply {
+                moveTo(first.first, mid)
+                points.forEach { (x, amplitude) -> lineTo(x, mid - amplitude) }
+                points.asReversed().forEach { (x, amplitude) -> lineTo(x, mid + amplitude) }
+                lineTo(first.first, mid)
+                close()
+            }
+            val top = androidx.compose.ui.graphics.Path().apply {
+                moveTo(first.first, mid - first.second)
+                points.drop(1).forEach { (x, amplitude) -> lineTo(x, mid - amplitude) }
+            }
+            val bottom = androidx.compose.ui.graphics.Path().apply {
+                moveTo(last.first, mid + last.second)
+                points.asReversed().drop(1).forEach { (x, amplitude) -> lineTo(x, mid + amplitude) }
+            }
+            drawPath(filled, accentColor.copy(alpha = 0.24f))
+            drawPath(top, accentColor.copy(alpha = 0.98f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.15f))
+            drawPath(bottom, accentColor.copy(alpha = 0.78f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.9f))
+        }
+
         if (peaks.isEmpty()) {
-            drawLine(accentColor.copy(alpha = 0.3f), Offset(0f, mid), Offset(size.width, mid), 1f)
             val markerColor = if (waveformLoading) accentColor else Color(0xFFFF7655)
             val markerWidth = (size.width * 0.025f).coerceIn(4f, 18f)
             drawRoundRect(markerColor.copy(alpha = 0.85f), Offset(size.width * 0.04f, mid - size.height * 0.24f),
@@ -6744,42 +6829,27 @@ private fun AudioClipWaveform(
             val durationSeconds = sourceDurationSeconds
             val range = durationSeconds?.let {
                 audioWaveformClipRange(
-                    sourceOffsetTicks = sourceOffsetTicks,
-                    clipLengthTicks = visibleLengthTicks,
-                    bpm = bpm,
-                    ppq = ppq,
-                    sourceDurationSeconds = it,
-                    peakCount = peaks.size,
-                    sourceOffsetMicros = sourceOffsetMicros,
-                    sourceLengthMicros = visibleLengthMicros
+                    sourceOffsetTicks = sourceOffsetTicks, clipLengthTicks = visibleLengthTicks,
+                    bpm = bpm, ppq = ppq, sourceDurationSeconds = it, peakCount = peaks.size,
+                    sourceOffsetMicros = sourceOffsetMicros, sourceLengthMicros = visibleLengthMicros
                 )
             }
             if (range == null) {
-                // Metadata could not be read, or the clip starts beyond the source. Don't invent
-                // a tick-to-frame conversion: show the whole source only for unknown duration.
                 if (durationSeconds == null) {
                     val dx = size.width / peaks.size.coerceAtLeast(1)
-                    peaks.forEachIndexed { index, peak ->
-                        val amplitude = peak.coerceIn(0f, 1f) * size.height * 0.46f
-                        val x = (index + 0.5f) * dx
-                        drawLine(accentColor.copy(alpha = 0.88f), Offset(x, mid - amplitude), Offset(x, mid + amplitude), dx.coerceIn(1f, 3f))
-                    }
-                } else {
-                    drawLine(accentColor.copy(alpha = 0.25f), Offset(0f, mid), Offset(size.width, mid), 1f)
+                    drawEnvelope(peaks.mapIndexed { index, peak ->
+                        (index + 0.5f) * dx to (peak.coerceIn(0f, 1f) * size.height * 0.46f)
+                    })
                 }
             } else {
-                val dx = size.width * (range.sourceDurationSeconds / peaks.size.toDouble()) /
-                    range.clipDurationSeconds
+                val points = ArrayList<Pair<Float, Float>>(range.endPeakIndexExclusive - range.firstPeakIndex)
                 for (index in range.firstPeakIndex until range.endPeakIndexExclusive) {
                     val peak = peaks[index].coerceIn(0f, 1f)
                     val sampleTime = (index + 0.5) * range.sourceDurationSeconds / peaks.size
                     val x = ((sampleTime - range.sourceOffsetSeconds) / range.clipDurationSeconds * size.width).toFloat()
-                    if (x >= 0f && x <= size.width) {
-                        val amplitude = peak * size.height * 0.46f
-                        drawLine(accentColor.copy(alpha = 0.95f), Offset(x, mid - amplitude), Offset(x, mid + amplitude),
-                            dx.toFloat().coerceIn(1f, 3f))
-                    }
+                    if (x.isFinite() && x in 0f..size.width) points.add(x to (peak * size.height * 0.46f))
                 }
+                drawEnvelope(points)
             }
         }
     }

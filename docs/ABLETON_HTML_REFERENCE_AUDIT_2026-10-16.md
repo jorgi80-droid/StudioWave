@@ -142,3 +142,12 @@ Audio Clip View now exposes a persisted clip-level gain control in dB, applied a
 - DirectWave width is responsive. Device View now shows one selected MIDI source at a time, followed by serial FX inserts, with a SYNTH action to switch back to StudioWave Synth.
 - Fixed the failing legacy persistence fixture by removing both newer audio-clip fields before checking old-project defaults.
 - This is an Ableton Live-inspired native adaptation, not exact pixel parity or proprietary asset reuse. Physical Android 16 validation remains required.
+
+
+## Visual implementation batch — 2026-10-16 (Arrangement / Master / Piano Roll)
+
+- Arrangement waveform cache increased from 240 to 1024 bins. Audio clips now render a translucent symmetric fill and connected upper/lower contours around a center baseline rather than isolated vertical needle marks.
+- MIDI clip previews normalize note positions to the clip's own pitch range with margins, rather than squeezing every clip through the full 0–127 MIDI range.
+- Piano Roll now opens around the selected clip's note register (or around middle C for an empty clip), removing the hard-coded C8 start that hid ordinary C3–C5 patterns. The editor now has a dedicated bottom velocity lane with per-note stems and aligned bar/step guides; touching that lane edits the nearest note's velocity.
+- Removed the generic horizontal Master gain slider from the transport toolbar; actual Master gain remains available as the Master channel fader in Mixer View. The transport's output indicator now shows recent peak history in accent/warning/danger colors.
+- Added unit coverage for initial Piano Roll register selection. Physical Android 16 validation and CI for this exact commit remain required.

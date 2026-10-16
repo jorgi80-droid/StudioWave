@@ -14,6 +14,14 @@ class TimelineViewportTest {
         assertEquals(120f, choosePreferredRefreshRate(listOf(Float.NaN, Float.POSITIVE_INFINITY, 120f))!!)
     }
 
+    @Test fun pianoRollStartsInTheActiveNoteRegister() {
+        assertEquals(72, initialPianoRollTopPitch(emptyList()))
+        assertEquals(74, initialPianoRollTopPitch(listOf(48, 60, 72), 28))
+        assertEquals(99, initialPianoRollTopPitch(listOf(80, 90), 28))
+        assertEquals(27, initialPianoRollTopPitch(listOf(-3), 28))
+        assertEquals(127, initialPianoRollTopPitch(listOf(127), 28))
+    }
+
     @Test fun transportTickClampMatchesThe1800BarViewportLimit() {
         val limit = maxArrangementTick(common)
         assertEquals(0L, clampArrangementTick(-1L, common))
