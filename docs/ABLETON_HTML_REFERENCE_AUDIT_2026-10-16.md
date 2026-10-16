@@ -151,3 +151,5 @@ Audio Clip View now exposes a persisted clip-level gain control in dB, applied a
 - Piano Roll now opens around the selected clip's note register (or around middle C for an empty clip), removing the hard-coded C8 start that hid ordinary C3–C5 patterns. The editor now has a dedicated bottom velocity lane with per-note stems and aligned bar/step guides; touching that lane edits the nearest note's velocity.
 - Removed the generic horizontal Master gain slider from the transport toolbar; actual Master gain remains available as the Master channel fader in Mixer View. The transport's output indicator now shows recent peak history in accent/warning/danger colors.
 - Added unit coverage for initial Piano Roll register selection. Physical Android 16 validation and CI for this exact commit remain required.
+
+- Follow-up: Piano Roll now recalculates its initial note-register framing from the actual visible row count after reserving the velocity lane; pitch clamping and pinch zoom use the actual rows available on the current display, not a desktop-sized minimum.
