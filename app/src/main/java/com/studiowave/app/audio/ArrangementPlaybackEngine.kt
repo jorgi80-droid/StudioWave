@@ -1416,6 +1416,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             error("Audio preparation was cancelled")
         }
         synchronized(audioAssetCache) { audioAssetCache.put(key, decoded) }
+        if (running.get()) refreshPlanRequests.trySend(Unit)
         android.util.Log.i(
             "StudioWaveAudio",
             "Source prepared: frames=${decoded.frames}, complete=${decoded.complete}, cacheKiB=${audioAssetCache.size()}"
@@ -1429,36 +1430,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
      */
     suspend fun updateArrangement(project: StudioProject) {
         check(!closed.get()) { "Playback engine is closed" }
-        val planRef = activePlanRef ?: return
-        if (!running.get()) return
-        val token = generation.get()
-        val revision = arrangementUpdateRevision.incrementAndGet()
-        updateMix(project)
-        val startedAt = System.nanoTime()
+        if (!running.get() || activePlanRef == null) return
+        // Store only the latest immutable project snapshot and let the conflated background
+        // worker publish one plan after a short debounce. Fifty rapid track edits therefore
+        // do not trigger fifty full schedule/DSP allocations on the producer or UI coroutine.
         latestProjectForPlayback = project
-        val updatedPlan = try {
-            withContext(Dispatchers.IO) {
-                buildPlan(project, token, parallelPreparation = true, revision = revision,
-                    allowUnpreparedAudio = true)
-            }
-        } catch (failure: Exception) {
-            // Rapid successive edits supersede old plans. Silently discard stale preparation;
-            // only surface errors belonging to the newest requested project snapshot.
-            if (arrangementUpdateRevision.get() != revision || generation.get() != token) return
-            throw failure
-        }
-        if (closed.get() || generation.get() != token ||
-            arrangementUpdateRevision.get() != revision) return
-        if (running.get() && activePlanRef === planRef) {
-            planRef.set(updatedPlan)
-            schedulePendingAudioPreparation(project, token, planRef, updatedPlan.pendingAudioSources)
-            val elapsedMs = (System.nanoTime() - startedAt).coerceAtLeast(0L) / 1_000_000L
-            android.util.Log.i(
-                "StudioWaveAudio",
-                "Arrangement hot-update published in ${elapsedMs}ms; tracks=${project.tracks.size}, " +
-                    "clips=${project.tracks.sumOf { it.clips.size }}, pendingSources=${updatedPlan.pendingAudioSources.size}"
-            )
-        }
+        arrangementUpdateRevision.incrementAndGet()
+        updateMix(project)
+        refreshPlanRequests.trySend(Unit)
     }
 
     fun updateMix(project: StudioProject) {
