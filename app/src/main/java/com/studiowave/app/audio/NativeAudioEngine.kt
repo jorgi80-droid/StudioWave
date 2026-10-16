@@ -35,11 +35,14 @@ class NativeAudioEngine:AutoCloseable {
   require(sampleCount in 2..samples.size&&sampleCount%2==0){"PCM count must contain complete stereo frames"}
   check(!closed.get()){"Audio engine is closed"}
   while(running.get()&&keepRunning()){
-   if(nativeQueuedFrames()>=producerBackpressureFrames){
+   val queued = nativeQueuedFrames()
+   if (queued < 0) { running.set(false); return false }
+   if(queued>=producerBackpressureFrames){
     try { Thread.sleep(1L) } catch (_:InterruptedException) { Thread.currentThread().interrupt(); return false }
     continue
    }
    if(nativeWritePcm(samples,sampleCount)==sampleCount)return true
+   if (nativeQueuedFrames() < 0) { running.set(false); return false }
    try{Thread.sleep(1L)}catch(_:InterruptedException){Thread.currentThread().interrupt();return false}
   };return false
  }
