@@ -25,29 +25,170 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
             b0=(1+alpha*a)/a0; b1=(-2*c)/a0; b2=(1-alpha*a)/a0; a1=(-2*c)/a0; a2=(1-alpha/a)/a0
         }
     }
-    private class State(sampleRate:Int) {
-        var lowL=0.0; var lowR=0.0; var envL=0.0; var envR=0.0; var write=0
-        val delayL=FloatArray((sampleRate*2.1f).toInt().coerceAtLeast(4096)); val delayR=FloatArray(delayL.size)
-        val eq=Array(8){Biquad()}; var eqSignature=Long.MIN_VALUE
+    private class State(sampleRate: Int, val hasDelay: Boolean, val hasEq: Boolean) {
+        var lowL = 0.0; var lowR = 0.0; var envL = 0.0; var envR = 0.0; var write = 0
+        // Most processors do not need delay lines. Allocating 2.1 seconds of stereo delay
+        // memory for every EQ/compressor/saturator was wasting ~740 KiB per module.
+        val delayL = FloatArray(if (hasDelay) (sampleRate * 2.1f).toInt().coerceAtLeast(4096) else 1)
+        val delayR = FloatArray(delayL.size)
+        val eq: Array<Biquad> = if (hasEq) Array(8) { Biquad() } else emptyArray()
+        val eqLowAlpha = 1 - exp(-2 * PI * 180 / sampleRate)
+        val eqHighAlpha = 1 - exp(-2 * PI * 5200 / sampleRate)
+        var eqSignature = Long.MIN_VALUE
+        var parameterSource: Map<String, Float>? = null
+        var parameterType: String? = null
+        var lowGain = 1.0; var midGain = 1.0; var highGain = 1.0
+        var filterAlpha = 1.0; var filterMode = 0
+        var saturatorDrive = 2.5; var saturatorWet = 0.35; var saturatorNorm = 1.0; var saturatorOutput = 1.0
+        var compressorThreshold = -18.0; var compressorRatio = 3.0
+        var compressorAttack = 0.0; var compressorRelease = 0.0; var compressorMakeup = 1.0
+        var delayFrames = 1; var delayFeedback = 0.32; var delayWet = 0.2
+        var reverbRoom = 0.45; var reverbWet = 0.22; var reverbTap2 = 1; var reverbTap3 = 1
+        var limiterCeiling = 1.0
     }
-    private val states=HashMap<String,State>()
-    private var chainSignature=""
-    fun process(buffer:FloatArray,master:FloatArray,sampleCount:Int,masterGain:Float,devices:List<TrackDevice>) {
-        val active=devices.filter{it.enabled && it.type in EFFECTS}
-        val signature=active.joinToString("|"){"${it.id}:${it.type}"}
-        if(signature!=chainSignature) {
-            val ids=active.map{it.id}.toSet(); states.keys.retainAll(ids)
-            active.forEach{states.getOrPut(it.id){State(sampleRate)}}
-            chainSignature=signature
+    private data class ActiveDevice(var device: TrackDevice, val state: State)
+    private val states = HashMap<String, State>()
+    @Volatile private var activeChain: List<ActiveDevice> = emptyList()
+    @Volatile private var preparedForRealtime = false
+
+    private fun active(device: TrackDevice): Boolean = device.enabled && device.type in EFFECTS
+
+    private fun sameActiveStructure(devices: List<TrackDevice>): Boolean {
+        var index = 0
+        val current = activeChain
+        for (device in devices) {
+            if (!active(device)) continue
+            if (index >= current.size) return false
+            val old = current[index++].device
+            if (old.id != device.id || old.type != device.type) return false
         }
-        if(active.isEmpty()) return
-        val gain=masterGain.coerceIn(0f,1f)
+        return index == current.size
+    }
+
+    private fun prepareParameters(activeDevice: ActiveDevice) {
+        val device = activeDevice.device
+        val state = activeDevice.state
+        val parameters = device.parameters
+        if (state.parameterSource === parameters && state.parameterType == device.type) return
+        state.parameterSource = parameters
+        state.parameterType = device.type
+        when (device.type) {
+            "EQ" -> {
+                state.lowGain = db(parameters["lowDb"] ?: 0f)
+                state.midGain = db(parameters["midDb"] ?: 0f)
+                state.highGain = db(parameters["highDb"] ?: 0f)
+            }
+            "FILTER" -> {
+                val cutoff = (parameters["cutoffHz"] ?: 16000f).coerceIn(20f, sampleRate * 0.45f)
+                state.filterMode = (parameters["mode"] ?: 0f).toInt().coerceIn(0, 2)
+                state.filterAlpha = 1 - exp(-2 * PI * cutoff / sampleRate)
+            }
+            "SATURATOR" -> {
+                state.saturatorDrive = (parameters["drive"] ?: 2.5f).coerceIn(0.2f, 12f).toDouble()
+                state.saturatorWet = (parameters["wet"] ?: 0.35f).coerceIn(0f, 1f).toDouble()
+                state.saturatorNorm = tanh(state.saturatorDrive).coerceAtLeast(0.0001)
+                state.saturatorOutput = db(parameters["outputDb"] ?: 0f)
+            }
+            "COMPRESSOR" -> {
+                state.compressorThreshold = (parameters["thresholdDb"] ?: -18f).coerceIn(-60f, 0f).toDouble()
+                state.compressorRatio = (parameters["ratio"] ?: 3f).coerceIn(1f, 20f).toDouble()
+                state.compressorAttack = exp(-1.0 / ((parameters["attackMs"] ?: 10f).coerceIn(0.1f, 250f) * sampleRate / 1000.0))
+                state.compressorRelease = exp(-1.0 / ((parameters["releaseMs"] ?: 120f).coerceIn(1f, 1500f) * sampleRate / 1000.0))
+                state.compressorMakeup = db(parameters["makeupDb"] ?: 0f)
+            }
+            "DELAY" -> {
+                val ms = (parameters["timeMs"] ?: 320f).coerceIn(10f, 2000f)
+                state.delayFrames = (ms * sampleRate / 1000).toInt().coerceIn(1, state.delayL.size - 1)
+                state.delayFeedback = (parameters["feedback"] ?: 0.32f).coerceIn(0f, 0.88f).toDouble()
+                state.delayWet = (parameters["wet"] ?: 0.2f).coerceIn(0f, 1f).toDouble()
+            }
+            "REVERB" -> {
+                val ms = ((parameters["decay"] ?: 1.6f) * 1000 / 7).coerceIn(24f, 180f)
+                state.delayFrames = (ms * sampleRate / 1000).toInt().coerceIn(1, state.delayL.size - 1)
+                state.reverbRoom = (parameters["room"] ?: 0.45f).coerceIn(0.05f, 0.95f).toDouble()
+                state.reverbWet = (parameters["wet"] ?: 0.22f).coerceIn(0f, 1f).toDouble()
+                state.reverbTap2 = (state.delayFrames * 1.31f).toInt().coerceAtMost(state.delayL.size - 1)
+                state.reverbTap3 = (state.delayFrames * 1.73f).toInt().coerceAtMost(state.delayL.size - 1)
+            }
+            "LIMITER" -> {
+                state.limiterCeiling = db((parameters["ceilingDb"] ?: -1f).coerceIn(-12f, 0f)).coerceIn(0.05, 1.0)
+            }
+        }
+    }
+
+    /** Prepare new effect state away from the realtime render loop. */
+    fun prepare(devices: List<TrackDevice>) {
+        ensureActiveChain(devices)
+        activeChain.forEach { prepareParameters(it) }
+        preparedForRealtime = true
+    }
+
+    private fun refreshActiveReferences(devices: List<TrackDevice>) {
+        // Parameters may change while module topology stays the same. Refresh references
+        // in-place with no per-block lists, strings or maps.
+        var index = 0
+        val current = activeChain
+        for (device in devices) {
+            if (active(device)) current[index++].device = device
+        }
+    }
+
+    private fun ensureActiveChain(devices: List<TrackDevice>) {
+        if (sameActiveStructure(devices)) {
+            refreshActiveReferences(devices)
+            return
+        }
+
+        val next = ArrayList<ActiveDevice>()
+        val ids = HashSet<String>()
+        for (device in devices) {
+            if (!active(device)) continue
+            ids.add(device.id)
+            val needsDelay = device.type == "DELAY" || device.type == "REVERB"
+            val needsEq = device.type == "PARAM_EQ_8"
+            val previous = states[device.id]
+            val state = if (previous != null &&
+                previous.hasDelay == needsDelay && previous.hasEq == needsEq
+            ) previous else State(sampleRate, needsDelay, needsEq)
+            states[device.id] = state
+            next.add(ActiveDevice(device, state))
+        }
+        states.keys.retainAll(ids)
+        activeChain = next
+    }
+
+    fun hasSameStructure(devices: List<TrackDevice>): Boolean {
+        val current = activeChain
+        var index = 0
+        for (device in devices) {
+            if (!active(device)) continue
+            if (index >= current.size) return false
+            val old = current[index++].device
+            if (old.id != device.id || old.type != device.type) return false
+        }
+        return index == current.size
+    }
+
+    fun process(buffer: FloatArray, master: FloatArray, sampleCount: Int, masterGain: Float, devices: List<TrackDevice>) {
+        if (sameActiveStructure(devices)) {
+            refreshActiveReferences(devices)
+        } else if (!preparedForRealtime) {
+            // Standalone/test fallback only. Production render plans call prepare() before
+            // publication, so a topology change never allocates on the realtime worker.
+            ensureActiveChain(devices)
+            preparedForRealtime = true
+        }
+        val active = activeChain
+        if (active.isEmpty()) return
+        // Expensive parameter transforms run only when a module's parameter map changes.
+        active.forEach { prepareParameters(it) }
 
         // Tune EQ filters once per block, not once per stereo frame. Keep temporary
         // list/fold work out of the sample loop to reduce allocations on the audio path.
-        active.forEach { device ->
+        active.forEach { activeDevice ->
+            val device = activeDevice.device
             if(device.type == "PARAM_EQ_8") {
-                val st=states.getValue(device.id)
+                val st=activeDevice.state
                 val p=device.parameters
                 var signatureValue=1L
                 for(band in 1..8) {
@@ -75,74 +216,61 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         for(i in 0 until sampleCount step 2) {
             val dryL=buffer[i].toDouble(); val dryR=buffer[i+1].toDouble()
             var left=dryL; var right=dryR
-            active.forEach { device ->
-                val st=states.getValue(device.id); val p=device.parameters
+            active.forEach { activeDevice ->
+                val device = activeDevice.device
+                val st = activeDevice.state
                 when(device.type) {
                     "EQ" -> {
-                        val lowGain=db(p["lowDb"]?:0f); val midGain=db(p["midDb"]?:0f); val highGain=db(p["highDb"]?:0f)
-                        val al=1-exp(-2*PI*180/sampleRate); val ah=1-exp(-2*PI*5200/sampleRate)
-                        st.lowL+=al*(left-st.lowL); st.lowR+=al*(right-st.lowR)
-                        st.envL+=ah*(left-st.envL); st.envR+=ah*(right-st.envR)
+                        st.lowL+=st.eqLowAlpha*(left-st.lowL); st.lowR+=st.eqLowAlpha*(right-st.lowR)
+                        st.envL+=st.eqHighAlpha*(left-st.envL); st.envR+=st.eqHighAlpha*(right-st.envR)
                         val hiL=left-st.envL; val hiR=right-st.envR
                         val midL=left-st.lowL-hiL; val midR=right-st.lowR-hiR
-                        left=st.lowL*lowGain+midL*midGain+hiL*highGain
-                        right=st.lowR*lowGain+midR*midGain+hiR*highGain
+                        left=st.lowL*st.lowGain+midL*st.midGain+hiL*st.highGain
+                        right=st.lowR*st.lowGain+midR*st.midGain+hiR*st.highGain
                     }
                     "PARAM_EQ_8" -> {
                         st.eq.forEach { filter -> left=filter.processL(left); right=filter.processR(right) }
                     }
                     "FILTER" -> {
-                        val cutoff=(p["cutoffHz"]?:16000f).coerceIn(20f,sampleRate*0.45f)
-                        val mode=(p["mode"]?:0f).toInt().coerceIn(0,2)
-                        val alpha=1-exp(-2*PI*cutoff/sampleRate)
-                        st.lowL+=alpha*(left-st.lowL);st.lowR+=alpha*(right-st.lowR)
-                        when(mode){1->{left-=st.lowL;right-=st.lowR};2->{left=(left-st.lowL)*0.7+st.lowL*0.3;right=(right-st.lowR)*0.7+st.lowR*0.3};else->{left=st.lowL;right=st.lowR}}
+                        st.lowL+=st.filterAlpha*(left-st.lowL);st.lowR+=st.filterAlpha*(right-st.lowR)
+                        when(st.filterMode){1->{left-=st.lowL;right-=st.lowR};2->{left=(left-st.lowL)*0.7+st.lowL*0.3;right=(right-st.lowR)*0.7+st.lowR*0.3};else->{left=st.lowL;right=st.lowR}}
                     }
                     "SATURATOR" -> {
-                        val drive=(p["drive"]?:2.5f).coerceIn(0.2f,12f).toDouble()
-                        val wet=(p["wet"]?:0.35f).coerceIn(0f,1f).toDouble()
-                        val out=db(p["outputDb"]?:0f); val norm=tanh(drive).coerceAtLeast(0.0001)
-                        left=(left*(1-wet)+tanh(left*drive)/norm*wet)*out
-                        right=(right*(1-wet)+tanh(right*drive)/norm*wet)*out
+                        left=(left*(1-st.saturatorWet)+tanh(left*st.saturatorDrive)/st.saturatorNorm*st.saturatorWet)*st.saturatorOutput
+                        right=(right*(1-st.saturatorWet)+tanh(right*st.saturatorDrive)/st.saturatorNorm*st.saturatorWet)*st.saturatorOutput
                     }
                     "COMPRESSOR" -> {
-                        val threshold=(p["thresholdDb"]?:-18f).coerceIn(-60f,0f); val ratio=(p["ratio"]?:3f).coerceIn(1f,20f)
-                        val aa=exp(-1.0/((p["attackMs"]?:10f).coerceIn(0.1f,250f)*sampleRate/1000.0))
-                        val ra=exp(-1.0/((p["releaseMs"]?:120f).coerceIn(1f,1500f)*sampleRate/1000.0))
-                        val absL=abs(left);val absR=abs(right);val la=if(absL>st.envL)aa else ra;val lr=if(absR>st.envR)aa else ra
+                        val absL=abs(left);val absR=abs(right)
+                        val la=if(absL>st.envL)st.compressorAttack else st.compressorRelease
+                        val lr=if(absR>st.envR)st.compressorAttack else st.compressorRelease
                         st.envL=la*st.envL+(1-la)*absL;st.envR=lr*st.envR+(1-lr)*absR
                         val detector=max(st.envL,st.envR).coerceAtLeast(1e-7);val inDb=20*log10(detector)
-                        val outDb=if(inDb>threshold)threshold+(inDb-threshold)/ratio else inDb
-                        val reduction=db((outDb-inDb).toFloat())*db(p["makeupDb"]?:0f)
+                        val outDb=if(inDb>st.compressorThreshold)st.compressorThreshold+(inDb-st.compressorThreshold)/st.compressorRatio else inDb
+                        val reduction=db((outDb-inDb).toFloat())*st.compressorMakeup
                         left*=reduction;right*=reduction
                     }
                     "DELAY","REVERB" -> {
-                        val ms=if(device.type=="REVERB")((p["decay"]?:1.6f)*1000/7).coerceIn(24f,180f) else (p["timeMs"]?:320f).coerceIn(10f,2000f)
-                        val frames=(ms*sampleRate/1000).toInt().coerceIn(1,st.delayL.size-1)
+                        val frames=st.delayFrames
                         if(device.type=="DELAY") {
                             val read=Math.floorMod(st.write-frames,st.delayL.size);val dl=st.delayL[read].toDouble();val dr=st.delayR[read].toDouble()
-                            val feedback=(p["feedback"]?:0.32f).coerceIn(0f,0.88f).toDouble();val wet=(p["wet"]?:0.2f).coerceIn(0f,1f).toDouble()
-                            st.delayL[st.write]=(left+dl*feedback).toFloat().coerceIn(-4f,4f);st.delayR[st.write]=(right+dr*feedback).toFloat().coerceIn(-4f,4f)
-                            left=left*(1-wet)+dl*wet;right=right*(1-wet)+dr*wet
+                            st.delayL[st.write]=(left+dl*st.delayFeedback).toFloat().coerceIn(-4f,4f);st.delayR[st.write]=(right+dr*st.delayFeedback).toFloat().coerceIn(-4f,4f)
+                            left=left*(1-st.delayWet)+dl*st.delayWet;right=right*(1-st.delayWet)+dr*st.delayWet
                         } else {
-                            val room=(p["room"]?:0.45f).coerceIn(0.05f,0.95f).toDouble();val wet=(p["wet"]?:0.22f).coerceIn(0f,1f).toDouble()
                             val tap1=frames
-                            val tap2=(frames*1.31f).toInt().coerceAtMost(st.delayL.size-1)
-                            val tap3=(frames*1.73f).toInt().coerceAtMost(st.delayL.size-1)
                             val a=st.delayL[Math.floorMod(st.write-tap1,st.delayL.size)].toDouble()
-                            val b=st.delayL[Math.floorMod(st.write-tap2,st.delayL.size)].toDouble()
-                            val c=st.delayL[Math.floorMod(st.write-tap3,st.delayL.size)].toDouble()
+                            val b=st.delayL[Math.floorMod(st.write-st.reverbTap2,st.delayL.size)].toDouble()
+                            val c=st.delayL[Math.floorMod(st.write-st.reverbTap3,st.delayL.size)].toDouble()
                             val ar=st.delayR[Math.floorMod(st.write-tap1,st.delayR.size)].toDouble()
-                            val br=st.delayR[Math.floorMod(st.write-tap2,st.delayR.size)].toDouble()
-                            val cr=st.delayR[Math.floorMod(st.write-tap3,st.delayR.size)].toDouble()
-                            st.delayL[st.write]=(left+(a+b+c)/3*room).toFloat().coerceIn(-4f,4f)
-                            st.delayR[st.write]=(right+(ar+br+cr)/3*room).toFloat().coerceIn(-4f,4f)
-                            left=left*(1-wet)+(a+b+c)/3*wet;right=right*(1-wet)+(ar+br+cr)/3*wet
+                            val br=st.delayR[Math.floorMod(st.write-st.reverbTap2,st.delayR.size)].toDouble()
+                            val cr=st.delayR[Math.floorMod(st.write-st.reverbTap3,st.delayR.size)].toDouble()
+                            st.delayL[st.write]=(left+(a+b+c)/3*st.reverbRoom).toFloat().coerceIn(-4f,4f)
+                            st.delayR[st.write]=(right+(ar+br+cr)/3*st.reverbRoom).toFloat().coerceIn(-4f,4f)
+                            left=left*(1-st.reverbWet)+(a+b+c)/3*st.reverbWet;right=right*(1-st.reverbWet)+(ar+br+cr)/3*st.reverbWet
                         }
                         st.write=(st.write+1)%st.delayL.size
                     }
                     "LIMITER" -> {
-                        val ceiling=db((p["ceilingDb"]?:-1f).coerceIn(-12f,0f)).coerceIn(0.05,1.0)
+                        val ceiling=st.limiterCeiling
                         left=(left/(1+abs(left)/ceiling)).coerceIn(-ceiling,ceiling)
                         right=(right/(1+abs(right)/ceiling)).coerceIn(-ceiling,ceiling)
                     }

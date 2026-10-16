@@ -293,7 +293,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val velocity: Int,
         val pan: Float,
         val track: StudioTrack,
-        val instrument: SamplerInstrument? = null
+        val instrument: SamplerInstrument? = null,
+        val frequency: Double,
+        val instrumentRate: Double,
+        val attackFrames: Long,
+        val decayFrames: Long,
+        val releaseFrames: Long
     )
 
     private data class DrumEvent(
@@ -310,7 +315,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val totalFrames: Long,
         val audio: List<AudioEvent>,
         val notes: List<NoteEvent>,
-        val drums: List<DrumEvent>
+        val drums: List<DrumEvent>,
+        val trackBuffers: Map<String, FloatArray>,
+        val deviceDsp: Map<String, TrackDeviceDsp>,
+        val deviceChainSignatures: Map<String, List<Pair<String, String>>>,
+        val audioWorkspace: ArrayList<AudioEvent>,
+        val noteWorkspace: ArrayList<NoteEvent>,
+        val drumWorkspace: ArrayList<DrumEvent>
     )
 
     private data class TrackMix(
@@ -497,7 +508,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 ?: requestedFrames.toLong().coerceAtLeast(1L) * 4L
             estimatedBytes += allocationBytes
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
-                "Decoded PCM disk cache exceeds its 2 GiB budget; free storage or reduce the total source duration"
+                "Decoded PCM disk cache exceeds its 8 GiB budget; free storage or reduce the total source duration"
             }
             sourceRequests += SourceRequest(uriString, sourceSeconds, requestedFrames, cacheKey)
         }
@@ -555,7 +566,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 .coerceIn(1L, sampleRate.toLong() * 30L).toInt()
             estimatedBytes += frameCount.toLong() * 4L
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
-                "Instrument PCM disk cache exceeds its 2 GiB budget; free storage or reduce sample duration"
+                "Instrument PCM disk cache exceeds its 8 GiB budget; free storage or reduce sample duration"
             }
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
             val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
@@ -624,10 +635,20 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val noteDuration = ticksToFrames(note.durationTicks.coerceAtLeast(1L))
                         val noteEnd = min(clipEnd, if (noteStart > Long.MAX_VALUE - noteDuration) Long.MAX_VALUE else noteStart + noteDuration)
                         if (noteEnd > noteStart) {
+                            val pitch = note.pitch.coerceIn(0, 127)
+                            val instrument = instrumentsByTrack[track.id]
                             notes.add(NoteEvent(
-                                noteStart, noteEnd, note.pitch.coerceIn(0, 127),
+                                noteStart, noteEnd, pitch,
                                 note.velocity.coerceIn(1, 127), note.pan.coerceIn(-1f, 1f), track,
-                                instrumentsByTrack[track.id]
+                                instrument,
+                                440.0 * 2.0.pow((pitch - 69) / 12.0),
+                                instrument?.let {
+                                    2.0.pow(((pitch - 60 + it.pitchSemitones).toDouble() +
+                                        it.fineTuneCents / 100.0) / 12.0)
+                                } ?: 1.0,
+                                instrument?.let { it.attackMs.toLong() * sampleRate / 1000L } ?: 0L,
+                                instrument?.let { it.decayMs.toLong() * sampleRate / 1000L } ?: 0L,
+                                instrument?.let { it.releaseMs.toLong() * sampleRate / 1000L } ?: 0L
                             ))
                         }
                     }
@@ -644,6 +665,32 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
             }
         }
+        // Allocate every per-track bus and prepare new DSP state on this background
+        // preparation thread. The render worker must not allocate buffers or delay lines.
+        val trackBuffers = tracks.associate { it.id to FloatArray(BLOCK_FRAMES * 2) }
+        val deviceChainSignatures = tracks.associate { track ->
+            track.id to track.devices
+                .filter { it.enabled && it.type in EFFECT_DEVICE_TYPES }
+                .map { it.id to it.type }
+        }
+        val previousPlan = activePlanRef?.get()
+        val deviceDsp = HashMap<String, TrackDeviceDsp>()
+        tracks.forEach { track ->
+            val signature = deviceChainSignatures[track.id].orEmpty()
+            if (signature.isNotEmpty()) {
+                val previousDsp = previousPlan?.deviceDsp?.get(track.id)
+                val previousSignature = previousPlan?.deviceChainSignatures?.get(track.id)
+                val dsp = if (previousDsp != null && previousSignature == signature) {
+                    previousDsp
+                } else {
+                    TrackDeviceDsp(sampleRate).also { it.prepare(track.devices) }
+                }
+                deviceDsp[track.id] = dsp
+            }
+        }
+        val sortedAudio = audioEvents.sortedBy { it.startFrame }
+        val sortedNotes = notes.sortedBy { it.startFrame }
+        val sortedDrums = drums.sortedBy { it.startFrame }
         return Plan(
             sampleRate,
             bpm,
@@ -651,9 +698,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             project.numerator.coerceIn(1, 32),
             project.denominator.coerceIn(1, 32),
             totalFrames,
-            audioEvents.sortedBy { it.startFrame },
-            notes.sortedBy { it.startFrame },
-            drums.sortedBy { it.startFrame }
+            sortedAudio,
+            sortedNotes,
+            sortedDrums,
+            trackBuffers,
+            deviceDsp,
+            deviceChainSignatures,
+            ArrayList(sortedAudio.size),
+            ArrayList(sortedNotes.size),
+            ArrayList(sortedDrums.size)
         )
     }
 
@@ -691,6 +744,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         revision: Long? = null,
         allowTransportGenerationChange: Boolean = false
     ): AudioAsset {
+        // When audio is already running, source decoding must yield CPU time to the
+        // THREAD_PRIORITY_AUDIO renderer rather than competing at normal thread priority.
+        val decodeTid = Process.myTid()
+        val previousPriority = runCatching { Process.getThreadPriority(decodeTid) }
+            .getOrDefault(Process.THREAD_PRIORITY_DEFAULT)
         fun ensureCurrent() {
             check(!closed.get() && (allowTransportGenerationChange || generation.get() == token) &&
                 (revision == null || arrangementUpdateRevision.get() == revision)) {
@@ -705,6 +763,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         var pcmRandomAccess: RandomAccessFile? = null
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
+        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
         try {
             extractor.setDataSource(appContext, uri, null)
             var selected = -1
@@ -821,6 +880,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             runCatching { extractor.release() }
             runCatching { pcmRandomAccess?.close() }
             if (!keepPcmFile) runCatching { pcmFile.delete() }
+            runCatching { Process.setThreadPriority(previousPriority) }
         }
     }
 
@@ -875,16 +935,16 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
-        val perTrackMix = HashMap<String, FloatArray>()
-        val deviceDsp = HashMap<String, TrackDeviceDsp>()
         var plan = planRef.get()
+        var perTrackMix = plan.trackBuffers
+        var deviceDsp = plan.deviceDsp
         val sampleRate = plan.sampleRate
         var scheduledAudio = plan.audio
         var scheduledNotes = plan.notes
         var scheduledDrums = plan.drums
-        val playingAudio = ArrayList<AudioEvent>()
-        val playingNotes = ArrayList<NoteEvent>()
-        val playingDrums = ArrayList<DrumEvent>()
+        var playingAudio = plan.audioWorkspace
+        var playingNotes = plan.noteWorkspace
+        var playingDrums = plan.drumWorkspace
         var audioCursor = 0
         var noteCursor = 0
         var drumCursor = 0
@@ -925,6 +985,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val latestPlan = planRef.get()
                 if (latestPlan !== plan) {
                     plan = latestPlan
+                    perTrackMix = plan.trackBuffers
+                    deviceDsp = plan.deviceDsp
+                    playingAudio = plan.audioWorkspace
+                    playingNotes = plan.noteWorkspace
+                    playingDrums = plan.drumWorkspace
                     scheduledAudio = plan.audio
                     scheduledNotes = plan.notes
                     scheduledDrums = plan.drums
@@ -978,7 +1043,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
-                    val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val channelBuffer = perTrackMix[event.track.id] ?: continue
                     // Read the atomic scrub offset once per audio event/block, not per sample.
                     val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
@@ -1015,19 +1080,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
                     val instrument = note.instrument
-                    val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
+                    val frequency = note.frequency
                     val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
-                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val channelBuffer = perTrackMix[note.track.id] ?: continue
                     val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
-                    val instrumentRate = instrument?.let {
-                        2.0.pow(((note.pitch - 60 + it.pitchSemitones).toDouble() + it.fineTuneCents / 100.0) / 12.0)
-                    } ?: 1.0
-                    val attackFrames = instrument?.let { it.attackMs.toLong() * sampleRate / 1000L } ?: 0L
-                    val decayFrames = instrument?.let { it.decayMs.toLong() * sampleRate / 1000L } ?: 0L
-                    val releaseFrames = instrument?.let { it.releaseMs.toLong() * sampleRate / 1000L } ?: 0L
+                    val instrumentRate = note.instrumentRate
+                    val attackFrames = note.attackFrames
+                    val decayFrames = note.decayFrames
+                    val releaseFrames = note.releaseFrames
                     for (absolute in from until to) {
                         val elapsed = absolute - note.startFrame
                         val outIndex = ((absolute - position) * 2).toInt()
@@ -1082,7 +1145,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
-                    val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val channelBuffer = perTrackMix[drum.track.id] ?: continue
                     for (absolute in from until to) {
                         val t = (absolute - drum.startFrame).toDouble() / sampleRate
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
@@ -1121,8 +1184,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 perTrackMix.forEach { (trackId, channel) ->
                     val trackState = mixState.tracks[trackId] ?: return@forEach
                     if (trackState.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
-                        deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
-                            .process(channel, mix, sampleCount, liveMasterGain, trackState.devices)
+                        deviceDsp[trackId]?.process(channel, mix, sampleCount, liveMasterGain, trackState.devices)
                     }
                 }
                 // Per-channel meters are calculated from each track's summed pre-master stereo bus.
@@ -1217,7 +1279,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         require(uriString.isNotBlank()) { "Audio source URI is empty" }
         require(durationSeconds.isFinite() && durationSeconds > 0.0) { "Audio duration is invalid" }
         val token = generation.get()
-        val seconds = durationSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
+        // A small tail lets MediaCodec deliver EOS even when container duration metadata
+        // rounds down by a few frames; the asset is truncated to actual decoded frames.
+        val seconds = (durationSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble()) + 0.25)
+            .coerceAtMost(MAX_SOURCE_SECONDS.toDouble())
         val requestedFrames = ceil(seconds * OUTPUT_SAMPLE_RATE).toLong()
             .coerceIn(1L, OUTPUT_SAMPLE_RATE.toLong() * MAX_SOURCE_SECONDS).toInt()
         val key = "$uriString|$OUTPUT_SAMPLE_RATE"
@@ -1234,7 +1299,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
             }
         }
-        check(!closed.get()) { "Audio preparation was cancelled" }
+        if (closed.get()) {
+            runCatching { decoded.pcmFile?.delete() }
+            error("Audio preparation was cancelled")
+        }
         synchronized(audioAssetCache) { audioAssetCache.put(key, decoded) }
         android.util.Log.i(
             "StudioWaveAudio",
@@ -1374,10 +1442,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 300
         const val MAX_ARRANGEMENT_BARS = 1800
-        // PCM is file-backed and memory-mapped: keep a bounded on-disk cache instead of
-        // requiring every track's decoded audio to fit in the Java heap.
-        const val MAX_TOTAL_PCM_BYTES = 2L * 1024L * 1024L * 1024L
-        const val MAX_ASSET_CACHE_KIB = 2 * 1024 * 1024
+        // PCM is file-backed and memory-mapped: bound decoded source storage separately
+        // from the Java heap so large multitrack arrangements do not fail at 64 MiB.
+        const val MAX_TOTAL_PCM_BYTES = 8L * 1024L * 1024L * 1024L
+        const val MAX_ASSET_CACHE_KIB = 8 * 1024 * 1024
         const val MAX_PARALLEL_DECODERS = 2
         const val MAX_CACHED_SOURCE_DURATIONS = 256
     }
