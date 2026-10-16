@@ -1605,6 +1605,52 @@ private fun TransportBar(
         SmallIconButton(Icons.Default.Save, p.muted, onSaveProject)
         TransportAction("WAV", heightDp = 25, onClick = onExportWav)
         Box(Modifier.width(1.dp).height(19.dp).background(p.border))
+        // Compact horizontal master fader (not the peak meter): direct touch mapping and clear cap.
+        Row(
+            Modifier.width(if (compact) 68.dp else 86.dp).height(22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(3.dp)
+        ) {
+            Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black)
+            Canvas(
+                Modifier.weight(1f).fillMaxHeight()
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = { start ->
+                                val width = size.width.coerceAtLeast(1).toFloat()
+                                onMaster((start.x / width).coerceIn(0f, 1f))
+                            },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                val width = size.width.coerceAtLeast(1).toFloat()
+                                onMaster((change.position.x / width).coerceIn(0f, 1f))
+                            }
+                        )
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { point ->
+                            val width = size.width.coerceAtLeast(1).toFloat()
+                            onMaster((point.x / width).coerceIn(0f, 1f))
+                        })
+                    }
+            ) {
+                val cy = size.height / 2f
+                val trackHeight = 3.5f
+                val trackTop = cy - trackHeight / 2f
+                drawRect(p.control, Offset(0f, trackTop), Size(size.width, trackHeight))
+                drawRect(p.border, Offset(0f, trackTop), Size(size.width, trackHeight),
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.8f))
+                val fraction = master.coerceIn(0f, 1f)
+                val x = size.width * fraction
+                drawLine(p.accent.copy(alpha = 0.85f), Offset(0f, cy), Offset(x, cy), 2.5f)
+                val capWidth = 5f
+                drawRoundRect(p.text, Offset((x - capWidth / 2f).coerceIn(0f, size.width - capWidth),
+                    cy - size.height * 0.34f), Size(capWidth, size.height * 0.68f),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
+                drawLine(p.room, Offset(x, cy - size.height * 0.24f),
+                    Offset(x, cy + size.height * 0.24f), 1f)
+            }
+        }
         Text("OUT", color = p.muted, fontSize = 6.sp, fontWeight = FontWeight.Black)
         Column(Modifier.width(if (compact) 64.dp else 78.dp), verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {

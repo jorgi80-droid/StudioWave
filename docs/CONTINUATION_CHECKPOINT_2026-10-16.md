@@ -303,3 +303,9 @@ See `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` for the manual-to-source m
 - The Mixer Master fader now has a wider outlined cap and a high-contrast orange position line on a slightly stronger rail. Existing dB taper and drag/tap callbacks remain unchanged.
 - Arrangement viewport/timebase, clip hit testing/resize/snap, MIDI note model, DSP routing, master gain mapping, and the 1,800-bar limit are unchanged.
 - Validate this commit with Android CI unit tests, debug APK build, and APK artifact upload. Physical-device playback/layout checks remain required.
+
+
+## Transport master control — 2026-10-16
+- Added the missing compact horizontal Master gain fader to the top transport, beside the output label and peak/LUFS meter. It has a visible track and distinct position cap; tap and horizontal drag set the existing master gain value.
+- The top fader uses the same `onMaster` callback already wired to the audio engine, and does not replace the output peak/LUFS display.
+- Together with the Arrangement bipolar peak normalization, drum-pattern thumbnails, and larger Mixer Master cap, this addresses the specific visual defects reported from the latest APK. The next Android CI run is the compile/test gate; device validation remains required.
