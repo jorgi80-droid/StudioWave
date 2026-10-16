@@ -19,6 +19,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
@@ -117,6 +119,19 @@ internal fun boundedAudioDecodeDurationSeconds(
     return min(required, sourceDuration ?: required).coerceIn(0.05, safeMaximum)
 }
 
+/** Smooth master-bus safety saturation; keeps ordinary levels linear and avoids abrupt hard clipping. */
+internal fun softLimitMasterSample(sample: Float, threshold: Float = 0.92f, ceiling: Float = 0.98f): Float {
+    if (!sample.isFinite()) return 0f
+    val safeThreshold = threshold.takeIf { it.isFinite() }?.coerceIn(0f, 0.999f) ?: 0.92f
+    val safeCeiling = ceiling.takeIf { it.isFinite() }?.coerceIn(safeThreshold + 0.001f, 1f) ?: 0.98f
+    val magnitude = abs(sample)
+    if (magnitude <= safeThreshold) return sample
+    val knee = (safeCeiling - safeThreshold).coerceAtLeast(0.001f)
+    val excess = magnitude - safeThreshold
+    val limited = safeThreshold + knee * (excess / (excess + knee))
+    return if (sample < 0f) -limited.coerceAtMost(safeCeiling) else limited.coerceAtMost(safeCeiling)
+}
+
 class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
@@ -203,6 +218,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         override fun sizeOf(key: String, value: AudioAsset): Int =
             (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
+    // MediaCodec instances are expensive on mobile. Never open one decoder per track at once.
+    private val decodeSemaphore = Semaphore(MAX_PARALLEL_DECODERS)
+    private val sourceDurationCache = java.util.concurrent.ConcurrentHashMap<String, Double>()
     @Volatile private var worker: Thread? = null
     @Volatile private var output: NativeAudioEngine? = null
 
@@ -421,7 +439,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
             if (cached != null) return request.uriString to cached
             val decoded = try {
-                decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token)
+                decodeSemaphore.withPermit {
+                    decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token)
+                }
             } catch (failure: Exception) {
                 // One stale URI or unsupported/corrupt file must not abort playback of every
                 // other audio, MIDI, and drum track in the project.
@@ -461,7 +481,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 ?: return@forEach
             val uri = Uri.parse(uriText)
             // Bound instrument decoding to 30 seconds and include it in the shared PCM budget.
-            val duration = (readSourceDurationSeconds(uri) ?: 10.0).coerceIn(0.05, 30.0)
+            val duration = (cachedSourceDurationSeconds(uri) ?: 10.0).coerceIn(0.05, 30.0)
             val frameCount = ceil(duration * sampleRate).toLong()
                 .coerceIn(1L, sampleRate.toLong() * 30L).toInt()
             estimatedBytes += frameCount.toLong() * 4L
@@ -471,7 +491,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
             val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
             val asset = cachedInstrument ?: try {
-                decodeAudioAsset(uri, duration, token).also { decoded ->
+                decodeSemaphore.withPermit { decodeAudioAsset(uri, duration, token) }.also { decoded ->
                     ensureCurrent()
                     synchronized(audioAssetCache) { audioAssetCache.put(cacheKey, decoded) }
                 }
@@ -566,6 +586,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             notes.sortedBy { it.startFrame },
             drums.sortedBy { it.startFrame }
         )
+    }
+
+    /** Memoizes slow content-provider metadata probes for the lifetime of this engine. */
+    private fun cachedSourceDurationSeconds(uri: Uri): Double? {
+        val key = uri.toString()
+        sourceDurationCache[key]?.let { return it }
+        val duration = readSourceDurationSeconds(uri) ?: return null
+        return sourceDurationCache.putIfAbsent(key, duration) ?: duration
     }
 
     /** Reads original media duration on the IO preparation dispatcher, never the render thread. */
@@ -976,8 +1004,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 var blockPeak = 0f
                 var blockSquares = 0.0
                 for (i in 0 until sampleCount) {
-                    val sample = mix[i].coerceIn(-0.98f, 0.98f)
-                    mix[i] = sample // Meter the same clipped master signal queued for native output.
+                    val sample = softLimitMasterSample(mix[i])
+                    mix[i] = sample // Meter the same safety-limited master signal queued for native output.
                     val absolute = kotlin.math.abs(sample)
                     if (absolute > blockPeak) blockPeak = absolute
                     blockSquares += sample.toDouble() * sample.toDouble()
@@ -1151,5 +1179,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         // 64 MiB accommodates one five-minute stereo PCM source (~50.5 MiB), avoiding
         // cache eviction and expensive source decoding every time a long clip is resized.
         const val MAX_ASSET_CACHE_KIB = 64 * 1024
+        const val MAX_PARALLEL_DECODERS = 2
     }
 }
