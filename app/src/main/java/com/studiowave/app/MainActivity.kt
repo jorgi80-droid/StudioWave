@@ -856,7 +856,8 @@ private fun StudioWaveApp() {
                     "OUTPUT QUEUE::${output.queuedFrames} frames queued · ${output.playedFrames} frames consumed",
                     "PROCESS CPU::$cpuLabel · ${runtime.availableProcessors} logical processors reported by Android",
                     "MEMORY::Process PSS %.1f MB · Java heap %.1f / %.1f MB · native heap %.1f MB".format(java.util.Locale.US, pssMb, javaUsedMb, javaMaxMb, nativeMb),
-                    "RENDER PACING::${fpsLabel} estimated UI frame rate · ${frameLabel} mean smoothed frame interval",
+                    "RENDER PACING::${fpsLabel} estimated UI frame rate · ${frameLabel} smoothed UI frame interval",
+                    "AUDIO RENDER::last ${"%.2f".format(java.util.Locale.US, output.lastRenderMillis)} ms · max ${"%.2f".format(java.util.Locale.US, output.maxRenderMillis)} ms · budget ${"%.2f".format(java.util.Locale.US, output.renderBudgetMillis)} ms · ${output.renderOverrunBlocks} over-budget blocks",
                     "PROJECT LOAD::${project.tracks.size} tracks · ${project.tracks.sumOf { it.clips.size }} clips · BPM ${project.bpm}",
                     "MIXER CONFIG::256-frame render blocks · ${if (parallelPreparation) "parallel source preparation ON" else "sequential source preparation"} · realtime mix worker single-threaded",
                     "METRONOME::${if (metronomeEnabled) "ON" else "OFF"} · level ${(metronomeLevel * 100).toInt()}%"
