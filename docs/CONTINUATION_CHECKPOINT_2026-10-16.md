@@ -234,3 +234,32 @@
 - Recorded takes are saved in the app's private recordings directory and referenced by their file URI in the arrangement; capture works offline.
 - Added RIFF/WAV header regression tests for mono channel count, sample rate, byte rate, bit depth and data size. Also moved playback-bounce writer startup after constructor validation to avoid starting a worker before rejecting an invalid sample rate.
 - Validation gate: this batch is not verified by Android CI yet. Require debug APK build, unit tests and APK artifact upload before calling it green. Physical device testing is required for microphone permission, actual input level, recording start/stop, and playback of the recorded clip.
+
+
+## Integrated professional audio + Ableton-reference pass
+
+Baseline for this batch: branch HEAD `b36db6883886ec3c4ce481afb7c56a2dded8caf4`. PR #15 remains Draft and has not been merged.
+
+### Integrated changes
+- Added project-backed `STUDIO_SYNTH` parameters for an original dual-oscillator instrument: waveform A/B, mix/gain, tuning, filter cutoff/resonance, ADSR and LFO. Reused the existing `TrackDevice.parameters` persistence format to preserve compatibility with older projects.
+- Connected scheduled MIDI events to configured voice rendering. Pitch mapping includes 12-TET, Just Intonation and Pythagorean ratios anchored to a selected root MIDI note. Note-off release tails extend the transport render plan but do not expand the bar-limited arrangement coordinate system.
+- Bounded the active MIDI voice set to 128 voices with deterministic oldest-start voice stealing. Kept DirectWave as a separate sample source and preserved its existing sampled ADSR; its synth controls are not shown when the sample-source mode is active.
+- Added a bounded, preallocated handoff of post-master PCM blocks to a background Hann-windowed radix-2 FFT worker. The device UI consumes spectrum snapshots from real rendered PCM; FFT/windowing/band aggregation do not execute inside the render loop.
+- Added eight-band EQ response math based on the peaking-biquad equations used by `TrackDeviceDsp`. Graph node gestures write persisted `PARAM_EQ_8` gain/frequency parameters and the insert enable toggle controls the actual device bypass.
+- Improved Live-inspired graphite/light palette contrast, Arrangement clip fill/title/detail legibility, and reduced resize-handle visual noise without rewriting time transforms, zoom/scroll math, gesture hit bounds or the 1,800-bar cap.
+- Replaced the previous local-state instrument/spectrum mock panel with project-backed StudioWave controls and the real PCM spectrum. Unsupported tuning names and fake spectrum animation are not presented as working features.
+
+### Added regression coverage
+- DSP: tuning intervals, finite oscillator output, envelope/release and peak behavior.
+- Analyzer: FFT tone/bin math and frequency-to-bin mapping.
+- EQ: flat response at unity, gain/frequency response and bypass.
+- Persistence: StudioWave Dual Synth parameters round-trip through project JSON.
+- Existing tests remain for timeline viewport, audio trim/playback, serial effects/bypass and WAV header behavior.
+
+### Remaining validation boundaries
+- GitHub Actions for the newly pushed source must pass before this batch is reported green. The CI state and APK artifact must be confirmed from the commit's actual workflow run.
+- No physical Android 16 device test is claimed. Microphone capture code and WAV header tests exist, but runtime permission/lifecycle, recording take insertion into Arrangement, and take save/reopen/playback remain physical-device acceptance tests.
+- True audio tempo warp/time-stretch with warp markers and full parallel Instrument/Effect Rack chains/Macros are not claimed complete here. Clip trimming is not the same feature as tempo warping.
+- UI fidelity is a reference-informed original native adaptation, not a claim of pixel-identical Ableton implementation or use of proprietary Ableton assets.
+
+See `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` for the manual-to-source mapping.

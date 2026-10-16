@@ -14,6 +14,7 @@ import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioTrack
 import com.studiowave.app.data.TrackDevice
 import com.studiowave.app.data.EFFECT_DEVICE_TYPES
+import com.studiowave.app.data.INSTRUMENT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -217,6 +218,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         meter.rmsRight.set(java.lang.Float.floatToRawIntBits(rmsRight.coerceIn(0f, 1f)))
     }
 
+    /** Snapshot of the real post-master PCM spectrum, calculated on a worker thread. */
+    fun spectrumSnapshot(): FloatArray = spectrumAnalyzer.snapshot()
+
     private fun publishMasterMeter(peak: Float, rms: Float, momentaryLufs: Float) {
         masterPeakBits.set(java.lang.Float.floatToRawIntBits(peak.coerceIn(0f, 1f)))
         masterRmsBits.set(java.lang.Float.floatToRawIntBits(rms.coerceIn(0f, 1f)))
@@ -268,6 +272,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     @Volatile private var worker: Thread? = null
     @Volatile private var output: NativeAudioEngine? = null
     @Volatile private var wavRecorder: PlaybackWavRecorder? = null
+    private val spectrumAnalyzer = PcmSpectrumAnalyzer()
     // Render reads an immutable plan snapshot per block; edits publish replacements atomically.
     @Volatile private var activePlanRef: java.util.concurrent.atomic.AtomicReference<Plan>? = null
     // Supersedes stale background schedule builds when many clips/tracks are added rapidly.
@@ -367,7 +372,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     private data class NoteEvent(
         val startFrame: Long,
+        /** Final audio frame after the release tail. */
         val endFrame: Long,
+        /** MIDI note-off frame before its release tail. */
+        val noteOffFrame: Long,
         val pitch: Int,
         val velocity: Int,
         val pan: Float,
@@ -377,7 +385,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val instrumentRate: Double,
         val attackFrames: Long,
         val decayFrames: Long,
-        val releaseFrames: Long
+        val releaseFrames: Long,
+        val synthParameters: StudioWaveVoiceDsp.Parameters? = null,
+        val voiceState: StudioWaveVoiceDsp.VoiceState = StudioWaveVoiceDsp.VoiceState()
     )
 
     private data class DrumEvent(
@@ -574,7 +584,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         // Keep playback aligned with the same 1800-bar musical limit as Arrangement.
         // A fixed seconds cap would truncate valid projects at slower tempos or different meters.
         val boundedMaxTick = maxTick.coerceIn(1L, maxAllowedTick)
-        val totalFrames = ticksToFrames(boundedMaxTick).coerceAtLeast(1L)
+        val arrangementFrames = ticksToFrames(boundedMaxTick).coerceAtLeast(1L)
 
         val requestedTicksByUri = linkedMapOf<String, Long>()
         tracks.filter { it.kind == "audio" }.forEach { track ->
@@ -677,8 +687,19 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val notes = ArrayList<NoteEvent>()
         val drums = ArrayList<DrumEvent>()
         val samplerPreferences = appContext.getSharedPreferences("studiowave_directwave", Context.MODE_PRIVATE)
+        val voiceParametersByTrack = tracks.mapNotNull { track ->
+            val device = track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
+            if (device == null) null else {
+                val hasPersistedStudioParameters = device.type != "DIRECTWAVE" || device.parameters.keys.any {
+                    it == "oscillatorA" || it == "tuning" || it == "cutoffHz" || it == "attackMs"
+                }
+                if (hasPersistedStudioParameters) {
+                    track.id to StudioWaveVoiceDsp.Parameters.forDevice(device.type, device.parameters)
+                } else null
+            }
+        }.toMap()
         val instrumentsByTrack = HashMap<String, SamplerInstrument>()
-        tracks.asSequence().filter { it.kind == "midi" }.forEach { track ->
+        tracks.asSequence().filter { track -> track.kind == "midi" && track.devices.none { it.type == "STUDIO_SYNTH" } }.forEach { track ->
             ensureCurrent()
             val uriText = samplerPreferences.getString("sample.${track.id}", null)?.takeIf { it.isNotBlank() }
                 ?: return@forEach
@@ -737,7 +758,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 ensureCurrent()
                 val clipStart = ticksToFrames(clip.startTick)
                 val clipLength = ticksToFrames(clip.lengthTicks.coerceAtLeast(1L))
-                val clipEnd = min(totalFrames, if (clipStart > Long.MAX_VALUE - clipLength) Long.MAX_VALUE else clipStart + clipLength)
+                val clipEnd = min(arrangementFrames, if (clipStart > Long.MAX_VALUE - clipLength) Long.MAX_VALUE else clipStart + clipLength)
                 if (clipEnd <= clipStart) return@clipLoop
                 when (track.kind) {
                     "audio" -> {
@@ -771,18 +792,35 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         if (noteEnd > noteStart) {
                             val pitch = note.pitch.coerceIn(0, 127)
                             val instrument = instrumentsByTrack[track.id]
-                            notes.add(NoteEvent(
-                                noteStart, noteEnd, pitch,
-                                note.velocity.coerceIn(1, 127), note.pan.coerceIn(-1f, 1f), track,
-                                instrument,
-                                440.0 * 2.0.pow((pitch - 69) / 12.0),
-                                instrument?.let {
-                                    2.0.pow(((pitch - 60 + it.pitchSemitones).toDouble() +
-                                        it.fineTuneCents / 100.0) / 12.0)
-                                } ?: 1.0,
-                                instrument?.let { it.attackMs.toLong() * sampleRate / 1000L } ?: 0L,
-                                instrument?.let { it.decayMs.toLong() * sampleRate / 1000L } ?: 0L,
-                                instrument?.let { it.releaseMs.toLong() * sampleRate / 1000L } ?: 0L
+                            val voiceParameters = voiceParametersByTrack[track.id]
+                            val attackMs = instrument?.attackMs ?: voiceParameters?.attackMs ?: StudioWaveVoiceDsp.Parameters.DEFAULT.attackMs
+                            val decayMs = instrument?.decayMs ?: voiceParameters?.decayMs ?: StudioWaveVoiceDsp.Parameters.DEFAULT.decayMs
+                            val releaseMs = instrument?.releaseMs ?: voiceParameters?.releaseMs ?: StudioWaveVoiceDsp.Parameters.DEFAULT.releaseMs
+                            val releaseFrames = releaseMs.toLong() * sampleRate / 1000L
+                            val voiceEndFrame = if (noteEnd > Long.MAX_VALUE - releaseFrames) Long.MAX_VALUE else noteEnd + releaseFrames
+                            val tuning = voiceParameters?.tuning ?: 0
+                            val rootMidi = voiceParameters?.rootMidi ?: 60
+                            val instrumentRate = instrument?.let {
+                                val sourcePitch = (pitch + it.pitchSemitones).coerceIn(0, 127)
+                                (StudioWaveVoiceDsp.tunedFrequency(sourcePitch, tuning, rootMidi) /
+                                    StudioWaveVoiceDsp.tunedFrequency(60, tuning, rootMidi)) *
+                                    2.0.pow(it.fineTuneCents / 1200.0)
+                            } ?: 1.0
+                            if (voiceEndFrame > noteStart) notes.add(NoteEvent(
+                                startFrame = noteStart,
+                                endFrame = voiceEndFrame,
+                                noteOffFrame = noteEnd,
+                                pitch = pitch,
+                                velocity = note.velocity.coerceIn(1, 127),
+                                pan = note.pan.coerceIn(-1f, 1f),
+                                track = track,
+                                instrument = instrument,
+                                frequency = StudioWaveVoiceDsp.tunedFrequency(pitch, tuning, rootMidi),
+                                instrumentRate = instrumentRate,
+                                attackFrames = attackMs.toLong() * sampleRate / 1000L,
+                                decayFrames = decayMs.toLong() * sampleRate / 1000L,
+                                releaseFrames = releaseFrames,
+                                synthParameters = voiceParameters
                             ))
                         }
                     }
@@ -792,7 +830,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             if (active) {
                                 val tick = clip.startTick + (clip.lengthTicks.coerceAtLeast(1L) * step / steps.size.coerceAtLeast(1))
                                 val frame = ticksToFrames(tick)
-                                if (frame < totalFrames) drums.add(DrumEvent(frame, track))
+                                if (frame < arrangementFrames) drums.add(DrumEvent(frame, track))
                             }
                         }
                     }
@@ -824,6 +862,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
         val sortedAudio = audioEvents.sortedBy { it.startFrame }
         val sortedNotes = notes.sortedBy { it.startFrame }
+        // Keep note releases audible after the final clip without expanding the bar-limited arrangement grid.
+        val totalFrames = max(arrangementFrames, sortedNotes.maxOfOrNull { it.endFrame } ?: arrangementFrames)
         val sortedDrums = drums.sortedBy { it.startFrame }
         return Plan(
             sampleRate,
@@ -831,7 +871,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             ppq,
             project.numerator.coerceIn(1, 32),
             project.denominator.coerceIn(1, 32),
-            totalFrames,
+            arrangementFrames,
             sortedAudio,
             sortedNotes,
             sortedDrums,
@@ -1279,7 +1319,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
                 playingNotes.removeAll { it.endFrame <= position }
                 while (noteCursor < scheduledNotes.size && scheduledNotes[noteCursor].startFrame < blockEnd) {
-                    playingNotes.add(scheduledNotes[noteCursor++])
+                    val nextVoice = scheduledNotes[noteCursor++]
+                    if (playingNotes.size >= MAX_ACTIVE_MIDI_VOICES) {
+                        var stealIndex = 0
+                        var oldestStart = Long.MAX_VALUE
+                        for (voiceIndex in playingNotes.indices) {
+                            val voiceStart = playingNotes[voiceIndex].startFrame
+                            if (voiceStart < oldestStart) { oldestStart = voiceStart; stealIndex = voiceIndex }
+                        }
+                        playingNotes.removeAt(stealIndex)
+                    }
+                    playingNotes.add(nextVoice)
                 }
                 playingDrums.removeAll { it.startFrame + DRUM_DURATION_FRAMES <= position }
                 while (drumCursor < scheduledDrums.size && scheduledDrums[drumCursor].startFrame < blockEnd) {
@@ -1338,7 +1388,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     val channelBuffer = perTrackMix[note.track.id] ?: continue
-                    val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
+                    val voiceLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
+                    val heldLength = (note.noteOffFrame - note.startFrame).coerceAtLeast(1L)
                     val instrumentRate = note.instrumentRate
                     val attackFrames = note.attackFrames
                     val decayFrames = note.decayFrames
@@ -1363,20 +1414,28 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                 else ((note.endFrame - absolute).toFloat() / releaseFrames.toFloat()).coerceIn(0f, 1f)
                             val envelope = min(sustainGain, releaseGain)
                             val sampleIndex = sourceFrame.toInt().coerceIn(0, instrument.asset.frames - 1) * 2
-                            val velocityGain = channelMix.volume * (note.velocity / 127f) * envelope
-                            val sourceLeft = instrument.asset.sampleAt(sampleIndex) / 32768f * velocityGain * leftPan
-                            val sourceRight = instrument.asset.sampleAt(sampleIndex + 1) / 32768f * velocityGain * rightPan
+                            val deviceGain = note.synthParameters?.gain ?: 1f
+                            val velocityGain = channelMix.volume * (note.velocity / 127f) * envelope * deviceGain
+                            var sourceLeft = instrument.asset.sampleAt(sampleIndex) / 32768f * velocityGain * leftPan
+                            var sourceRight = instrument.asset.sampleAt(sampleIndex + 1) / 32768f * velocityGain * rightPan
+                            note.synthParameters?.let { parameters ->
+                                sourceLeft = StudioWaveVoiceDsp.processSample(sourceLeft, elapsed, sampleRate, parameters, note.voiceState, 0)
+                                sourceRight = StudioWaveVoiceDsp.processSample(sourceRight, elapsed, sampleRate, parameters, note.voiceState, 1)
+                            }
                             mix[outIndex] += sourceLeft * liveMasterGain
                             mix[outIndex + 1] += sourceRight * liveMasterGain
                             channelBuffer[outIndex] += sourceLeft
                             channelBuffer[outIndex + 1] += sourceRight
                         } else {
-                            val channelWave = StudioWaveVoiceDsp.sample(
+                            val channelWave = StudioWaveVoiceDsp.sampleConfigured(
                                 midiPitch = note.pitch,
                                 elapsedFrames = elapsed,
-                                noteLengthFrames = noteLength,
+                                noteLengthFrames = voiceLength,
                                 sampleRate = sampleRate,
-                                amplitude = channelGain
+                                amplitude = channelGain,
+                                parameters = note.synthParameters ?: StudioWaveVoiceDsp.Parameters.DEFAULT,
+                                state = note.voiceState,
+                                heldFrames = heldLength
                             )
                             val wave = channelWave * liveMasterGain
                             val sourceLeft = channelWave * leftPan
@@ -1454,6 +1513,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     blockSquares += sample.toDouble() * sample.toDouble()
                     pcm[i] = (sample * 32767f).toInt().toShort()
                 }
+                spectrumAnalyzer.offer(mix, sampleCount, sampleRate)
                 val momentaryLufs = loudnessMeter.processBlock(mix, sampleCount)
                 publishMasterMeter(blockPeak, kotlin.math.sqrt(blockSquares / sampleCount.coerceAtLeast(1)).toFloat(), momentaryLufs)
                 perTrackMix.forEach { (id, channel) ->
@@ -1685,6 +1745,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 latestProjectForPlayback = null
                 audioAssetCache.evictAll()
                 sourceDurationCache.clear()
+                spectrumAnalyzer.close()
             }
         }
     }
@@ -1693,6 +1754,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         const val OUTPUT_SAMPLE_RATE = 44100
         const val MAX_SCRATCH_OFFSET_MS = 10_000L
         const val BLOCK_FRAMES = 256
+        const val MAX_ACTIVE_MIDI_VOICES = 128
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 300
         const val MAX_ARRANGEMENT_BARS = 1800

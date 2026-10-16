@@ -23,6 +23,30 @@ class TrackDeviceProjectTest {
         assertTrue(actual.all { it.enabled })
     }
 
+    @Test fun studioWaveSynthParametersRoundTripThroughProjectJson() {
+        val original = StudioProject()
+        val midi = original.tracks.first { it.kind == "midi" }
+        val instrument = TrackDevice(
+            type = "STUDIO_SYNTH",
+            name = "StudioWave Dual Synth",
+            parameters = defaultDeviceParameters("STUDIO_SYNTH") + mapOf(
+                "oscillatorA" to 4f, "oscillatorB" to 2f, "mix" to 0.63f,
+                "tuning" to 2f, "cutoffHz" to 1240f, "releaseMs" to 420f, "modRateHz" to 3.5f
+            )
+        )
+        val edited = original.copy(tracks = original.tracks.map {
+            if (it.id == midi.id) it.copy(devices = listOf(instrument)) else it
+        })
+        val restored = StudioProject.fromJson(JSONObject(edited.toJson().toString()))
+            .tracks.first { it.id == midi.id }.devices.single()
+        assertEquals("STUDIO_SYNTH", restored.type)
+        assertEquals(4f, restored.parameters["oscillatorA"]!!, 0.001f)
+        assertEquals(2f, restored.parameters["tuning"]!!, 0.001f)
+        assertEquals(1240f, restored.parameters["cutoffHz"]!!, 0.001f)
+        assertEquals(420f, restored.parameters["releaseMs"]!!, 0.001f)
+        assertEquals(3.5f, restored.parameters["modRateHz"]!!, 0.001f)
+    }
+
     @Test fun legacyProjectWithoutDeviceArrayStillOpens() {
         val json = StudioProject().toJson()
         val tracks = json.getJSONArray("tracks")

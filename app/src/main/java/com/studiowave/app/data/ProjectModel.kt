@@ -40,7 +40,7 @@ data class TrackDevice(
 )
 
 internal val EFFECT_DEVICE_TYPES = setOf("EQ", "PARAM_EQ_8", "REVERB", "DELAY", "COMPRESSOR", "SATURATOR", "FILTER", "LIMITER")
-internal val INSTRUMENT_DEVICE_TYPES = setOf("DIRECTWAVE", "SYNTH_SINE", "SYNTH_SAW", "SYNTH_SQUARE", "SYNTH_TRIANGLE", "FM_SYNTH", "DRUM_RACK")
+internal val INSTRUMENT_DEVICE_TYPES = setOf("DIRECTWAVE", "STUDIO_SYNTH", "SYNTH_SINE", "SYNTH_SAW", "SYNTH_SQUARE", "SYNTH_TRIANGLE", "FM_SYNTH", "DRUM_RACK")
 internal fun defaultDeviceParameters(type: String): Map<String, Float> = when (type) {
     "EQ" -> mapOf("lowDb" to 0f, "midDb" to 0f, "highDb" to 0f)
     "PARAM_EQ_8" -> buildMap {
@@ -57,6 +57,7 @@ internal fun defaultDeviceParameters(type: String): Map<String, Float> = when (t
     "SATURATOR" -> mapOf("drive" to 2.5f, "wet" to 0.35f, "outputDb" to 0f)
     "FILTER" -> mapOf("cutoffHz" to 16000f, "resonance" to 0.15f, "mode" to 0f)
     "LIMITER" -> mapOf("ceilingDb" to -1f, "releaseMs" to 80f)
+    "STUDIO_SYNTH" -> mapOf("oscillatorA" to 0f, "oscillatorB" to 1f, "mix" to 0.28f, "gain" to 0.8f, "detuneCents" to 7f, "cutoffHz" to 18000f, "resonance" to 0.12f, "attackMs" to 8f, "decayMs" to 120f, "sustain" to 0.75f, "releaseMs" to 140f, "tuning" to 0f, "rootMidi" to 60f, "modRateHz" to 0.35f, "modDepth" to 0f, "modTarget" to 0f)
     "SYNTH_SINE", "SYNTH_SAW", "SYNTH_SQUARE", "SYNTH_TRIANGLE", "FM_SYNTH" -> mapOf("level" to 0.8f, "attackMs" to 8f, "releaseMs" to 90f)
     else -> emptyMap()
 }

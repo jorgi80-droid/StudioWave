@@ -86,6 +86,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -97,9 +98,13 @@ import com.studiowave.app.audio.DirectWaveSampler
 import com.studiowave.app.audio.ArrangementPlaybackEngine
 import com.studiowave.app.audio.AudioPerformanceProfile
 import com.studiowave.app.audio.ArrangementTiming
+import com.studiowave.app.audio.StudioWaveVoiceDsp
+import com.studiowave.app.audio.ParametricEqMath
+import com.studiowave.app.audio.PcmSpectrumAnalyzer
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.defaultDeviceParameters
 import com.studiowave.app.data.EFFECT_DEVICE_TYPES
+import com.studiowave.app.data.INSTRUMENT_DEVICE_TYPES
 import com.studiowave.app.data.TrackDevice
 import com.studiowave.app.data.StudioProjectFile
 import com.studiowave.app.data.StudioTrack
@@ -514,6 +519,7 @@ private fun StudioWaveApp() {
     var trackMeterReadings by remember {
         mutableStateOf<Map<String, ArrangementPlaybackEngine.TrackMeterSnapshot>>(emptyMap())
     }
+    var analyzerValues by remember { mutableStateOf(FloatArray(PcmSpectrumAnalyzer.BAND_COUNT)) }
     var selectedWorkspace by remember { mutableStateOf("ARRANGEMENT") }
     var showSettings by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf("INTERFACE") }
@@ -532,8 +538,8 @@ private fun StudioWaveApp() {
             if (preferences.getBoolean("ui_theme_selected_manually", false)) {
                 preferences.getString("ui_theme", "Live Light") ?: "Live Light"
             } else {
-                // Match the supplied Ableton Live references by default; graphite themes remain in Settings.
-                "Live Light"
+                // High contrast graphite by default; Live Light remains selectable in Settings.
+                "Live Mid"
             }
         )
     }
@@ -1142,6 +1148,7 @@ private fun StudioWaveApp() {
             masterPeakDbfs = meter.peakDbfs
             masterRmsDbfs = meter.rmsDbfs
             masterMomentaryLufs = meter.momentaryLufs
+            analyzerValues = arrangementPlayback.spectrumSnapshot()
             masterPeakHistory = masterPeakHistory.drop(1) + meter.peakLinear.coerceIn(0f, 1f)
             delay(50)
         }
@@ -1417,7 +1424,8 @@ private fun StudioWaveApp() {
                             onSelectTrack = { editorTrackId = it },
                             onProjectChange = { changeProject(it) },
                             onToggle = { selectedWorkspace = "ARRANGEMENT" },
-                            fullScreen = true
+                            fullScreen = true,
+                            spectrumValues = analyzerValues
                         )
                         "MIXER" -> MixerWorkspace(
                             project,
@@ -3370,7 +3378,7 @@ private fun TimelineGrid(
                         ) else rawAccent
                         val clipInk = if (isLightTheme) Color(0xFF17191C) else Color(0xFFF4F6FA)
                         val clipFill by androidx.compose.animation.animateColorAsState(
-                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.30f else 0.18f),
+                            targetValue = accent.copy(alpha = if (selectedClip == clip.id) 0.36f else 0.25f),
                             animationSpec = tween(durationMillis = 140),
                             label = "clipSelectionFill"
                         )
@@ -3488,26 +3496,28 @@ private fun TimelineGrid(
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 // Flat title strip and hairline border echo Live's clip headers without obscuring the note/wave content.
                                 Row(
-                                    Modifier.fillMaxWidth().height(16.dp)
-                                        .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.88f))
+                                    Modifier.fillMaxWidth().height(19.dp)
+                                        .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.90f))
                                         .padding(horizontal = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
                                         clip.name.uppercase(),
-                                        fontSize = 7.sp,
+                                        fontSize = 9.sp,
                                         fontWeight = FontWeight.Black,
-                                        color = clipInk,
-                                        maxLines = 1
+                                        color = if (accent.luminance() > 0.42f) Color(0xFF111317) else Color(0xFFF6F7F9),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                     )
                                 }
                                 val clipDetail = arrangementClipSummary(track.kind, clip, project)
                                 Text(
                                     clipDetail,
-                                    fontSize = 6.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = clipInk.copy(alpha = 0.78f),
-                                    maxLines = 1
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = clipInk.copy(alpha = 0.96f),
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
                             if (track.kind == "drum") {
@@ -3601,7 +3611,7 @@ private fun TimelineGrid(
                                     Modifier.align(Alignment.CenterStart)
                                         .width(resizeGripWidthDp.dp)
                                         .height(34.dp)
-                                        .background(timelinePalette.orange.copy(alpha = 0.28f), RoundedCornerShape(1.dp))
+                                        .background(Color.Transparent, RoundedCornerShape(1.dp))
                                         .pointerInput(clip.id) {
                                             var gestureViewport = currentViewport
                                             var gestureTimebase = currentTimebase
@@ -3657,7 +3667,7 @@ private fun TimelineGrid(
                                 Box(
                                     Modifier.align(Alignment.CenterEnd)
                                         .width(resizeGripWidthDp.dp).height(34.dp)
-                                        .background(timelinePalette.orange.copy(alpha = 0.28f), RoundedCornerShape(1.dp))
+                                        .background(Color.Transparent, RoundedCornerShape(1.dp))
                                         .pointerInput(clip.id) {
                                             var gestureViewport = currentViewport
                                             var gestureTimebase = currentTimebase
@@ -3706,7 +3716,7 @@ private fun TimelineGrid(
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("↔", color = LocalStudioWavePalette.current.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Box(Modifier.width(2.dp).height(16.dp).background(timelinePalette.accent.copy(alpha = 0.90f), RoundedCornerShape(1.dp)))
                                 }
                             }
                         }
@@ -5136,7 +5146,8 @@ private fun DeviceDock(
     onSelectTrack: (String) -> Unit,
     onProjectChange: (StudioProject) -> Unit,
     onToggle: () -> Unit,
-    fullScreen: Boolean = false
+    fullScreen: Boolean = false,
+    spectrumValues: FloatArray = FloatArray(PcmSpectrumAnalyzer.BAND_COUNT)
 ) {
     val selectedTrack = project.tracks.firstOrNull { it.id == selectedTrackId } ?: project.tracks.firstOrNull()
     val palette = LocalStudioWavePalette.current
@@ -5239,7 +5250,45 @@ private fun DeviceDock(
                         DeviceModuleCard("NO INSERT FX", "EMPTY EFFECT CHAIN", palette,
                             "Tap + ADD FX to insert an audio processor. Values are saved with this project.")
                     }
-                    AbletonAdvancedInstrumentPanel(palette = palette, trackName = track.name)
+                    if (track.kind == "midi") {
+                        val instrumentDevice = track.devices.firstOrNull {
+                            it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK"
+                        } ?: remember(track.id) { TrackDevice(type="STUDIO_SYNTH",name="StudioWave Dual Synth",
+                            parameters=defaultDeviceParameters("STUDIO_SYNTH")) }
+                        val eqDevice = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
+                        StudioWaveInstrumentPanel(
+                            device=instrumentDevice,eqDevice=eqDevice,palette=palette,spectrumValues=spectrumValues,
+                            onDeviceChange={changed ->
+                                val target=changed.copy(
+                                    name=if(changed.type=="DIRECTWAVE")"DirectWave" else "StudioWave Dual Synth",
+                                    parameters=defaultDeviceParameters("STUDIO_SYNTH")+changed.parameters)
+                                val stored=track.devices.firstOrNull { it.id==changed.id }
+                                if(stored!=null) applyDeviceList(track.devices.map { if(it.id==stored.id)target else it })
+                                else {
+                                    val prior=track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type!="DRUM_RACK" }
+                                    if(prior==null) { if(track.devices.size<StudioProject.MAX_DEVICES_PER_TRACK)applyDeviceList(track.devices+target) }
+                                    else applyDeviceList(track.devices.map { if(it.id==prior.id)target.copy(id=prior.id) else it })
+                                }
+                            },
+                            onEqGainChange={band,gain,norm ->
+                                val current=track.devices.firstOrNull { it.type=="PARAM_EQ_8" }
+                                val base=current?:TrackDevice(type="PARAM_EQ_8",name="Parametric EQ Eight",
+                                    parameters=defaultDeviceParameters("PARAM_EQ_8"))
+                                val key="band"+(band+1)
+                                val updated=base.copy(parameters=defaultDeviceParameters("PARAM_EQ_8")+base.parameters+
+                                    mapOf(key to gain,key+"FreqNorm" to norm))
+                                if(current==null) { if(track.devices.size<StudioProject.MAX_DEVICES_PER_TRACK)applyDeviceList(track.devices+updated) }
+                                else applyDeviceList(track.devices.map { if(it.id==current.id)updated else it })
+                            },
+                            onEqEnabledChange={enabled ->
+                                val current=track.devices.firstOrNull { it.type=="PARAM_EQ_8" }
+                                if(current==null) {
+                                    if(enabled&&track.devices.size<StudioProject.MAX_DEVICES_PER_TRACK)applyDeviceList(track.devices+TrackDevice(type="PARAM_EQ_8",
+                                        name="Parametric EQ Eight",parameters=defaultDeviceParameters("PARAM_EQ_8")))
+                                } else applyDeviceList(track.devices.map { if(it.id==current.id)it.copy(enabled=enabled) else it })
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -6818,161 +6867,233 @@ internal fun TransportAction(label: String, heightDp: Int = 23, onClick: () -> U
 }
 
 
-// Live-inspired instrument lab: dual engines, modulation curves, spectrum display, tuning selector,
-// waveform preview, touch keyboard and eight-point interactive EQ response editor.
+
 @Composable
-private fun AbletonAdvancedInstrumentPanel(palette: StudioWavePalette, trackName: String) {
+private fun StudioWaveInstrumentPanel(
+    device: TrackDevice, eqDevice: TrackDevice?, palette: StudioWavePalette,
+    spectrumValues: FloatArray, onDeviceChange: (TrackDevice) -> Unit,
+    onEqGainChange: (Int, Float, Float) -> Unit, onEqEnabledChange: (Boolean) -> Unit
+) {
+    val defaults = defaultDeviceParameters("STUDIO_SYNTH")
+    val parameters = StudioWaveVoiceDsp.Parameters.forDevice(device.type, defaults + device.parameters)
     val p = palette
-    var engineA by remember(trackName) { mutableStateOf("Filtered Noise") }
-    var engineB by remember(trackName) { mutableStateOf("Extratone") }
-    var tuning by remember(trackName) { mutableStateOf("12-TET Equal") }
-    var tuningOpen by remember { mutableStateOf(false) }
-    var selectedBand by remember { mutableIntStateOf(0) }
-    var gains by remember { mutableStateOf(List(8) { 0f }) }
-    var rate by remember { mutableFloatStateOf(.4f) }
-    var depth by remember { mutableFloatStateOf(.7f) }
-    var cutoff by remember { mutableFloatStateOf(.72f) }
-    var resonance by remember { mutableFloatStateOf(.25f) }
-    var key by remember { mutableIntStateOf(-1) }
-    val transition = androidx.compose.animation.core.rememberInfiniteTransition(label = "live_spectrum")
-    val sweep by transition.animateFloat(0f, 1f, animationSpec = androidx.compose.animation.core.infiniteRepeatable(
-        animation = tween(1800, easing = androidx.compose.animation.core.LinearEasing)), label = "sweep")
-    Column(Modifier.width(440.dp).height(300.dp).background(p.canvas, RoundedCornerShape(2.dp))
-        .border(1.dp, p.border, RoundedCornerShape(2.dp)).padding(5.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(Modifier.fillMaxWidth().height(22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(7.dp).background(p.orange))
-            Spacer(Modifier.width(5.dp))
-            Text("MELD  /  INSTRUMENT & MODULATION", color = p.text, fontSize = 8.sp, fontWeight = FontWeight.Black)
+    val tuningNames = listOf("12-TET EQUAL", "JUST INTONATION", "PYTHAGOREAN")
+    var tuningOpen by remember(device.id) { mutableStateOf(false) }
+    val eqParameters = remember(eqDevice?.id, eqDevice?.parameters) { defaultDeviceParameters("PARAM_EQ_8") + (eqDevice?.parameters ?: emptyMap()) }
+    val eqEnabled = eqDevice?.enabled == true
+    val latestEqParameters by rememberUpdatedState(eqParameters)
+    val latestEqGainChange by rememberUpdatedState(onEqGainChange)
+    val eqResponse = remember(eqParameters, eqEnabled) { List(81) { i ->
+        ParametricEqMath.responseDbAt(ParametricEqMath.frequencyHzForNorm(i / 80f), 44_100, eqParameters, eqEnabled).toFloat().coerceIn(-18f,18f)
+    } }
+    val filterResponse = remember(parameters) { List(65) { i ->
+        StudioWaveVoiceDsp.filterResponseDb(20.0 * 1000.0.pow(i / 64.0),44_100,parameters).toFloat().coerceIn(-60f,6f)
+    } }
+    fun update(key: String, value: Float) {
+        val safe = if (value.isFinite()) value else (defaults[key] ?: 0f)
+        val targetType = if (key == "oscillatorA" || key == "oscillatorB" || key == "mix") "STUDIO_SYNTH" else device.type
+        onDeviceChange(device.copy(type=targetType,
+            name=if (targetType == "DIRECTWAVE") "DirectWave" else "StudioWave Dual Synth",
+            parameters=defaults + device.parameters + (key to safe)))
+    }
+    Column(Modifier.width(420.dp).heightIn(min=245.dp,max=385.dp).background(p.canvas,RoundedCornerShape(3.dp))
+        .border(1.dp,p.border,RoundedCornerShape(3.dp)).verticalScroll(rememberScrollState()).padding(6.dp),
+        verticalArrangement=Arrangement.spacedBy(5.dp)) {
+        Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically) {
+            Box(Modifier.width(3.dp).height(17.dp).background(p.accent,RoundedCornerShape(1.dp)))
+            Spacer(Modifier.width(6.dp))
+            Text(if (device.type == "DIRECTWAVE") "DIRECTWAVE / SAMPLE SOURCE" else "STUDIOWAVE / DUAL OSC",
+                color=p.text,fontSize=9.sp,fontWeight=FontWeight.Black,maxLines=1)
             Spacer(Modifier.weight(1f))
-            Text("ADVANCED VIEW", color = p.accent, fontSize = 6.sp, fontWeight = FontWeight.Black)
-        }
-        Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Column(Modifier.weight(.9f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                EngineVisualCard("A", engineA, p.accent, p, Modifier.weight(1f)) {
-                    engineA = if (engineA == "Filtered Noise") "Wavetable" else if (engineA == "Wavetable") "Sine Fold" else "Filtered Noise"
-                }
-                EngineVisualCard("B", engineB, p.orange, p, Modifier.weight(1f)) {
-                    engineB = if (engineB == "Extratone") "FM Metal" else if (engineB == "FM Metal") "Pulse Dual" else "Extratone"
-                }
-            }
-            Column(Modifier.weight(1.2f).fillMaxHeight().background(p.panel, RoundedCornerShape(2.dp)).padding(4.dp)) {
-                Text("MODULATION MATRIX", color = p.text, fontSize = 7.sp, fontWeight = FontWeight.Black)
-                Canvas(Modifier.fillMaxWidth().weight(1f).border(1.dp, p.border)) {
-                    for (i in 1..5) drawLine(p.border, Offset(0f, size.height*i/6f), Offset(size.width, size.height*i/6f), .7f)
-                    for (i in 1..7) drawLine(p.border, Offset(size.width*i/8f,0f), Offset(size.width*i/8f,size.height), .7f)
-                    val points=(0..70).map { i -> Offset(size.width*i/70f, size.height*(.5f-.4f*kotlin.math.sin(i/70f*Math.PI*2*(1+rate*3)).toFloat()*depth)) }
-                    for(i in 0 until points.lastIndex) drawLine(p.accent,points[i],points[i+1],2f)
-                    points.forEachIndexed { i, pt -> if(i%14==0) drawCircle(p.orange,2.5f,pt) }
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("RATE", color=p.muted,fontSize=6.sp)
-                    Slider(rate,{rate=it},Modifier.weight(1f).height(22.dp),colors=SliderDefaults.colors(thumbColor=p.accent,activeTrackColor=p.accent))
-                    Text("DEPTH",color=p.muted,fontSize=6.sp)
-                    Slider(depth,{depth=it},Modifier.weight(1f).height(22.dp),colors=SliderDefaults.colors(thumbColor=p.orange,activeTrackColor=p.orange))
+            Surface(color=if(device.type=="DIRECTWAVE")p.control else p.accent,
+                border=BorderStroke(1.dp,p.border),shape=RoundedCornerShape(2.dp),
+                modifier=Modifier.height(23.dp).clickable {
+                    val nextType=if(device.type=="DIRECTWAVE")"STUDIO_SYNTH" else "DIRECTWAVE"
+                    onDeviceChange(device.copy(type=nextType,name=if(nextType=="DIRECTWAVE")"DirectWave" else "StudioWave Dual Synth",
+                        parameters=defaults+device.parameters))
+                }) {
+                Box(Modifier.padding(horizontal=5.dp),contentAlignment=Alignment.Center) {
+                    Text(if(device.type=="DIRECTWAVE")"USE SYNTH" else "USE SAMPLE",
+                        color=if(device.type=="DIRECTWAVE")p.text else p.room,fontSize=7.sp,fontWeight=FontWeight.Black)
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(66.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Column(Modifier.weight(1.1f).fillMaxHeight().background(p.panel,RoundedCornerShape(2.dp)).padding(3.dp)) {
-                Text("SPECTRUM ANALYZER",color=p.text,fontSize=6.sp,fontWeight=FontWeight.Black)
-                Canvas(Modifier.fillMaxSize()) {
-                    for(i in 1..5) drawLine(p.border,Offset(0f,size.height*i/6f),Offset(size.width,size.height*i/6f),.7f)
-                    val n=42; val gap=1.3f; val bw=(size.width-gap*(n-1))/n
-                    for(i in 0 until n) {
-                        val h=size.height*(.12f+.82f*kotlin.math.abs(kotlin.math.sin(i*.31+sweep*6.28)).toFloat()*(.3f+.7f*kotlin.math.abs(kotlin.math.sin(i*.08+1.2)).toFloat()))
-                        val c=if(i>n*.82)p.orange else if(i>n*.6)p.accent else p.success
-                        drawRoundRect(c,Offset(i*(bw+gap),size.height-h),Size(bw.coerceAtLeast(1f),h),androidx.compose.ui.geometry.CornerRadius(1f))
-                    }
-                    drawLine(p.text.copy(alpha=.7f),Offset(size.width*sweep,0f),Offset(size.width*sweep,size.height),1f)
-                }
+        if (device.type != "DIRECTWAVE") {
+            StudioWaveShapeRow("OSC A",parameters.oscillatorA,p) { update("oscillatorA",it.toFloat()) }
+            StudioWaveShapeRow("OSC B",parameters.oscillatorB,p) { update("oscillatorB",it.toFloat()) }
+        }
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
+            if (device.type != "DIRECTWAVE") {
+                StudioWaveKnob("A/B MIX",parameters.mix,0f,1f,(parameters.mix*100).toInt().toString()+"%",p) { update("mix",it) }
             }
-            Column(Modifier.weight(1f).fillMaxHeight().background(p.panel,RoundedCornerShape(2.dp)).padding(3.dp)) {
-                Text("FILTER RESPONSE",color=p.text,fontSize=6.sp,fontWeight=FontWeight.Black)
-                Canvas(Modifier.fillMaxWidth().weight(1f)) {
-                    for(i in 1..3) drawLine(p.border,Offset(0f,size.height*i/4f),Offset(size.width,size.height*i/4f),.7f)
-                    val pts=(0..64).map { i -> Offset(size.width*i/64f, size.height*(.5f-.38f*kotlin.math.sin(i/64f*Math.PI*3).toFloat()*kotlin.math.exp(-i/25f))) }
-                    for(i in 0 until pts.lastIndex) drawLine(p.accent,pts[i],pts[i+1],1.5f)
-                    drawLine(p.orange,Offset(size.width*cutoff,0f),Offset(size.width*cutoff,size.height),1.5f)
-                }
-                Row(verticalAlignment=Alignment.CenterVertically) {
-                    Text("FREQ",color=p.muted,fontSize=6.sp)
-                    Slider(cutoff,{cutoff=it},Modifier.weight(1f).height(19.dp),colors=SliderDefaults.colors(thumbColor=p.accent,activeTrackColor=p.accent))
-                    Text("Q",color=p.muted,fontSize=6.sp)
-                    Slider(resonance,{resonance=it},Modifier.weight(1f).height(19.dp),colors=SliderDefaults.colors(thumbColor=p.orange,activeTrackColor=p.orange))
-                }
+            StudioWaveKnob("GAIN",parameters.gain,0f,1.5f,(parameters.gain*100).toInt().toString()+"%",p) { update("gain",it) }
+            val norm=ParametricEqMath.frequencyNormForHz(parameters.cutoffHz.toDouble())
+            StudioWaveKnob("CUTOFF",norm,0f,1f,parameters.cutoffHz.toInt().toString()+" Hz",p) { update("cutoffHz",ParametricEqMath.frequencyHzForNorm(it).toFloat()) }
+            StudioWaveKnob("RESON",parameters.resonance,0f,1f,(parameters.resonance*100).toInt().toString()+"%",p) { update("resonance",it) }
+        }
+        if (device.type != "DIRECTWAVE") {
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
+                StudioWaveKnob("ATTACK",parameters.attackMs.toFloat(),0f,1000f,parameters.attackMs.toString()+" ms",p) { update("attackMs",it) }
+                StudioWaveKnob("DECAY",parameters.decayMs.toFloat(),0f,1000f,parameters.decayMs.toString()+" ms",p) { update("decayMs",it) }
+                StudioWaveKnob("SUSTAIN",parameters.sustain,0f,1f,(parameters.sustain*100).toInt().toString()+"%",p) { update("sustain",it) }
+                StudioWaveKnob("RELEASE",parameters.releaseMs.toFloat(),0f,1000f,parameters.releaseMs.toString()+" ms",p) { update("releaseMs",it) }
             }
         }
-        Row(Modifier.fillMaxWidth().height(28.dp), verticalAlignment=Alignment.CenterVertically, horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-            Text("TUNING",color=p.muted,fontSize=6.sp,fontWeight=FontWeight.Black)
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+            Text("TUNING",color=p.muted,fontSize=8.sp,fontWeight=FontWeight.Black)
             Box {
-                Surface(color=p.control,border=BorderStroke(1.dp,p.border),shape=RoundedCornerShape(1.dp),modifier=Modifier.width(115.dp).height(24.dp).clickable { tuningOpen=true }) {
-                    Row(Modifier.padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
-                        Text(tuning,color=p.text,fontSize=7.sp,maxLines=1,modifier=Modifier.weight(1f)); Text("▾",color=p.accent,fontSize=8.sp)
+                Surface(color=p.control,border=BorderStroke(1.dp,p.border),shape=RoundedCornerShape(2.dp),
+                    modifier=Modifier.width(140.dp).height(27.dp).clickable { tuningOpen=true }) {
+                    Row(Modifier.padding(horizontal=6.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Text(tuningNames[parameters.tuning.coerceIn(0,2)],color=p.text,fontSize=8.sp,fontWeight=FontWeight.Bold,maxLines=1,modifier=Modifier.weight(1f))
+                        Text("▾",color=p.accent,fontSize=10.sp)
                     }
                 }
                 DropdownMenu(expanded=tuningOpen,onDismissRequest={tuningOpen=false}) {
-                    listOf("12-TET Equal","Just Intonation","Pythagorean","Quarter Tone","Maqam Nahawand","Maqam Rast","Slendro","Pelog").forEach {
-                        DropdownMenuItem(text={Text(it,fontSize=11.sp)},onClick={tuning=it;tuningOpen=false})
+                    tuningNames.forEachIndexed { i,label -> DropdownMenuItem(text={Text(label,fontSize=10.sp)},onClick={update("tuning",i.toFloat());tuningOpen=false}) }
+                }
+            }
+            Text("E4",color=p.text,fontSize=8.sp,fontWeight=FontWeight.Black)
+            val hz=StudioWaveVoiceDsp.tunedFrequency(64,parameters.tuning,parameters.rootMidi)
+            Text(((kotlin.math.round(hz*10)/10)).toString()+" Hz",color=p.accent,fontSize=8.sp,fontWeight=FontWeight.Bold)
+            Spacer(Modifier.weight(1f))
+            listOf("CUTOFF" to 0f,"PITCH" to 1f).forEach { opt ->
+                Surface(color=if(parameters.modulationTarget==opt.second.toInt())p.accent else p.control,
+                    border=BorderStroke(1.dp,p.border),shape=RoundedCornerShape(2.dp),
+                    modifier=Modifier.height(26.dp).clickable { update("modTarget",opt.second) }) {
+                    Box(Modifier.padding(horizontal=5.dp),contentAlignment=Alignment.Center) {
+                        Text(opt.first,color=if(parameters.modulationTarget==opt.second.toInt())p.room else p.text,fontSize=7.sp,fontWeight=FontWeight.Black)
                     }
                 }
             }
-            Text("WAVEFORM",color=p.muted,fontSize=6.sp,fontWeight=FontWeight.Black)
-            Canvas(Modifier.weight(1f).height(24.dp).background(p.room)) {
-                val mid=size.height/2
-                for(i in 0 until 100) {
-                    val v=kotlin.math.abs(kotlin.math.sin(i*.23)*kotlin.math.sin(i*.071)).toFloat()
-                    val x=size.width*i/100f
-                    drawLine(p.accent,Offset(x,mid-v*mid),Offset(x,mid+v*mid),1.2f)
+        }
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+            Column(Modifier.weight(1f).background(p.panel,RoundedCornerShape(2.dp)).padding(4.dp)) {
+                Text("LFO / RATE / DEPTH",color=p.text,fontSize=8.sp,fontWeight=FontWeight.Black)
+                Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceEvenly) {
+                    StudioWaveKnob("RATE",parameters.modulationRateHz,0.01f,20f,(kotlin.math.round(parameters.modulationRateHz*10)/10).toString()+" Hz",p) { update("modRateHz",it) }
+                    StudioWaveKnob("DEPTH",parameters.modulationDepth,0f,1f,(parameters.modulationDepth*100).toInt().toString()+"%",p) { update("modDepth",it) }
+                }
+                Canvas(Modifier.fillMaxWidth().height(27.dp).background(p.room)) {
+                    var prior: Offset?=null
+                    for(i in 0..64) {
+                        val x=size.width*i/64f
+                        val phase=i/64.0*2.0*Math.PI*(1.0+kotlin.math.ln(1.0+parameters.modulationRateHz.toDouble()))
+                        val pt=Offset(x,size.height*(0.5f-0.42f*parameters.modulationDepth*kotlin.math.sin(phase).toFloat()))
+                        prior?.let { drawLine(p.accent,it,pt,1.5f) }; prior=pt
+                    }
+                }
+            }
+            Column(Modifier.weight(1f).background(p.panel,RoundedCornerShape(2.dp)).padding(4.dp)) {
+                Text("FILTER / ACTUAL RESPONSE",color=p.text,fontSize=8.sp,fontWeight=FontWeight.Black)
+                Canvas(Modifier.fillMaxWidth().height(72.dp)) {
+                    for(db in listOf(-48f,-24f,0f)) drawLine(p.grid,Offset(0f,size.height*(6f-db)/66f),Offset(size.width,size.height*(6f-db)/66f),0.7f)
+                    for(i in 1 until filterResponse.size) {
+                        val x1=size.width*(i-1)/(filterResponse.size-1f);val x2=size.width*i/(filterResponse.size-1f)
+                        val y1=size.height*(6f-filterResponse[i-1])/66f;val y2=size.height*(6f-filterResponse[i])/66f
+                        drawLine(p.accent,Offset(x1,y1.coerceIn(0f,size.height)),Offset(x2,y2.coerceIn(0f,size.height)),1.5f)
+                    }
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(27.dp).horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(2.dp)) {
-            listOf("C","C♯","D","D♯","E","F","F♯","G","G♯","A","A♯","B").forEachIndexed { i,label ->
-                Surface(color=if(key==i)p.accent else if(label.contains("♯"))p.control else p.panel,border=BorderStroke(1.dp,p.border),
-                    shape=RoundedCornerShape(1.dp),modifier=Modifier.width(28.dp).fillMaxHeight().clickable { key=i }) {
-                    Box(contentAlignment=Alignment.Center) { Text(label,color=if(key==i)p.room else p.text,fontSize=6.sp,fontWeight=FontWeight.Bold) }
+        Column(Modifier.fillMaxWidth().background(p.panel,RoundedCornerShape(2.dp)).padding(5.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("SPECTRUM / MASTER PCM",color=p.text,fontSize=8.sp,fontWeight=FontWeight.Black)
+                Spacer(Modifier.weight(1f)); Text("FFT 1024 / 64 BANDS",color=p.muted,fontSize=7.sp,fontWeight=FontWeight.Bold)
+            }
+            Canvas(Modifier.fillMaxWidth().height(55.dp)) {
+                for(i in 1..3) drawLine(p.grid,Offset(0f,size.height*i/4f),Offset(size.width,size.height*i/4f),0.7f)
+                val w=size.width/spectrumValues.size.coerceAtLeast(1)
+                for(i in spectrumValues.indices) {
+                    val level=spectrumValues[i].takeIf { it.isFinite() }?.coerceIn(0f,1f)?:0f
+                    if(level>0.002f) drawRect(if(level>0.78f)p.danger else if(level>0.5f)p.warning else p.accent,
+                        Offset(i*w+0.7f,size.height-level*size.height),Size((w-1.4f).coerceAtLeast(1f),level*size.height))
                 }
             }
         }
-        Row(Modifier.fillMaxWidth().height(30.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-            Text("EQ EIGHT",color=p.text,fontSize=7.sp,fontWeight=FontWeight.Black)
-            Canvas(Modifier.weight(1f).height(26.dp).background(p.room).pointerInput(gains,selectedBand) {
-                detectTapGestures { pt ->
-                    val band=(pt.x/size.width*8).toInt().coerceIn(0,7); selectedBand=band
-                    val gain=((size.height/2f-pt.y)/(size.height/2f)*12f).coerceIn(-12f,12f)
-                    gains=gains.toMutableList().also { it[band]=gain }
+        Column(Modifier.fillMaxWidth().background(p.panel,RoundedCornerShape(2.dp)).padding(5.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("EQ EIGHT / INSERT",color=p.text,fontSize=8.sp,fontWeight=FontWeight.Black)
+                Spacer(Modifier.weight(1f))
+                Surface(color=if(eqEnabled)p.accent else p.control,border=BorderStroke(1.dp,p.border),shape=RoundedCornerShape(2.dp),
+                    modifier=Modifier.height(24.dp).clickable { onEqEnabledChange(!eqEnabled) }) {
+                    Box(Modifier.padding(horizontal=7.dp),contentAlignment=Alignment.Center) {
+                        Text(if(eqDevice==null)"+ INSERT EQ" else if(eqEnabled)"EQ ON / BYPASS" else "EQ BYPASSED / ON",
+                            color=if(eqEnabled)p.room else p.text,fontSize=7.sp,fontWeight=FontWeight.Black)
+                    }
                 }
+            }
+            Canvas(Modifier.fillMaxWidth().height(84.dp).pointerInput(eqEnabled) {
+                var drag=0
+                fun closest(x:Float):Int {
+                    var best=0;var dist=Float.MAX_VALUE
+                    for(b in 0..7) {
+                        val default=defaultDeviceParameters("PARAM_EQ_8")["band"+(b+1)+"FreqNorm"]?:0.5f
+                        val norm=latestEqParameters["band"+(b+1)+"FreqNorm"]?:default
+                        val d=kotlin.math.abs(norm*size.width-x);if(d<dist){dist=d;best=b}
+                    }
+                    return best
+                }
+                detectDragGestures(onDragStart={drag=closest(it.x)},onDrag={change,_->change.consume()
+                    latestEqGainChange(drag,((0.5f-change.position.y/size.height.coerceAtLeast(1f))*36f).coerceIn(-18f,18f),
+                        (change.position.x/size.width.coerceAtLeast(1f)).coerceIn(0f,1f))})
             }) {
-                for(i in 1..3) drawLine(p.border,Offset(0f,size.height*i/4f),Offset(size.width,size.height*i/4f),.7f)
-                val pts=(0..80).map { i ->
-                    val x=size.width*i/80f; val b=(x/size.width*7).toInt().coerceIn(0,7); val frac=x/size.width*7-b
-                    val g=gains[b]*(1-frac)+gains[(b+1).coerceAtMost(7)]*frac
-                    Offset(x,size.height/2f-g/24f*size.height)
+                for(db in listOf(-18f,-9f,0f,9f,18f)) {
+                    val y=size.height*(18f-db)/36f
+                    drawLine(p.grid,Offset(0f,y),Offset(size.width,y),if(db==0f)1f else 0.65f)
                 }
-                for(i in 0 until pts.lastIndex) drawLine(p.accent,pts[i],pts[i+1],1.5f)
-                for(i in 0..7) drawCircle(if(i==selectedBand)p.orange else p.text,if(i==selectedBand)3f else 2f,Offset(size.width*i/7f,size.height/2f-gains[i]/24f*size.height))
+                for(i in 1 until eqResponse.size) {
+                    val x1=size.width*(i-1)/(eqResponse.size-1f);val x2=size.width*i/(eqResponse.size-1f)
+                    val y1=size.height*(18f-eqResponse[i-1])/36f;val y2=size.height*(18f-eqResponse[i])/36f
+                    drawLine(if(eqEnabled)p.accent else p.muted,Offset(x1,y1),Offset(x2,y2),1.8f)
+                }
+                for(b in 0..7) {
+                    val df=defaultDeviceParameters("PARAM_EQ_8")["band"+(b+1)+"FreqNorm"]?:0.5f
+                    val norm=(eqParameters["band"+(b+1)+"FreqNorm"]?:df).coerceIn(0f,1f)
+                    val gain=(eqParameters["band"+(b+1)]?:0f).coerceIn(-18f,18f)
+                    val pt=Offset(norm*size.width,size.height*(18f-gain)/36f)
+                    drawCircle(p.room,5f,pt);drawCircle(if(eqEnabled)p.accent else p.muted,3f,pt)
+                }
             }
-            Text("B"+(selectedBand+1)+" "+gains[selectedBand].toInt()+"dB",color=p.accent,fontSize=6.sp,fontWeight=FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
+                Text("20 Hz",color=p.muted,fontSize=7.sp);Text("1 kHz",color=p.muted,fontSize=7.sp)
+                Text("20 kHz",color=p.muted,fontSize=7.sp);Text("Drag nodes to edit",color=p.muted,fontSize=7.sp)
+            }
         }
     }
 }
 
 @Composable
-private fun EngineVisualCard(slot: String, engine: String, accent: Color, palette: StudioWavePalette, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.fillMaxWidth().background(palette.panel,RoundedCornerShape(2.dp)).border(1.dp,palette.border).padding(4.dp),
-        verticalArrangement=Arrangement.spacedBy(3.dp)) {
-        Surface(color=accent,shape=RoundedCornerShape(1.dp),modifier=Modifier.fillMaxWidth().height(19.dp).clickable { onClick() }) {
-            Row(Modifier.padding(horizontal=4.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text(slot,color=palette.room,fontSize=8.sp,fontWeight=FontWeight.Black); Spacer(Modifier.width(4.dp))
-                Text(engine.uppercase(),color=palette.room,fontSize=6.sp,fontWeight=FontWeight.Black,maxLines=1)
-                Spacer(Modifier.weight(1f)); Text("▾",color=palette.room,fontSize=8.sp)
+private fun StudioWaveShapeRow(label:String,selected:Int,palette:StudioWavePalette,onSelect:(Int)->Unit) {
+    Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+        Text(label,color=palette.muted,fontSize=8.sp,fontWeight=FontWeight.Black,modifier=Modifier.width(42.dp))
+        listOf("SINE","SAW","SQR","TRI","FM").forEachIndexed { i,name ->
+            Surface(color=if(selected==i)palette.accent else palette.control,border=BorderStroke(1.dp,palette.border),
+                shape=RoundedCornerShape(2.dp),modifier=Modifier.weight(1f).height(23.dp).clickable { onSelect(i) }) {
+                Box(contentAlignment=Alignment.Center) {
+                    Text(name,color=if(selected==i)palette.room else palette.text,fontSize=7.sp,fontWeight=FontWeight.Black)
+                }
             }
         }
-        Canvas(Modifier.fillMaxWidth().weight(1f).background(Color(0xFF252629))) {
-            val mid=size.height/2
-            val pts=(0..40).map { i -> Offset(size.width*i/40f,mid-size.height*.38f*kotlin.math.sin(i/40f*Math.PI*(if(slot=="A")2 else 8)).toFloat()) }
-            for(i in 0 until pts.lastIndex) drawLine(accent,pts[i],pts[i+1],2f)
+    }
+}
+@Composable
+private fun StudioWaveKnob(label:String,value:Float,minValue:Float,maxValue:Float,display:String,palette:StudioWavePalette,onChange:(Float)->Unit) {
+    val fraction=((value-minValue)/(maxValue-minValue).coerceAtLeast(0.0001f)).coerceIn(0f,1f)
+    val currentValue by rememberUpdatedState(value)
+    val currentOnChange by rememberUpdatedState(onChange)
+    Column(Modifier.width(52.dp).padding(vertical=1.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+        Canvas(Modifier.size(38.dp).pointerInput(minValue,maxValue) {
+            detectDragGestures { change,drag -> change.consume();currentOnChange((currentValue-drag.y*((maxValue-minValue)/130f)).coerceIn(minValue,maxValue)) }
+        }) {
+            val stroke=3.dp.toPx()
+            drawArc(palette.border,140f,260f,false,style=Stroke(width=stroke))
+            drawArc(palette.accent,140f,260f*fraction,false,style=Stroke(width=stroke))
+            drawCircle(palette.raised,radius=size.minDimension*0.30f)
+            val angle=Math.toRadians(140.0+260.0*fraction);val center=Offset(size.width/2f,size.height/2f);val r=size.minDimension*0.24f
+            drawLine(palette.text,center,Offset(center.x+kotlin.math.cos(angle).toFloat()*r,center.y+kotlin.math.sin(angle).toFloat()*r),width=2.2.dp.toPx())
         }
-        Text("0 oct   0 st   0 ct",color=accent,fontSize=6.sp,fontWeight=FontWeight.Bold)
+        Text(label,color=palette.muted,fontSize=7.sp,fontWeight=FontWeight.Black,maxLines=1)
+        Text(display,color=palette.text,fontSize=8.sp,fontWeight=FontWeight.Bold,maxLines=1)
     }
 }

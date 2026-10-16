@@ -91,3 +91,31 @@ Inspected the current `ui/ableton-batch-viewport` source around `DeviceDock`, `D
 - GitHub Actions run `38748749046`: completed successfully; Build debug APK, Run unit tests and Upload debug APK all passed.
 - PR #15 remains open and draft. Green CI is not evidence of on-device audio/touch correctness.
 - Physical Android validation remains pending.
+
+
+## Integrated deep-reference mapping and current implementation
+
+The eight official Ableton Live 12 manual areas supplied by the project owner were reviewed as workflow, interaction and information-hierarchy references. StudioWave remains an original native Android DAW/instrument. No proprietary Ableton assets or pixel-identical implementation are claimed.
+
+| Reference | StudioWave mapping and current acceptance boundary |
+| --- | --- |
+| Arrangement View | Keep one shared ruler/grid/time transform, viewport overview, zoom/scroll and clip gesture anchors. This batch does not rewrite the already-stabilized arrangement timebase or the 1,800-bar bound. |
+| Clip View | Clip data remains source-specific. MIDI note pitches, positions, durations and velocity feed an instrument renderer; audio trim and offset refer to actual source time. |
+| Audio Clips, Tempo and Warping | Display and playback use real audio sources/waveforms where available. Source trim is distinct from tempo warp/time-stretch; a tested warp-marker model is not claimed by this batch. |
+| MIDI Editor/Piano Roll | MIDI notes remain the score. Tuned frequency calculations now affect the rendering path, not just the displayed scale name. |
+| Mixing | Meter/loudness values remain derived from processed audio. New spectrum bars consume the post-master PCM snapshot rather than random or synthetic animation. |
+| Device View, Instruments and Effects | Device parameters live in project state. Existing serial insert order and bypass remain owned by `TrackDeviceDsp`; EQ graph values are computed from peaking-biquad response equations. |
+| Instrument, Drum and Effect Racks | A persisted synth device and serial effect chain do not imply a complete parallel rack/Macro implementation; those unsupported behaviors are not represented as finished. |
+| Live Concepts | Compact transport, clear workspace switching, coherent grouping and legible contrast inform the mobile-landscape layout. |
+
+### UI issues addressed from supplied screenshots
+- Separated room/canvas/panel/control tiers in graphite and improved muted/text contrast.
+- Increased Arrangement clip title and metadata size and added truncation instead of allowing text to spill.
+- Reduced resize grip fill/glyph prominence while keeping the existing touch hit areas and geometry.
+- Replaced the local-only MELD-inspired demo and animated fake spectrum with original StudioWave Dual OSC controls, project-backed parameter writes, explicit synth/sample mode and actual master-PCM analyzer values.
+
+### Audio data path and verification boundaries
+- MIDI event schedule → project-backed oscillator/filter/envelope/tuning parameters → configured renderer → existing track/master processing.
+- Post-master PCM → bounded non-blocking offer into preallocated slots → worker-thread 1024-point FFT/Hann window → 64 logarithmic display bands → Compose snapshot.
+- EQ node drag → persisted `PARAM_EQ_8` gain/frequency values → existing serial effect DSP. Graph response is computed for the same eight peaking bands, including real insert bypass state.
+- Regression tests cover tuning intervals, voice envelopes, FFT bins, EQ response/bypass, and device JSON round-trip. Android physical testing is still required for touch ergonomics, audible consistency, microphone lifecycle and reopened recorded takes.
