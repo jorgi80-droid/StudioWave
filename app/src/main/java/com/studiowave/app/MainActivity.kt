@@ -587,7 +587,7 @@ private fun StudioWaveApp() {
         playbackJob?.cancel()
         playbackJob = null
         val snapshot = projectSnapshot
-        StudioWaveDiagnostics.log("INFO", "TRANSPORT", "Playback preparation requested at tick $startTick for project '${snapshot.name}'")
+        StudioWaveDiagnostics.log("INFO", "TRANSPORT", "Playback preparation requested at tick $tick for project '${snapshot.name}'")
         val gain = master.coerceIn(0f, 1f)
         val startTick = tick.coerceAtLeast(0L)
         playheadTick = startTick
