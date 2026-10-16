@@ -564,6 +564,7 @@ private fun StudioWaveApp() {
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var pendingExportProject by remember { mutableStateOf<StudioProject?>(null) }
+    var restartPendingPlayback: ((StudioProject) -> Unit)? = null
     fun changeProject(next: StudioProject) {
         if (next != project) {
             val previous = project
@@ -592,7 +593,7 @@ private fun StudioWaveApp() {
                 }
             } else if (arrangementChanged && playbackLoading) {
                 // Keep the pending initial playback snapshot in sync with edits made while loading.
-                startPlaybackAt(playheadTick, next)
+                restartPendingPlayback?.invoke(next)
             }
             StudioWaveDiagnostics.logThrottled("project-edit", 300L, "INFO", "PROJECT",
                 "Project edit committed: '${next.name}', ${next.tracks.size} tracks, ${next.tracks.sumOf { it.clips.size }} clips")
@@ -705,6 +706,7 @@ private fun StudioWaveApp() {
             }
         }
     }
+    restartPendingPlayback = { updated -> startPlaybackAt(playheadTick, updated) }
     fun seekToTick(tick: Long) {
         val target = tick.coerceAtLeast(0L)
         // Match DAW transport semantics: seeking while the transport is active is a
@@ -1279,7 +1281,9 @@ private fun StudioWaveApp() {
                                 // changeProject() owns hot plan publication for every editor,
                                 // including audio import, Piano Roll and Arrangement gestures.
                                 // Only replace an initial plan that has not started yet.
-                                if (playbackLoading) startPlaybackAt(playheadTick, updatedProject)
+                                if (playbackLoading && project != updatedProject) {
+                                    restartPendingPlayback?.invoke(updatedProject)
+                                }
                             },
                             showDevices = false,
                             onToggleDevices = {},
