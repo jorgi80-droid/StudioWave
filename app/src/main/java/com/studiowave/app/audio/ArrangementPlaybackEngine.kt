@@ -385,11 +385,23 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 "$uriString|$sampleRate|$requestedFrames")
         }
 
-        suspend fun prepareSource(request: SourceRequest): Pair<String, AudioAsset> {
+        suspend fun prepareSource(request: SourceRequest): Pair<String, AudioAsset?> {
             ensureCurrent()
             val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
             if (cached != null) return request.uriString to cached
-            val decoded = decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token)
+            val decoded = try {
+                decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token)
+            } catch (failure: Exception) {
+                // One stale URI or unsupported/corrupt file must not abort playback of every
+                // other audio, MIDI, and drum track in the project.
+                ensureCurrent()
+                android.util.Log.e(
+                    "StudioWavePlayback",
+                    "Skipping audio source that could not be decoded: ${request.uriString}",
+                    failure
+                )
+                return request.uriString to null
+            }
             ensureCurrent()
             // LruCache is not thread-safe; decoding happens outside the monitor, only cache
             // lookup/insert is synchronized. Each distinct source URI has only one request.
@@ -405,7 +417,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         } else {
             sourceRequests.map { request -> prepareSource(request) }
         }
-        preparedSources.forEach { (uri, asset) -> assets[uri] = asset }
+        preparedSources.forEach { (uri, asset) -> if (asset != null) assets[uri] = asset }
 
         val audioEvents = ArrayList<AudioEvent>()
         val notes = ArrayList<NoteEvent>()
@@ -427,9 +439,21 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             }
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
             val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
-            val asset = cachedInstrument ?: decodeAudioAsset(uri, duration, token).also { decoded ->
+            val asset = cachedInstrument ?: try {
+                decodeAudioAsset(uri, duration, token).also { decoded ->
+                    ensureCurrent()
+                    synchronized(audioAssetCache) { audioAssetCache.put(cacheKey, decoded) }
+                }
+            } catch (failure: Exception) {
+                // A missing sampler file should disable only this instrument source; MIDI
+                // notes still use the built-in synthesized fallback in renderPlan().
                 ensureCurrent()
-                synchronized(audioAssetCache) { audioAssetCache.put(cacheKey, decoded) }
+                android.util.Log.e(
+                    "StudioWavePlayback",
+                    "Sampler source unavailable for track ${track.name} (${track.id}); using built-in synth fallback",
+                    failure
+                )
+                return@forEach
             }
             instrumentsByTrack[track.id] = SamplerInstrument(
                 asset = asset,
