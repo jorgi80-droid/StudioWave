@@ -219,6 +219,12 @@ internal object StudioWaveDiagnostics {
     @Synchronized
     fun clear() {
         entries.clear()
+        val target = logFile
+        if (target != null) {
+            diskWriter.execute {
+                runCatching { synchronized(target) { target.writeText("") } }
+            }
+        }
         log("INFO", "DIAGNOSTICS", "Application event log cleared by user")
     }
 
