@@ -1267,7 +1267,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         require(uriString.isNotBlank()) { "Audio source URI is empty" }
         require(durationSeconds.isFinite() && durationSeconds > 0.0) { "Audio duration is invalid" }
         val token = generation.get()
-        val seconds = durationSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
+        // A small tail lets MediaCodec deliver EOS even when container duration metadata
+        // rounds down by a few frames; the asset is truncated to actual decoded frames.
+        val seconds = (durationSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble()) + 0.25)
+            .coerceAtMost(MAX_SOURCE_SECONDS.toDouble())
         val requestedFrames = ceil(seconds * OUTPUT_SAMPLE_RATE).toLong()
             .coerceIn(1L, OUTPUT_SAMPLE_RATE.toLong() * MAX_SOURCE_SECONDS).toInt()
         val key = "$uriString|$OUTPUT_SAMPLE_RATE"
