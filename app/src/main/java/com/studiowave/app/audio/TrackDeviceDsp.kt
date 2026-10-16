@@ -25,29 +25,91 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
             b0=(1+alpha*a)/a0; b1=(-2*c)/a0; b2=(1-alpha*a)/a0; a1=(-2*c)/a0; a2=(1-alpha/a)/a0
         }
     }
-    private class State(sampleRate:Int) {
-        var lowL=0.0; var lowR=0.0; var envL=0.0; var envR=0.0; var write=0
-        val delayL=FloatArray((sampleRate*2.1f).toInt().coerceAtLeast(4096)); val delayR=FloatArray(delayL.size)
-        val eq=Array(8){Biquad()}; var eqSignature=Long.MIN_VALUE
+    private class State(sampleRate: Int, val hasDelay: Boolean, val hasEq: Boolean) {
+        var lowL = 0.0; var lowR = 0.0; var envL = 0.0; var envR = 0.0; var write = 0
+        // Most processors do not need delay lines. Allocating 2.1 seconds of stereo delay
+        // memory for every EQ/compressor/saturator was wasting ~740 KiB per module.
+        val delayL = FloatArray(if (hasDelay) (sampleRate * 2.1f).toInt().coerceAtLeast(4096) else 1)
+        val delayR = FloatArray(delayL.size)
+        val eq = if (hasEq) Array(8) { Biquad() } else emptyArray()
+        var eqSignature = Long.MIN_VALUE
     }
-    private val states=HashMap<String,State>()
-    private var chainSignature=""
-    fun process(buffer:FloatArray,master:FloatArray,sampleCount:Int,masterGain:Float,devices:List<TrackDevice>) {
-        val active=devices.filter{it.enabled && it.type in EFFECTS}
-        val signature=active.joinToString("|"){"${it.id}:${it.type}"}
-        if(signature!=chainSignature) {
-            val ids=active.map{it.id}.toSet(); states.keys.retainAll(ids)
-            active.forEach{states.getOrPut(it.id){State(sampleRate)}}
-            chainSignature=signature
+    private data class ActiveDevice(var device: TrackDevice, val state: State)
+    private val states = HashMap<String, State>()
+    @Volatile private var activeChain: List<ActiveDevice> = emptyList()
+
+    private fun active(device: TrackDevice): Boolean = device.enabled && device.type in EFFECTS
+
+    private fun sameActiveStructure(devices: List<TrackDevice>): Boolean {
+        var index = 0
+        val current = activeChain
+        for (device in devices) {
+            if (!active(device)) continue
+            if (index >= current.size) return false
+            val old = current[index++].device
+            if (old.id != device.id || old.type != device.type) return false
         }
-        if(active.isEmpty()) return
-        val gain=masterGain.coerceIn(0f,1f)
+        return index == current.size
+    }
+
+    /** Prepare new effect state away from the realtime render loop. */
+    fun prepare(devices: List<TrackDevice>) {
+        ensureActiveChain(devices)
+    }
+
+    private fun ensureActiveChain(devices: List<TrackDevice>) {
+        if (sameActiveStructure(devices)) {
+            // Parameters may change while the track's module topology stays the same.
+            // Refresh object references in-place: no per-block lists, strings or maps.
+            var index = 0
+            val current = activeChain
+            for (device in devices) {
+                if (active(device)) current[index++].device = device
+            }
+            return
+        }
+
+        val next = ArrayList<ActiveDevice>()
+        val ids = HashSet<String>()
+        for (device in devices) {
+            if (!active(device)) continue
+            ids.add(device.id)
+            val needsDelay = device.type == "DELAY" || device.type == "REVERB"
+            val needsEq = device.type == "PARAM_EQ_8"
+            val previous = states[device.id]
+            val state = if (previous != null &&
+                previous.hasDelay == needsDelay && previous.hasEq == needsEq
+            ) previous else State(sampleRate, needsDelay, needsEq)
+            states[device.id] = state
+            next.add(ActiveDevice(device, state))
+        }
+        states.keys.retainAll(ids)
+        activeChain = next
+    }
+
+    fun hasSameStructure(devices: List<TrackDevice>): Boolean {
+        val current = activeChain
+        var index = 0
+        for (device in devices) {
+            if (!active(device)) continue
+            if (index >= current.size) return false
+            val old = current[index++].device
+            if (old.id != device.id || old.type != device.type) return false
+        }
+        return index == current.size
+    }
+
+    fun process(buffer: FloatArray, master: FloatArray, sampleCount: Int, masterGain: Float, devices: List<TrackDevice>) {
+        ensureActiveChain(devices)
+        val active = activeChain
+        if (active.isEmpty()) return
 
         // Tune EQ filters once per block, not once per stereo frame. Keep temporary
         // list/fold work out of the sample loop to reduce allocations on the audio path.
-        active.forEach { device ->
+        active.forEach { activeDevice ->
+            val device = activeDevice.device
             if(device.type == "PARAM_EQ_8") {
-                val st=states.getValue(device.id)
+                val st=activeDevice.state
                 val p=device.parameters
                 var signatureValue=1L
                 for(band in 1..8) {
@@ -75,8 +137,10 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         for(i in 0 until sampleCount step 2) {
             val dryL=buffer[i].toDouble(); val dryR=buffer[i+1].toDouble()
             var left=dryL; var right=dryR
-            active.forEach { device ->
-                val st=states.getValue(device.id); val p=device.parameters
+            active.forEach { activeDevice ->
+                val device = activeDevice.device
+                val st = activeDevice.state
+                val p=device.parameters
                 when(device.type) {
                     "EQ" -> {
                         val lowGain=db(p["lowDb"]?:0f); val midGain=db(p["midDb"]?:0f); val highGain=db(p["highDb"]?:0f)
