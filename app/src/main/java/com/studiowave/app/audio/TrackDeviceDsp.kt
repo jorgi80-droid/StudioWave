@@ -32,7 +32,19 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         val delayL = FloatArray(if (hasDelay) (sampleRate * 2.1f).toInt().coerceAtLeast(4096) else 1)
         val delayR = FloatArray(delayL.size)
         val eq = if (hasEq) Array(8) { Biquad() } else emptyArray()
+        val eqLowAlpha = 1 - exp(-2 * PI * 180 / sampleRate)
+        val eqHighAlpha = 1 - exp(-2 * PI * 5200 / sampleRate)
         var eqSignature = Long.MIN_VALUE
+        var parameterSource: Map<String, Float>? = null
+        var parameterType: String? = null
+        var lowGain = 1.0; var midGain = 1.0; var highGain = 1.0
+        var filterAlpha = 1.0; var filterMode = 0
+        var saturatorDrive = 2.5; var saturatorWet = 0.35; var saturatorNorm = 1.0; var saturatorOutput = 1.0
+        var compressorThreshold = -18.0; var compressorRatio = 3.0
+        var compressorAttack = 0.0; var compressorRelease = 0.0; var compressorMakeup = 1.0
+        var delayFrames = 1; var delayFeedback = 0.32; var delayWet = 0.2
+        var reverbRoom = 0.45; var reverbWet = 0.22; var reverbTap2 = 1; var reverbTap3 = 1
+        var limiterCeiling = 1.0
     }
     private data class ActiveDevice(var device: TrackDevice, val state: State)
     private val states = HashMap<String, State>()
@@ -53,9 +65,61 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         return index == current.size
     }
 
+    private fun prepareParameters(activeDevice: ActiveDevice) {
+        val device = activeDevice.device
+        val state = activeDevice.state
+        val parameters = device.parameters
+        if (state.parameterSource === parameters && state.parameterType == device.type) return
+        state.parameterSource = parameters
+        state.parameterType = device.type
+        when (device.type) {
+            "EQ" -> {
+                state.lowGain = db(parameters["lowDb"] ?: 0f)
+                state.midGain = db(parameters["midDb"] ?: 0f)
+                state.highGain = db(parameters["highDb"] ?: 0f)
+            }
+            "FILTER" -> {
+                val cutoff = (parameters["cutoffHz"] ?: 16000f).coerceIn(20f, sampleRate * 0.45f)
+                state.filterMode = (parameters["mode"] ?: 0f).toInt().coerceIn(0, 2)
+                state.filterAlpha = 1 - exp(-2 * PI * cutoff / sampleRate)
+            }
+            "SATURATOR" -> {
+                state.saturatorDrive = (parameters["drive"] ?: 2.5f).coerceIn(0.2f, 12f).toDouble()
+                state.saturatorWet = (parameters["wet"] ?: 0.35f).coerceIn(0f, 1f).toDouble()
+                state.saturatorNorm = tanh(state.saturatorDrive).coerceAtLeast(0.0001)
+                state.saturatorOutput = db(parameters["outputDb"] ?: 0f)
+            }
+            "COMPRESSOR" -> {
+                state.compressorThreshold = (parameters["thresholdDb"] ?: -18f).coerceIn(-60f, 0f).toDouble()
+                state.compressorRatio = (parameters["ratio"] ?: 3f).coerceIn(1f, 20f).toDouble()
+                state.compressorAttack = exp(-1.0 / ((parameters["attackMs"] ?: 10f).coerceIn(0.1f, 250f) * sampleRate / 1000.0))
+                state.compressorRelease = exp(-1.0 / ((parameters["releaseMs"] ?: 120f).coerceIn(1f, 1500f) * sampleRate / 1000.0))
+                state.compressorMakeup = db(parameters["makeupDb"] ?: 0f)
+            }
+            "DELAY" -> {
+                val ms = (parameters["timeMs"] ?: 320f).coerceIn(10f, 2000f)
+                state.delayFrames = (ms * sampleRate / 1000).toInt().coerceIn(1, state.delayL.size - 1)
+                state.delayFeedback = (parameters["feedback"] ?: 0.32f).coerceIn(0f, 0.88f).toDouble()
+                state.delayWet = (parameters["wet"] ?: 0.2f).coerceIn(0f, 1f).toDouble()
+            }
+            "REVERB" -> {
+                val ms = ((parameters["decay"] ?: 1.6f) * 1000 / 7).coerceIn(24f, 180f)
+                state.delayFrames = (ms * sampleRate / 1000).toInt().coerceIn(1, state.delayL.size - 1)
+                state.reverbRoom = (parameters["room"] ?: 0.45f).coerceIn(0.05f, 0.95f).toDouble()
+                state.reverbWet = (parameters["wet"] ?: 0.22f).coerceIn(0f, 1f).toDouble()
+                state.reverbTap2 = (state.delayFrames * 1.31f).toInt().coerceAtMost(state.delayL.size - 1)
+                state.reverbTap3 = (state.delayFrames * 1.73f).toInt().coerceAtMost(state.delayL.size - 1)
+            }
+            "LIMITER" -> {
+                state.limiterCeiling = db((parameters["ceilingDb"] ?: -1f).coerceIn(-12f, 0f)).coerceIn(0.05, 1.0)
+            }
+        }
+    }
+
     /** Prepare new effect state away from the realtime render loop. */
     fun prepare(devices: List<TrackDevice>) {
         ensureActiveChain(devices)
+        activeChain.forEach { prepareParameters(it) }
         preparedForRealtime = true
     }
 
@@ -113,6 +177,8 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         }
         val active = activeChain
         if (active.isEmpty()) return
+        // Expensive parameter transforms run only when a module's parameter map changes.
+        active.forEach { prepareParameters(it) }
 
         // Tune EQ filters once per block, not once per stereo frame. Keep temporary
         // list/fold work out of the sample loop to reduce allocations on the audio path.
