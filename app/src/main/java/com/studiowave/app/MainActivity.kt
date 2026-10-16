@@ -607,6 +607,14 @@ private fun StudioWaveApp() {
         project = previous
         bpm = previous.bpm
         arrangementPlayback.updateMix(previous)
+        if (playing && !playbackLoading) {
+            playbackScope.launch {
+                runCatching { arrangementPlayback.updateArrangement(previous) }
+                    .onFailure { audioError = it.message ?: "Undo arrangement update failed" }
+            }
+        } else if (playbackLoading) {
+            restartPendingPlayback?.invoke(previous)
+        }
     }
     fun redoProject() {
         val next = redoHistory.lastOrNull() ?: return
@@ -616,6 +624,14 @@ private fun StudioWaveApp() {
         project = next
         bpm = next.bpm
         arrangementPlayback.updateMix(next)
+        if (playing && !playbackLoading) {
+            playbackScope.launch {
+                runCatching { arrangementPlayback.updateArrangement(next) }
+                    .onFailure { audioError = it.message ?: "Redo arrangement update failed" }
+            }
+        } else if (playbackLoading) {
+            restartPendingPlayback?.invoke(next)
+        }
     }
     fun stopPlayback() {
         playbackSession += 1L
