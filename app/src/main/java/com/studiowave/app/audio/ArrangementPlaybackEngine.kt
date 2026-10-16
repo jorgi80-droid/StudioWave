@@ -735,6 +735,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         revision: Long? = null,
         allowTransportGenerationChange: Boolean = false
     ): AudioAsset {
+        // When audio is already running, source decoding must yield CPU time to the
+        // THREAD_PRIORITY_AUDIO renderer rather than competing at normal thread priority.
+        val decodeTid = Process.myTid()
+        val previousPriority = runCatching { Process.getThreadPriority(decodeTid) }
+            .getOrDefault(Process.THREAD_PRIORITY_DEFAULT)
+        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
         fun ensureCurrent() {
             check(!closed.get() && (allowTransportGenerationChange || generation.get() == token) &&
                 (revision == null || arrangementUpdateRevision.get() == revision)) {
@@ -865,6 +871,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             runCatching { extractor.release() }
             runCatching { pcmRandomAccess?.close() }
             if (!keepPcmFile) runCatching { pcmFile.delete() }
+            runCatching { Process.setThreadPriority(previousPriority) }
         }
     }
 
