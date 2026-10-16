@@ -1299,7 +1299,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
             }
         }
-        check(!closed.get()) { "Audio preparation was cancelled" }
+        if (closed.get()) {
+            runCatching { decoded.pcmFile?.delete() }
+            error("Audio preparation was cancelled")
+        }
         synchronized(audioAssetCache) { audioAssetCache.put(key, decoded) }
         android.util.Log.i(
             "StudioWaveAudio",
