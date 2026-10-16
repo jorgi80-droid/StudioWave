@@ -1112,7 +1112,7 @@ private fun StudioWaveApp() {
                     highContrast = highContrast, onHighContrastChange = { highContrast = it },
                     gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
                     uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.6f, 1.2f) },
-                    audioStatus = AudioPerformanceProfile.describeDevice(context, audioProfile) +
+                    audioStatus = AudioPerformanceProfile.describeDevice(context, audioProfile, parallelPreparation) +
                         " · Native AAudio stereo PCM16 · 256-frame render blocks; Android audio policy may override requested stream properties.",
                     audioProfile = audioProfile,
                     onAudioProfileChange = { value ->
