@@ -566,10 +566,34 @@ private fun StudioWaveApp() {
     var pendingExportProject by remember { mutableStateOf<StudioProject?>(null) }
     fun changeProject(next: StudioProject) {
         if (next != project) {
-            undoHistory = (undoHistory + project).takeLast(100)
+            val previous = project
+            val arrangementChanged =
+                previous.bpm != next.bpm ||
+                previous.ppq != next.ppq ||
+                previous.numerator != next.numerator ||
+                previous.denominator != next.denominator ||
+                previous.tracks.map { it.id to it.kind } != next.tracks.map { it.id to it.kind } ||
+                previous.tracks.map { it.id to it.clips } != next.tracks.map { it.id to it.clips }
+            undoHistory = (undoHistory + previous).takeLast(100)
             redoHistory = emptyList()
             project = next
             arrangementPlayback.updateMix(next)
+            if (arrangementChanged && playing && !playbackLoading) {
+                // Clip/sample/note edits publish a new render plan in the background.
+                // Do not stop transport or reopen AAudio while the new plan is prepared.
+                playbackScope.launch {
+                    runCatching { arrangementPlayback.updateArrangement(next) }
+                        .onFailure { failure ->
+                            audioError = failure.message ?: "Arrangement update failed"
+                            StudioWaveDiagnostics.log(
+                                "ERROR", "AUDIO_HOT_UPDATE", audioError ?: "Arrangement update failed"
+                            )
+                        }
+                }
+            } else if (arrangementChanged && playbackLoading) {
+                // Keep the pending initial playback snapshot in sync with edits made while loading.
+                startPlaybackAt(playheadTick, next)
+            }
             StudioWaveDiagnostics.logThrottled("project-edit", 300L, "INFO", "PROJECT",
                 "Project edit committed: '${next.name}', ${next.tracks.size} tracks, ${next.tracks.sumOf { it.clips.size }} clips")
         }
@@ -1252,28 +1276,10 @@ private fun StudioWaveApp() {
                                 selectedWorkspace = workspace
                             },
                             onPlaybackRestart = { updatedProject ->
-                                if (playing && !playbackLoading) {
-                                    // FL Studio Mobile-style live arrangement editing: keep the
-                                    // current transport/output stream running while the updated
-                                    // clip schedule and any newly imported PCM are prepared.
-                                    playbackScope.launch {
-                                        runCatching {
-                                            arrangementPlayback.updateArrangement(updatedProject)
-                                        }.onFailure { failure ->
-                                            if (playing) {
-                                                audioError = failure.message ?: "Arrangement update failed"
-                                                StudioWaveDiagnostics.log(
-                                                    "ERROR", "AUDIO_HOT_UPDATE",
-                                                    audioError ?: "Arrangement update failed"
-                                                )
-                                            }
-                                        }
-                                    }
-                                } else if (playbackLoading) {
-                                    // The initial plan has not started yet; replace that pending
-                                    // snapshot rather than letting an older project start playing.
-                                    startPlaybackAt(playheadTick, updatedProject)
-                                }
+                                // changeProject() owns hot plan publication for every editor,
+                                // including audio import, Piano Roll and Arrangement gestures.
+                                // Only replace an initial plan that has not started yet.
+                                if (playbackLoading) startPlaybackAt(playheadTick, updatedProject)
                             },
                             showDevices = false,
                             onToggleDevices = {},
