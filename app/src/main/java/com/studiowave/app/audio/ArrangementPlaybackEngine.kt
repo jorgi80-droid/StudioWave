@@ -805,7 +805,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         planRef: java.util.concurrent.atomic.AtomicReference<Plan>,
         requests: List<SourceRequest>
     ) {
-        if (closed.get()) return
+        if (closed.get() || latestProjectForPlayback !== project || activePlanRef !== planRef ||
+            generation.get() != token) return
         synchronized(pendingAudioJobsLock) {
             // Replace queued work with the latest plan and put recently added tracks first.
             // Already-running decoders are allowed to finish and populate the shared cache.
