@@ -726,9 +726,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
         var lastReportedFrame = -1L
         fun reportPlaybackPosition(force: Boolean = false) {
-            // Native callback consumption tracks frames read from the PCM queue.
-            val playedFrames = track.playedFrames()
-            val absoluteFrame = (startFrame + playedFrames).coerceAtMost(plan.totalFrames)
+            // Advance with elapsed device frames, not only PCM frames consumed. During an
+            // underrun AAudio still emits silence; consumed-only timing freezes the playhead.
+            val outputFrames = track.outputFrames()
+            val absoluteFrame = (startFrame + outputFrames).coerceAtMost(plan.totalFrames)
             val reportInterval = (sampleRate / 30).toLong().coerceAtLeast(1L)
             if (force || lastReportedFrame < 0L || absoluteFrame - lastReportedFrame >= reportInterval) {
                 lastReportedFrame = absoluteFrame

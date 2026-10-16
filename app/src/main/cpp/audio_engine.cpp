@@ -17,7 +17,10 @@ struct AudioState {
     std::array<int16_t, kCapacityFrames * kChannels> ring{};
     std::atomic<uint64_t> writeFrame{0};
     std::atomic<uint64_t> readFrame{0};
+    // PCM frames consumed drain the final queued block; output frames count elapsed
+    // device callbacks, including silence during underruns, so the playhead cannot freeze.
     std::atomic<uint64_t> playedFrames{0};
+    std::atomic<uint64_t> outputFrames{0};
     std::atomic<uint64_t> underruns{0};
     std::atomic<bool> hasReceivedPcm{false};
     std::atomic<bool> running{false};
@@ -84,6 +87,7 @@ aaudio_data_callback_result_t dataCallback(
 
     state->readFrame.store(read + fromQueue, std::memory_order_release);
     state->playedFrames.fetch_add(fromQueue, std::memory_order_relaxed);
+    state->outputFrames.fetch_add(static_cast<uint64_t>(numFrames), std::memory_order_relaxed);
     if (fromQueue < static_cast<uint64_t>(numFrames) &&
         state->hasReceivedPcm.load(std::memory_order_acquire)) {
         state->underruns.fetch_add(1, std::memory_order_relaxed);
@@ -107,6 +111,7 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeOpenOutput(JNIEnv*, jobjec
     g_state.writeFrame.store(0, std::memory_order_relaxed);
     g_state.readFrame.store(0, std::memory_order_relaxed);
     g_state.playedFrames.store(0, std::memory_order_relaxed);
+    g_state.outputFrames.store(0, std::memory_order_relaxed);
     g_state.underruns.store(0, std::memory_order_relaxed);
     g_state.hasReceivedPcm.store(false, std::memory_order_relaxed);
     g_state.sampleRate.store(sampleRate, std::memory_order_relaxed);
@@ -198,6 +203,11 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeQueuedFrames(JNIEnv*, jobj
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_studiowave_app_audio_NativeAudioEngine_nativePlayedFrames(JNIEnv*, jobject) {
     return static_cast<jlong>(g_state.playedFrames.load(std::memory_order_relaxed));
+}
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_studiowave_app_audio_NativeAudioEngine_nativeOutputFrames(JNIEnv*, jobject) {
+    return static_cast<jlong>(g_state.outputFrames.load(std::memory_order_relaxed));
 }
 
 extern "C" JNIEXPORT jlong JNICALL

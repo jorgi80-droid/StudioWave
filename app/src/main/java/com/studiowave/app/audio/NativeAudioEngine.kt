@@ -16,6 +16,7 @@ class NativeAudioEngine:AutoCloseable {
  private external fun nativeWritePcm(source:ShortArray,sampleCount:Int):Int
  private external fun nativeQueuedFrames():Int
  private external fun nativePlayedFrames():Long
+ private external fun nativeOutputFrames():Long
  private external fun nativeUnderrunCount():Long
  fun configureQueueTarget(targetFrames:Int){
   producerBackpressureFrames=targetFrames.coerceIn(256,4096)
@@ -48,6 +49,8 @@ class NativeAudioEngine:AutoCloseable {
  }
  fun queuedFrames():Int=if(running.get())nativeQueuedFrames().coerceAtLeast(0) else 0
  fun playedFrames():Long=nativePlayedFrames().coerceAtLeast(0L)
+ /** Device frames elapsed, including silent frames emitted during an underrun. */
+ fun outputFrames():Long=nativeOutputFrames().coerceAtLeast(0L)
  fun underrunCount():Long=nativeUnderrunCount().coerceAtLeast(0L)
  data class Diagnostics(val queuedFrames:Int,val playedFrames:Long,val underruns:Long)
  fun diagnostics():Diagnostics = Diagnostics(queuedFrames(),playedFrames(),underrunCount())
