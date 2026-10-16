@@ -8,6 +8,7 @@ import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Process
+import com.studiowave.app.StudioWaveDiagnostics
 import com.studiowave.app.data.MidiNote
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.StudioTrack
@@ -876,10 +877,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                             if (!firstPcmLogged) {
                                                 firstPcmLogged = true
                                                 val firstPcmMs = (System.nanoTime() - decodeStartedNanos).coerceAtLeast(0L) / 1_000_000L
-                                                android.util.Log.i(
-                                                    "StudioWaveAudio",
-                                                    "First PCM ready in ${firstPcmMs}ms; frames=${partial.frames}; source=${request.uriString}"
-                                                )
+                                                val message = "First PCM ready in ${firstPcmMs}ms; frames=${partial.frames}; sourceKey=${request.cacheKey.hashCode()}"
+                                                android.util.Log.i("StudioWaveAudio", message)
+                                                StudioWaveDiagnostics.log("INFO", "AUDIO_PREPARATION", message)
                                             }
                                             refreshPlanRequests.trySend(Unit)
                                         }
@@ -889,10 +889,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             if (!closed.get() && generation.get() == token) {
                                 synchronized(audioAssetCache) { audioAssetCache.put(request.cacheKey, decoded) }
                                 val totalDecodeMs = (System.nanoTime() - decodeStartedNanos).coerceAtLeast(0L) / 1_000_000L
-                                android.util.Log.i(
-                                    "StudioWaveAudio",
-                                    "PCM source ready in ${totalDecodeMs}ms; frames=${decoded.frames}; complete=${decoded.complete}; source=${request.uriString}"
-                                )
+                                val message = "PCM source ready in ${totalDecodeMs}ms; frames=${decoded.frames}; complete=${decoded.complete}; sourceKey=${request.cacheKey.hashCode()}"
+                                android.util.Log.i("StudioWaveAudio", message)
+                                StudioWaveDiagnostics.log("INFO", "AUDIO_PREPARATION", message)
                                 refreshPlanRequests.trySend(Unit)
                             } else {
                                 runCatching { decoded.pcmFile?.delete() }
