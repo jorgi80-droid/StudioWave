@@ -248,13 +248,20 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     /** Apply the selected device profile before the next playback preparation begins. */
     fun setDecoderParallelism(parallelism: Int) {
-        decodeSemaphore = Semaphore(parallelism.coerceIn(1, 4))
+        val value = parallelism.coerceIn(1, 4)
+        configuredDecoderParallelism = value
+        decodeSemaphore = Semaphore(value)
     }
     private val sourceDurationCache = java.util.concurrent.ConcurrentHashMap<String, Double>()
     private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshPlanRequests = Channel<Unit>(Channel.CONFLATED)
+    // Only active decoder jobs occupy this map. Waiting sources stay in a replaceable,
+    // newest-first queue so rapid imports never create dozens of coroutines parked on a semaphore.
     private val pendingAudioJobs = HashMap<String, Job>()
+    private val pendingAudioQueue = LinkedHashMap<String, SourceRequest>()
+    private val failedAudioSources = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
     private val pendingAudioJobsLock = Any()
+    @Volatile private var configuredDecoderParallelism = MAX_PARALLEL_DECODERS
     @Volatile private var latestProjectForPlayback: StudioProject? = null
     @Volatile private var worker: Thread? = null
     @Volatile private var output: NativeAudioEngine? = null
@@ -405,6 +412,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
+        failedAudioSources.clear()
         scratchOffsetsMs.clear()
         lastRenderBlockNanos.set(0L)
         maxRenderBlockNanos.set(0L)
@@ -784,10 +792,31 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         planRef: java.util.concurrent.atomic.AtomicReference<Plan>,
         requests: List<SourceRequest>
     ) {
-        if (requests.isEmpty() || closed.get()) return
-        requests.forEach { request ->
-            synchronized(pendingAudioJobsLock) {
+        if (closed.get()) return
+        synchronized(pendingAudioJobsLock) {
+            // Replace queued work with the latest plan and put recently added tracks first.
+            // Already-running decoders are allowed to finish and populate the shared cache.
+            pendingAudioQueue.clear()
+            requests.asReversed().forEach { request ->
+                if (failedAudioSources.contains(request.cacheKey)) return@forEach
                 if (pendingAudioJobs[request.cacheKey]?.isActive == true) return@forEach
+                val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
+                    ?.takeIf { it.frames >= request.requestedFrames || it.complete }
+                if (cached == null) pendingAudioQueue[request.cacheKey] = request
+            }
+        }
+        startQueuedPendingAudioPreparation(token)
+    }
+
+    private fun startQueuedPendingAudioPreparation(token: Long) {
+        synchronized(pendingAudioJobsLock) {
+            if (closed.get() || generation.get() != token) return
+            while (pendingAudioJobs.size < configuredDecoderParallelism && pendingAudioQueue.isNotEmpty()) {
+                val first = pendingAudioQueue.entries.first()
+                val key = first.key
+                val request = first.value
+                pendingAudioQueue.remove(key)
+                if (pendingAudioJobs[key]?.isActive == true || failedAudioSources.contains(key)) continue
                 val job = preparationScope.launch(start = CoroutineStart.LAZY) {
                     try {
                         val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
@@ -810,6 +839,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         }
                     } catch (failure: Exception) {
                         if (!closed.get() && generation.get() == token) {
+                            failedAudioSources.add(request.cacheKey)
                             android.util.Log.e(
                                 "StudioWavePlayback",
                                 "Background audio preparation failed for ${request.uriString}",
@@ -822,9 +852,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                 pendingAudioJobs.remove(request.cacheKey)
                             }
                         }
+                        startQueuedPendingAudioPreparation(token)
                     }
                 }
-                pendingAudioJobs[request.cacheKey] = job
+                pendingAudioJobs[key] = job
                 job.start()
             }
         }
@@ -1496,6 +1527,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         synchronized(pendingAudioJobsLock) {
             pendingAudioJobs.values.forEach { it.cancel() }
             pendingAudioJobs.clear()
+            pendingAudioQueue.clear()
         }
         activePlanRef = null
         scratchOffsetsMs.clear()
@@ -1540,6 +1572,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 synchronized(pendingAudioJobsLock) {
                     pendingAudioJobs.values.forEach { it.cancel() }
                     pendingAudioJobs.clear()
+                    pendingAudioQueue.clear()
                 }
                 latestProjectForPlayback = null
                 audioAssetCache.evictAll()
