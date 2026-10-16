@@ -659,10 +659,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         uri: Uri,
         durationSeconds: Double,
         token: Long,
-        revision: Long? = null
+        revision: Long? = null,
+        allowTransportGenerationChange: Boolean = false
     ): AudioAsset {
         fun ensureCurrent() {
-            check(!closed.get() && generation.get() == token &&
+            check(!closed.get() && (allowTransportGenerationChange || generation.get() == token) &&
                 (revision == null || arrangementUpdateRevision.get() == revision)) {
                 "Playback preparation cancelled"
             }
@@ -1184,11 +1185,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 if (secondLook != null && (secondLook.frames >= requestedFrames || secondLook.complete)) {
                     secondLook
                 } else {
-                    decodeAudioAsset(Uri.parse(uriString), seconds, token)
+                    decodeAudioAsset(Uri.parse(uriString), seconds, token, allowTransportGenerationChange = true)
                 }
             }
         }
-        check(!closed.get() && generation.get() == token) { "Audio preparation was cancelled" }
+        check(!closed.get()) { "Audio preparation was cancelled" }
         synchronized(audioAssetCache) { audioAssetCache.put(key, decoded) }
         android.util.Log.i(
             "StudioWaveAudio",
