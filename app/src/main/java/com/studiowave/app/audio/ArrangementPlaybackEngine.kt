@@ -605,9 +605,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             sourceRequests.map { request -> prepareSource(request) }
         }
         preparedSources.forEach { (uri, asset) -> if (asset != null) assets[uri] = asset }
-        val pendingAudioSources = if (allowUnpreparedAudio) {
+        val pendingAudioSources = (if (allowUnpreparedAudio) {
             sourceRequests.filter { request -> assets[request.uriString] == null }
-        } else emptyList()
+        } else emptyList()).toMutableList()
 
         val audioEvents = ArrayList<AudioEvent>()
         val notes = ArrayList<NoteEvent>()
@@ -620,7 +620,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 ?: return@forEach
             val uri = Uri.parse(uriText)
             // Bound instrument decoding to 30 seconds and include it in the shared PCM budget.
-            val duration = (cachedSourceDurationSeconds(uri) ?: 10.0).coerceIn(0.05, 30.0)
+            // A cold project must not synchronously probe every sampler URI before transport
+            // starts. Use a stable 10-second preparation window in partial-plan mode; the
+            // sample is decoded off-thread and cached under this same key for the next plan.
+            val duration = (if (allowUnpreparedAudio) 10.0 else cachedSourceDurationSeconds(uri) ?: 10.0)
+                .coerceIn(0.05, 30.0)
             val frameCount = ceil(duration * sampleRate).toLong()
                 .coerceIn(1L, sampleRate.toLong() * 30L).toInt()
             estimatedBytes += frameCount.toLong() * 4L
@@ -629,6 +633,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             }
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
             val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
+            if (cachedInstrument == null && allowUnpreparedAudio) {
+                pendingAudioSources += SourceRequest(uriText, duration, frameCount, cacheKey)
+                return@forEach
+            }
             val asset = cachedInstrument ?: try {
                 decodeSemaphore.withPermit { decodeAudioAsset(uri, duration, token, revision) }.also { decoded ->
                     ensureCurrent()
@@ -766,7 +774,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             ArrayList(sortedAudio.size),
             ArrayList(sortedNotes.size),
             ArrayList(sortedDrums.size),
-            pendingAudioSources
+            pendingAudioSources.toList()
         )
     }
 
