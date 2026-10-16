@@ -433,10 +433,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 .coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
             val requestedFrames = ceil(requiredSeconds * sampleRate).toLong()
                 .coerceIn(1L, sampleRate.toLong() * MAX_SOURCE_SECONDS).toInt()
-            val cacheKey = "$uriString|$sampleRate|$requestedFrames"
+            val cacheKey = "$uriString|$sampleRate"
             // Check the PCM cache before opening a metadata retriever. This removes repeated
             // content-provider/metadata work on play, pause, seek, and clip edits.
-            val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
+            val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }?.takeIf { it.frames >= requestedFrames }
             // The clip's persisted source range already tells us the maximum PCM window
             // needed for playback. Do not synchronously probe every media file with
             // MediaMetadataRetriever before decoding: providers/codecs can make that probe
@@ -449,7 +449,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 requiredSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
             }
             val allocationBytes = cached?.let { it.pcmStereo.size.toLong() * 2L }
-                ?: ceil(sourceSeconds * sampleRate).toLong().coerceAtLeast(1L) * 4L
+                ?: requestedFrames.toLong().coerceAtLeast(1L) * 4L
             estimatedBytes += allocationBytes
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
                 "Arrangement audio cache exceeds the safe memory budget; shorten clips or reduce the number of source files"
@@ -460,6 +460,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         suspend fun prepareSource(request: SourceRequest): Pair<String, AudioAsset?> {
             ensureCurrent()
             val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
+                ?.takeIf { it.frames >= request.requestedFrames }
             if (cached != null) return request.uriString to cached
             val decoded = try {
                 decodeSemaphore.withPermit {
@@ -680,7 +681,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 ensureCurrent()
                 var progress = false
                 if (!inputDone) {
-                    val inputIndex = decoder.dequeueInputBuffer(10_000)
+                    val inputIndex = decoder.dequeueInputBuffer(1_000)
                     if (inputIndex >= 0) {
                         val input = decoder.getInputBuffer(inputIndex) ?: error("Audio input buffer unavailable")
                         input.clear()
@@ -696,7 +697,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     }
                 }
 
-                when (val outIndex = decoder.dequeueOutputBuffer(info, 10_000)) {
+                when (val outIndex = decoder.dequeueOutputBuffer(info, 1_000)) {
                     MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                         val decodedFormat = decoder.outputFormat
                         if (decodedFormat.containsKey(MediaFormat.KEY_SAMPLE_RATE)) outputRate = decodedFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE).coerceIn(8000, 192000)
@@ -1206,7 +1207,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         // 64 MiB accommodates one five-minute stereo PCM source (~50.5 MiB), avoiding
         // cache eviction and expensive source decoding every time a long clip is resized.
         const val MAX_ASSET_CACHE_KIB = 64 * 1024
-        const val MAX_PARALLEL_DECODERS = 2
+        val MAX_PARALLEL_DECODERS = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
         const val MAX_CACHED_SOURCE_DURATIONS = 256
     }
 }
