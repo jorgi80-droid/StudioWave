@@ -93,6 +93,18 @@ internal object ArrangementTiming {
 
     fun trackIsAudible(trackMuted: Boolean, trackSolo: Boolean, anySoloActive: Boolean): Boolean =
         !trackMuted && (!anySoloActive || trackSolo)
+    /**
+     * Map a clip-relative frame into the selected source window for tempo-sync varispeed.
+     * Uses Double arithmetic to avoid Long multiplication overflow on malformed long clips.
+     */
+    fun warpedSourceFrame(relativeClipFrame: Long, clipDurationFrames: Long, sourceWindowFrames: Long): Long {
+        val duration = clipDurationFrames.coerceAtLeast(1L)
+        val window = sourceWindowFrames.coerceAtLeast(1L)
+        val position = relativeClipFrame.coerceAtLeast(0L).coerceAtMost(duration - 1L)
+        val mapped = (position.toDouble() * window.toDouble() / duration.toDouble()).toLong()
+        return mapped.coerceIn(0L, window - 1L)
+    }
+
     /** Wrap a playback cursor inside the selected source window, never outside the trimmed range. */
     fun sourceFrameWithinTrim(
         rawSourceFrame: Long,

@@ -28,7 +28,9 @@ data class WaveClip(
     /** Source-relative trim offset in absolute microseconds; independent of project BPM. */
     val sourceOffsetMicros: Long? = null,
     /** Source-relative trim window length in absolute microseconds; independent of project BPM. */
-    val sourceLengthMicros: Long? = null
+    val sourceLengthMicros: Long? = null,
+    /** Tempo-sync varispeed warp; preserves the trim window but changes pitch with playback speed. */
+    val warpEnabled: Boolean = false
 )
 
 data class TrackDevice(
@@ -142,6 +144,7 @@ data class StudioProject(
                                 put("sourceOffsetTicks", clip.sourceOffsetTicks.coerceAtLeast(0L))
                                 clip.sourceOffsetMicros?.coerceAtLeast(0L)?.let { put("sourceOffsetMicros", it) }
                                 clip.sourceLengthMicros?.coerceAtLeast(1L)?.let { put("sourceLengthMicros", it) }
+                                if (clip.warpEnabled) put("warpEnabled", true)
                                 clip.colorArgb?.let { put("colorArgb", it) }
                                 put("drumSteps", JSONArray().apply { clip.drumSteps.forEach { put(it) } })
                                 put("midiNotes", JSONArray().apply {
@@ -228,7 +231,8 @@ data class StudioProject(
                                 sourceOffsetMicros = if (c.has("sourceOffsetMicros")) c.optLong("sourceOffsetMicros", 0L).coerceAtLeast(0L)
                                     else if (kind == "audio" && clipSourceUri != null) legacyTicksToMicros(c.optLong("sourceOffsetTicks", 0L)) else null,
                                 sourceLengthMicros = if (c.has("sourceLengthMicros")) c.optLong("sourceLengthMicros", 1L).coerceAtLeast(1L)
-                                    else if (kind == "audio" && clipSourceUri != null) legacyTicksToMicros(c.optLong("lengthTicks", 3840L).coerceAtLeast(1L)).coerceAtLeast(1L) else null
+                                    else if (kind == "audio" && clipSourceUri != null) legacyTicksToMicros(c.optLong("lengthTicks", 3840L).coerceAtLeast(1L)).coerceAtLeast(1L) else null,
+                                warpEnabled = c.optBoolean("warpEnabled", false)
                             ))
                         }
                     }

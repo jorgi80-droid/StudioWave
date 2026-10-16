@@ -78,6 +78,16 @@ class ArrangementTimingTest {
         assertEquals(Long.MAX_VALUE, ArrangementTiming.ticksToMicros(Long.MAX_VALUE, 40, 24))
     }
 
+    @Test fun warpedSourceMappingStretchesSelectedWindowAcrossClipDuration() {
+        assertEquals(0L, ArrangementTiming.warpedSourceFrame(0L, 100L, 50L))
+        assertEquals(12L, ArrangementTiming.warpedSourceFrame(25L, 100L, 50L))
+        assertEquals(49L, ArrangementTiming.warpedSourceFrame(99L, 100L, 50L))
+        assertEquals(99L, ArrangementTiming.warpedSourceFrame(99L, 100L, 100L))
+        assertEquals(0L, ArrangementTiming.warpedSourceFrame(-5L, 100L, 50L))
+        assertEquals(49L, ArrangementTiming.warpedSourceFrame(Long.MAX_VALUE, Long.MAX_VALUE, 50L))
+        assertEquals(0L, ArrangementTiming.warpedSourceFrame(0L, 0L, 0L))
+    }
+
     @Test fun sourceFrameWrappingStaysInsideTrimmedWindowForMalformedAndOverflowInputs() {
         assertEquals(10L, ArrangementTiming.sourceFrameWithinTrim(10L, 10L, 4L, 100L))
         assertEquals(12L, ArrangementTiming.sourceFrameWithinTrim(-1L, 10L, 4L, 100L))

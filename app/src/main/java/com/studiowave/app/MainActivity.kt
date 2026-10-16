@@ -2743,6 +2743,17 @@ private fun AudioEditorWorkspace(
             Text(if (clip?.sourceUri != null) "AUDIO SOURCE" else "NO AUDIO CLIP", color = LocalStudioWavePalette.current.orange, fontSize = 8.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.weight(1f))
             SmallAction("IMPORT AUDIO") { onImportAudio() }
+            SmallAction(if (clip?.warpEnabled == true) "WARP ON" else "WARP OFF") {
+                val activeTrack = track
+                val activeClip = clip
+                if (activeTrack != null && activeClip?.sourceUri != null) {
+                    onProjectChange(project.copy(tracks = project.tracks.map { item ->
+                        if (item.id != activeTrack.id) item else item.copy(clips = item.clips.map { current ->
+                            if (current.id == activeClip.id) current.copy(warpEnabled = !current.warpEnabled) else current
+                        })
+                    }))
+                }
+            }
             SmallAction("RESET RANGE") {
                 if (sourceDurationTicks >= 2L && clip?.sourceUri != null) {
                     startFraction = 0f
@@ -2751,6 +2762,12 @@ private fun AudioEditorWorkspace(
                 }
             }
         }
+        Text(
+            if (clip?.warpEnabled == true) "VARISPEED WARP · syncs the selected source window to clip length; pitch follows speed"
+            else "WARP OFF · original source speed and pitch",
+            color = LocalStudioWavePalette.current.muted, fontSize = 7.sp, maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
         Row(Modifier.fillMaxWidth().height(24.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Text("START", color = LocalStudioWavePalette.current.muted, fontSize = 7.sp)
             Slider(value = startFraction, enabled = clip?.sourceUri != null && sourceDurationTicks >= 2L, onValueChange = { value ->

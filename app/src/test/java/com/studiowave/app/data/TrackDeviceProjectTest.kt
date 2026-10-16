@@ -47,6 +47,37 @@ class TrackDeviceProjectTest {
         assertEquals(3.5f, restored.parameters["modRateHz"]!!, 0.001f)
     }
 
+    @Test fun audioWarpToggleRoundTripsAndOldProjectsDefaultToOff() {
+        val original = StudioProject()
+        val audio = original.tracks.first { it.kind == "audio" }
+        val clip = WaveClip(
+            name = "Tempo Sync",
+            startTick = 0,
+            lengthTicks = 3840,
+            sourceUri = "content://studiowave/test.wav",
+            sourceOffsetMicros = 125_000L,
+            sourceLengthMicros = 2_000_000L,
+            warpEnabled = true
+        )
+        val edited = original.copy(tracks = original.tracks.map {
+            if (it.id == audio.id) it.copy(clips = listOf(clip)) else it
+        })
+        val restored = StudioProject.fromJson(JSONObject(edited.toJson().toString()))
+            .tracks.first { it.id == audio.id }.clips.single()
+        assertTrue(restored.warpEnabled)
+        assertEquals(125_000L, restored.sourceOffsetMicros)
+        assertEquals(2_000_000L, restored.sourceLengthMicros)
+
+        val legacyJson = edited.toJson()
+        val tracks = legacyJson.getJSONArray("tracks")
+        val audioJson = (0 until tracks.length()).map { tracks.getJSONObject(it) }
+            .first { it.optString("kind") == "audio" }
+        audioJson.getJSONArray("clips").getJSONObject(0).remove("warpEnabled")
+        val legacyRestored = StudioProject.fromJson(legacyJson)
+            .tracks.first { it.id == audio.id }.clips.single()
+        assertFalse(legacyRestored.warpEnabled)
+    }
+
     @Test fun legacyProjectWithoutDeviceArrayStillOpens() {
         val json = StudioProject().toJson()
         val tracks = json.getJSONArray("tracks")

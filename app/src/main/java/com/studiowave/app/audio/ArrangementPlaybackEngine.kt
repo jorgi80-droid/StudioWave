@@ -1351,8 +1351,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
                     for (absolute in from until to) {
                         val relative = absolute - event.startFrame
-                        val relativeAssetFrame = (relative.toDouble() *
-                            event.asset.sampleRate.toDouble() / sampleRate.toDouble()).toLong()
+                        val relativeAssetFrame = if (event.clip.warpEnabled) {
+                            ArrangementTiming.warpedSourceFrame(
+                                relativeClipFrame = relative,
+                                clipDurationFrames = event.endFrame - event.startFrame,
+                                sourceWindowFrames = event.sourceWindowFrames
+                            )
+                        } else {
+                            (relative.toDouble() * event.asset.sampleRate.toDouble() / sampleRate.toDouble()).toLong()
+                        }
                         val rawSourceFrame = event.sourceOffsetFrame + relativeAssetFrame + scratchFrames
                         if (event.asset.frames <= 0) continue
                         // Loop only inside the clip's selected source window. Wrapping across

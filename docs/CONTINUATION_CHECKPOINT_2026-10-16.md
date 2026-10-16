@@ -263,3 +263,11 @@ Baseline for this batch: branch HEAD `b36db6883886ec3c4ce481afb7c56a2dded8caf4`.
 - UI fidelity is a reference-informed original native adaptation, not a claim of pixel-identical Ableton implementation or use of proprietary Ableton assets.
 
 See `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` for the manual-to-source mapping.
+
+
+## Audio Clip View tempo-sync follow-up — 2026-10-16
+- Added a persisted per-clip warpEnabled field without changing the project schema version; older projects default to Warp Off.
+- Audio Clip View exposes WARP ON/OFF and explicitly labels the mode VARISPEED. With Warp enabled, the selected source window maps across the arrangement clip duration using bounded source-frame mapping; changing BPM therefore changes playback rate while keeping the clip aligned to the arrangement.
+- Added timing tests for source mapping boundaries/extreme values and project JSON persistence/legacy default behavior.
+- This is the first tempo-sync mode, not pitch-preserving time-stretch; warp markers and advanced Ableton warp algorithms remain outstanding.
+- The compile correction commit de75304d88f450dcd4b9efc4c8c773ef37e37d72 passed GitHub Actions unit tests and debug APK build.

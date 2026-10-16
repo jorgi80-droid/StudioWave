@@ -119,3 +119,12 @@ The eight official Ableton Live 12 manual areas supplied by the project owner we
 - Post-master PCM → bounded non-blocking offer into preallocated slots → worker-thread 1024-point FFT/Hann window → 64 logarithmic display bands → Compose snapshot.
 - EQ node drag → persisted `PARAM_EQ_8` gain/frequency values → existing serial effect DSP. Graph response is computed for the same eight peaking bands, including real insert bypass state.
 - Regression tests cover tuning intervals, voice envelopes, FFT bins, EQ response/bypass, and device JSON round-trip. Android physical testing is still required for touch ergonomics, audible consistency, microphone lifecycle and reopened recorded takes.
+
+
+## Follow-up: functional tempo-sync varispeed control
+
+- Audio Clip View now has a persisted Warp On/Off switch for source-linked audio clips.
+- When enabled, playback maps the selected source-trim window across the clip's arrangement duration, so changing project tempo changes the source playback rate and keeps the clip aligned to the arrangement.
+- This first warp mode is VARISPEED: pitch changes along with speed. It is deliberately not described as Ableton's pitch-preserving Beats/Tones/Texture/Complex time-stretch, and it does not yet provide movable warp markers.
+- The default for legacy project files is Warp Off. warpEnabled is optional in the existing JSON schema, so older projects continue to load.
+- Added pure timing tests for source-window mapping at start/middle/end, zero and extreme frame bounds, plus project JSON round-trip and legacy default behavior.
