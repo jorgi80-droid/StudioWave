@@ -3573,25 +3573,36 @@ private fun TimelineGrid(
                                 }
                             }
                             if (track.kind == "drum") {
-                                // Step-sequencer thumbnail: 16 equal steps, stronger beat accents, active hits clearly visible.
-                                Row(
-                                    Modifier.weight(1f).fillMaxWidth().padding(top = 2.dp, bottom = 2.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(1.dp),
-                                    verticalAlignment = Alignment.Bottom
+                                // Draw actual saved drum hits as a Live-inspired clip thumbnail.
+                                Canvas(
+                                    Modifier.weight(1f).fillMaxWidth()
+                                        .padding(top = 2.dp, bottom = 2.dp)
                                 ) {
-                                    val visibleStepCount = clip.drumSteps.size.coerceIn(16, 128)
-                                    (0 until visibleStepCount).forEach { step ->
-                                        val active = clip.drumSteps.getOrNull(step) == true
+                                    val stepCount = clip.drumSteps.size.coerceIn(16, 128)
+                                    val cellWidth = size.width / stepCount.toFloat()
+                                    val baseline = size.height - 2f
+                                    drawLine(clipInk.copy(alpha = 0.28f), Offset(0f, baseline),
+                                        Offset(size.width, baseline), 0.8f)
+                                    for (step in 0 until stepCount) {
+                                        val x = step * cellWidth
                                         val isBeat = step % 4 == 0
-                                        Box(
-                                            Modifier.weight(1f).fillMaxHeight()
-                                                .padding(top = if (active) 0.dp else 3.dp)
-                                                .background(
-                                                    if (active) accent.copy(alpha = if (isBeat) 1f else 0.82f)
-                                                    else timelinePalette.text.copy(alpha = if (isLightTheme) 0.16f else 0.24f),
-                                                    RoundedCornerShape(if (isBeat) 2.dp else 1.dp)
-                                                )
+                                        drawLine(clipInk.copy(alpha = if (isBeat) 0.42f else 0.13f),
+                                            Offset(x, 0f), Offset(x, size.height),
+                                            if (isBeat) 1f else 0.5f)
+                                        val active = clip.drumSteps.getOrNull(step) == true
+                                        val barHeight = if (active) size.height * (if (isBeat) 0.88f else 0.68f)
+                                            else size.height * (if (isBeat) 0.12f else 0.055f)
+                                        val barWidth = (cellWidth * 0.66f).coerceAtLeast(1f)
+                                        val left = x + (cellWidth - barWidth) / 2f
+                                        drawRoundRect(
+                                            color = if (active) accent.copy(alpha = if (isBeat) 1f else 0.88f)
+                                                else clipInk.copy(alpha = 0.20f),
+                                            topLeft = Offset(left, (baseline - barHeight).coerceAtLeast(0f)),
+                                            size = Size(barWidth, barHeight.coerceAtLeast(1f)),
+                                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
                                         )
+                                        if (active && isBeat) drawLine(accent.copy(alpha = 0.95f),
+                                            Offset(left, 1f), Offset(left + barWidth, 1f), 1.1f)
                                     }
                                 }
                             } else if (track.kind == "midi") {
@@ -5040,15 +5051,16 @@ private fun MixerWorkspace(
                             })
                         }
                 ) {
-                    val railWidth = 5f
+                    val railWidth = 7f
                     val railLeft = (size.width - railWidth) / 2f
-                    val railTop = 8f
-                    val railBottom = (size.height - 8f).coerceAtLeast(railTop + 1f)
+                    val railTop = 10f
+                    val railBottom = (size.height - 10f).coerceAtLeast(railTop + 1f)
                     drawRoundRect(mixerPalette.room, Offset(railLeft, railTop),
                         Size(railWidth, railBottom - railTop),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f))
-                    drawLine(mixerPalette.border, Offset(railLeft + railWidth / 2f, railTop),
-                        Offset(railLeft + railWidth / 2f, railBottom), 1f)
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(3.5f))
+                    drawLine(mixerPalette.border.copy(alpha = 0.95f),
+                        Offset(railLeft + railWidth / 2f, railTop),
+                        Offset(railLeft + railWidth / 2f, railBottom), 1.1f)
                     listOf(0.0, -6.0, -12.0, -24.0, -48.0).forEach { db ->
                         val fraction = ((db + 60.0) / 60.0).toFloat()
                         val y = railBottom - fraction * (railBottom - railTop)
@@ -5058,19 +5070,18 @@ private fun MixerWorkspace(
                             if (major) 1.2f else 0.7f)
                     }
                     val gain = mixerFaderFractionForGain(master, 1f)
-                    val thumbY = (railBottom - gain * (railBottom - railTop)).coerceIn(railTop + 7f, railBottom - 7f)
-                    val capLeft = size.width * 0.12f
-                    val capWidth = size.width * 0.76f
-                    drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 7f),
-                        Size(capWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
-                    drawRoundRect(mixerPalette.border, Offset(capLeft, thumbY - 7f),
-                        Size(capWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f),
+                    val thumbY = (railBottom - gain * (railBottom - railTop))
+                        .coerceIn(railTop + 10f, railBottom - 10f)
+                    val capLeft = size.width * 0.08f
+                    val capWidth = size.width * 0.84f
+                    // Wider metal-style cap and bright position line remain readable at phone scale.
+                    drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 10f),
+                        Size(capWidth, 20f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
+                    drawRoundRect(mixerPalette.text.copy(alpha = 0.82f), Offset(capLeft, thumbY - 10f),
+                        Size(capWidth, 20f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f),
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
-                    drawLine(mixerPalette.text, Offset(capLeft + 4f, thumbY),
-                        Offset(capLeft + capWidth - 4f, thumbY), 1.5f)
-                    drawLine(mixerPalette.orange.copy(alpha = 0.9f),
-                        Offset(capLeft + capWidth * 0.34f, thumbY),
-                        Offset(capLeft + capWidth * 0.66f, thumbY), 2f)
+                    drawLine(mixerPalette.orange, Offset(capLeft + 4f, thumbY),
+                        Offset(capLeft + capWidth - 4f, thumbY), 2.2f)
                 }
             }
             Row(
@@ -7054,12 +7065,17 @@ private fun AudioClipWaveform(
                 // A stale trim range must not make an otherwise decoded source appear blank.
                 drawDecodedFallbackEnvelope()
             } else {
+                // Normalize visible peaks for legibility while preserving their relative dynamics.
+                // Quiet sources therefore render as a bipolar envelope, not hairline ticks.
+                val visibleMaxPeak = peaks.subList(range.firstPeakIndex, range.endPeakIndexExclusive)
+                    .maxOrNull()?.coerceAtLeast(0.0001f) ?: 1f
                 val points = ArrayList<Pair<Float, Float>>(range.endPeakIndexExclusive - range.firstPeakIndex)
                 for (index in range.firstPeakIndex until range.endPeakIndexExclusive) {
                     val peak = peaks[index].coerceIn(0f, 1f)
+                    val normalizedPeak = (peak / visibleMaxPeak).coerceIn(0f, 1f)
                     val sampleTime = (index + 0.5) * range.sourceDurationSeconds / peaks.size
                     val x = ((sampleTime - range.sourceOffsetSeconds) / range.clipDurationSeconds * size.width).toFloat()
-                    if (x.isFinite() && x in 0f..size.width) points.add(x to (peak * size.height * 0.46f))
+                    if (x.isFinite() && x in 0f..size.width) points.add(x to (normalizedPeak * size.height * 0.46f))
                 }
                 if (points.isEmpty()) drawDecodedFallbackEnvelope() else drawEnvelope(points)
             }

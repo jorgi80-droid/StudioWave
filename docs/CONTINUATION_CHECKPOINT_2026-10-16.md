@@ -294,3 +294,12 @@ See `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` for the manual-to-source m
 - The synth faceplate no longer draws a second EQ Eight or exposes EQ controls that bypass the serial chain. EQ Eight is shown and edited only by its actual effect insert card after the selected instrument.
 - MIDI clip note thumbnails now use high-contrast note ink against the track-colored clip fill so pitch/velocity patterns stay legible at Arrangement scale.
 - This keeps the instrument controls and measured master-PCM spectrum; only the duplicated EQ insert presentation was removed. Verify CI and landscape touch behavior before calling the UI finished.
+
+
+## Arrangement waveform / Master fader / drum clip thumbnail batch — 2026-10-16
+- Batch based on source head `295cfc1141cea40386a605db8e1fa31de4efeeb8`.
+- Arrangement audio clip peaks now normalize within the visible source window for display. Relative dynamics remain intact while quiet valid audio becomes visibly bipolar instead of a row of near-zero peak ticks. Audio samples and playback gain are unchanged.
+- Drum clips render saved step events as a compact beat-grid thumbnail with distinct active-hit energy and stronger beat boundaries. No hits are invented or animated.
+- The Mixer Master fader now has a wider outlined cap and a high-contrast orange position line on a slightly stronger rail. Existing dB taper and drag/tap callbacks remain unchanged.
+- Arrangement viewport/timebase, clip hit testing/resize/snap, MIDI note model, DSP routing, master gain mapping, and the 1,800-bar limit are unchanged.
+- Validate this commit with Android CI unit tests, debug APK build, and APK artifact upload. Physical-device playback/layout checks remain required.
