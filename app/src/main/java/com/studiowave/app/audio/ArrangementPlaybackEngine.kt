@@ -105,6 +105,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val generation = java.util.concurrent.atomic.AtomicLong(0L)
+    private val lastRenderBlockNanos = java.util.concurrent.atomic.AtomicLong(0L)
+    private val maxRenderBlockNanos = java.util.concurrent.atomic.AtomicLong(0L)
+    private val renderBudgetNanos = java.util.concurrent.atomic.AtomicLong(0L)
+    private val renderOverrunBlocks = java.util.concurrent.atomic.AtomicLong(0L)
     private val scratchOffsetsMs = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicLong>()
     @Volatile private var liveMasterGain = 0.72f
     @Volatile private var liveMetronomeEnabled = false
@@ -267,6 +271,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
         scratchOffsetsMs.clear()
+        lastRenderBlockNanos.set(0L)
+        maxRenderBlockNanos.set(0L)
+        renderBudgetNanos.set(0L)
+        renderOverrunBlocks.set(0L)
         stopOutputOnly()
         liveMasterGain = masterGain.coerceIn(0f, 1f)
         liveMetronomeEnabled = metronomeEnabled
@@ -652,12 +660,27 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
 
     /** Latest native output health snapshot; useful for diagnostics and device stress tests. */
-    data class OutputDiagnostics(val queuedFrames: Int, val playedFrames: Long, val underruns: Long)
+    data class OutputDiagnostics(
+        val queuedFrames: Int,
+        val playedFrames: Long,
+        val underruns: Long,
+        val lastRenderMillis: Double,
+        val maxRenderMillis: Double,
+        val renderBudgetMillis: Double,
+        val renderOverrunBlocks: Long
+    )
 
     fun outputDiagnostics(): OutputDiagnostics {
         val current = output
-        return if (current == null) OutputDiagnostics(0, 0L, 0L)
-        else OutputDiagnostics(current.queuedFrames(), current.playedFrames(), current.underrunCount())
+        return OutputDiagnostics(
+            queuedFrames = current?.queuedFrames() ?: 0,
+            playedFrames = current?.playedFrames() ?: 0L,
+            underruns = current?.underrunCount() ?: 0L,
+            lastRenderMillis = lastRenderBlockNanos.get() / 1_000_000.0,
+            maxRenderMillis = maxRenderBlockNanos.get() / 1_000_000.0,
+            renderBudgetMillis = renderBudgetNanos.get() / 1_000_000.0,
+            renderOverrunBlocks = renderOverrunBlocks.get()
+        )
     }
 
     private fun renderPlan(
@@ -715,6 +738,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         try {
             while (running.get() && generation.get() == token && position < plan.totalFrames) {
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
+                val renderBlockStartedNanos = System.nanoTime()
                 val sampleCount = frames * 2
                 java.util.Arrays.fill(mix, 0, sampleCount, 0f)
                 perTrackMix.values.forEach { java.util.Arrays.fill(it, 0, sampleCount, 0f) }
@@ -912,6 +936,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 mixState.tracks.keys.forEach { id ->
                     if (id !in perTrackMix) publishTrackMeter(id, 0f, 0f, 0f, 0f)
                 }
+                // Measure mixer/DSP work before producer back-pressure; sleeping while waiting
+                // for output space is not counted as render CPU time.
+                val renderNanos = (System.nanoTime() - renderBlockStartedNanos).coerceAtLeast(0L)
+                lastRenderBlockNanos.set(renderNanos)
+                val previousMax = maxRenderBlockNanos.get()
+                if (renderNanos > previousMax) {
+                    maxRenderBlockNanos.compareAndSet(previousMax, renderNanos)
+                }
+                val blockBudget = (frames.toLong() * 1_000_000_000L / sampleRate.toLong()).coerceAtLeast(1L)
+                renderBudgetNanos.set(blockBudget)
+                if (renderNanos > blockBudget) renderOverrunBlocks.incrementAndGet()
                 if (!track.queuePcm(pcm, sampleCount) { running.get() && generation.get() == token }) break
                 position = blockEnd
                 reportPlaybackPosition()
