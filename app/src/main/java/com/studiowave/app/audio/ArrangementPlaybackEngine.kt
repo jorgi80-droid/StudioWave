@@ -593,7 +593,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val key = uri.toString()
         sourceDurationCache[key]?.let { return it }
         val duration = readSourceDurationSeconds(uri) ?: return null
-        return sourceDurationCache.putIfAbsent(key, duration) ?: duration
+        val cached = sourceDurationCache.putIfAbsent(key, duration) ?: duration
+        // Avoid retaining an unbounded list of imported content-provider URIs.
+        if (sourceDurationCache.size > MAX_CACHED_SOURCE_DURATIONS) sourceDurationCache.clear()
+        return cached
     }
 
     /** Reads original media duration on the IO preparation dispatcher, never the render thread. */
@@ -1164,6 +1167,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 stop()
             } finally {
                 audioAssetCache.evictAll()
+                sourceDurationCache.clear()
             }
         }
     }
@@ -1180,5 +1184,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         // cache eviction and expensive source decoding every time a long clip is resized.
         const val MAX_ASSET_CACHE_KIB = 64 * 1024
         const val MAX_PARALLEL_DECODERS = 2
+        const val MAX_CACHED_SOURCE_DURATIONS = 256
     }
 }
