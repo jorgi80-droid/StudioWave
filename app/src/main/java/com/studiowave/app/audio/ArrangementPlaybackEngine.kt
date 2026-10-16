@@ -244,7 +244,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
     // MediaCodec instances are expensive on mobile. Never open one decoder per track at once.
-    private val decodeSemaphore = Semaphore(MAX_PARALLEL_DECODERS)
+    @Volatile private var decodeSemaphore = Semaphore(MAX_PARALLEL_DECODERS)
+
+    /** Apply the selected device profile before the next playback preparation begins. */
+    fun setDecoderParallelism(parallelism: Int) {
+        decodeSemaphore = Semaphore(parallelism.coerceIn(1, 4))
+    }
     private val sourceDurationCache = java.util.concurrent.ConcurrentHashMap<String, Double>()
     private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshPlanRequests = Channel<Unit>(Channel.CONFLATED)
@@ -1501,6 +1506,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     fun stop() {
         generation.incrementAndGet()
+        synchronized(pendingAudioJobsLock) {
+            pendingAudioJobs.values.forEach { it.cancel() }
+            pendingAudioJobs.clear()
+        }
         activePlanRef = null
         scratchOffsetsMs.clear()
         stopOutputOnly()
