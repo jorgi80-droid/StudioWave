@@ -565,18 +565,32 @@ private fun StudioWaveApp() {
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var pendingExportProject by remember { mutableStateOf<StudioProject?>(null) }
     var restartPendingPlayback: ((StudioProject) -> Unit)? = null
+    fun arrangementScheduleChanged(previous: StudioProject, next: StudioProject): Boolean {
+        if (previous.bpm != next.bpm || previous.ppq != next.ppq ||
+            previous.numerator != next.numerator || previous.denominator != next.denominator ||
+            previous.tracks.size != next.tracks.size
+        ) return true
+        for (trackIndex in previous.tracks.indices) {
+            val oldTrack = previous.tracks[trackIndex]
+            val newTrack = next.tracks[trackIndex]
+            if (oldTrack.id != newTrack.id || oldTrack.kind != newTrack.kind ||
+                oldTrack.clips != newTrack.clips ||
+                oldTrack.devices.size != newTrack.devices.size
+            ) return true
+            for (deviceIndex in oldTrack.devices.indices) {
+                val oldDevice = oldTrack.devices[deviceIndex]
+                val newDevice = newTrack.devices[deviceIndex]
+                if (oldDevice.id != newDevice.id || oldDevice.type != newDevice.type ||
+                    oldDevice.enabled != newDevice.enabled
+                ) return true
+            }
+        }
+        return false
+    }
     fun changeProject(next: StudioProject) {
         if (next != project) {
             val previous = project
-            val arrangementChanged =
-                previous.bpm != next.bpm ||
-                previous.ppq != next.ppq ||
-                previous.numerator != next.numerator ||
-                previous.denominator != next.denominator ||
-                previous.tracks.map { it.id to it.kind } != next.tracks.map { it.id to it.kind } ||
-                previous.tracks.map { track -> track.id to track.devices.map { Triple(it.id, it.type, it.enabled) } } !=
-                    next.tracks.map { track -> track.id to track.devices.map { Triple(it.id, it.type, it.enabled) } } ||
-                previous.tracks.map { it.id to it.clips } != next.tracks.map { it.id to it.clips }
+            val arrangementChanged = arrangementScheduleChanged(previous, next)
             undoHistory = (undoHistory + previous).takeLast(100)
             redoHistory = emptyList()
             project = next
