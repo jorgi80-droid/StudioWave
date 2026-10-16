@@ -3643,7 +3643,7 @@ private fun TimelineGrid(
                                         val y = (1f - normalizedPitch) * (size.height - rowHeight)
                                         if (rawLeft < size.width && rawRight > 0f && noteWidth > 0f) {
                                             drawRoundRect(
-                                                color = accent.copy(alpha = (0.48f + note.velocity.coerceIn(1, 127) / 254f).coerceIn(0.5f, 0.98f)),
+                                                color = clipInk.copy(alpha = (0.70f + note.velocity.coerceIn(1, 127) / 420f).coerceIn(0.72f, 0.96f)),
                                                 topLeft = Offset(left, y),
                                                 size = Size(noteWidth.coerceAtLeast(1f), rowHeight.coerceAtMost(size.height)),
                                                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f)
@@ -5282,7 +5282,6 @@ private fun DeviceDock(
                     track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
                         ?: remember(track.id) { TrackDevice(type = "STUDIO_SYNTH", name = "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH")) }
                 } else null
-                val eqDevice = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
                 Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Top) {
                     DeviceChainSlotMarker(number = 1, palette = palette, label = when (track.kind) { "midi" -> if (instrumentDevice?.type == "DIRECTWAVE") "SAMPLE" else "INST"; "drum" -> "DRUM"; else -> "AUDIO" })
                     when (track.kind) {
@@ -5292,28 +5291,33 @@ private fun DeviceDock(
                                 if (stored != null) { val synth = stored.copy(type = "STUDIO_SYNTH", name = "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH") + stored.parameters); applyDeviceList(track.devices.map { if (it.id == stored.id) synth else it }) }
                             })
                         } else if (instrumentDevice != null) {
-                            StudioWaveInstrumentPanel(device = instrumentDevice, eqDevice = eqDevice, palette = palette, spectrumValues = spectrumValues,
+                            StudioWaveInstrumentPanel(
+                                device = instrumentDevice,
+                                palette = palette,
+                                spectrumValues = spectrumValues,
                                 onDeviceChange = { changed ->
-                                    val target = changed.copy(name = if (changed.type == "DIRECTWAVE") "DirectWave" else "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH") + changed.parameters)
+                                    val target = changed.copy(
+                                        name = if (changed.type == "DIRECTWAVE") "DirectWave" else "StudioWave Dual Synth",
+                                        parameters = defaultDeviceParameters("STUDIO_SYNTH") + changed.parameters
+                                    )
                                     val stored = track.devices.firstOrNull { it.id == changed.id }
-                                    if (stored != null) applyDeviceList(track.devices.map { if (it.id == stored.id) target else it }) else {
-                                        val prior = track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
-                                        if (prior == null) { if (track.devices.size < StudioProject.MAX_DEVICES_PER_TRACK) applyDeviceList(track.devices + target) } else applyDeviceList(track.devices.map { if (it.id == prior.id) target.copy(id = prior.id) else it })
+                                    if (stored != null) {
+                                        applyDeviceList(track.devices.map { if (it.id == stored.id) target else it })
+                                    } else {
+                                        val prior = track.devices.firstOrNull {
+                                            it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK"
+                                        }
+                                        if (prior == null) {
+                                            if (track.devices.size < StudioProject.MAX_DEVICES_PER_TRACK) applyDeviceList(track.devices + target)
+                                        } else {
+                                            applyDeviceList(track.devices.map { if (it.id == prior.id) target.copy(id = prior.id) else it })
+                                        }
                                     }
-                                },
-                                onEqGainChange = { band, gain, norm ->
-                                    val current = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
-                                    val base = current ?: TrackDevice(type = "PARAM_EQ_8", name = "Parametric EQ Eight", parameters = defaultDeviceParameters("PARAM_EQ_8"))
-                                    val key = "band" + (band + 1); val updated = base.copy(parameters = defaultDeviceParameters("PARAM_EQ_8") + base.parameters + mapOf(key to gain, key + "FreqNorm" to norm))
-                                    if (current == null) { if (track.devices.size < StudioProject.MAX_DEVICES_PER_TRACK) applyDeviceList(track.devices + updated) } else applyDeviceList(track.devices.map { if (it.id == current.id) updated else it })
-                                },
-                                onEqEnabledChange = { enabled ->
-                                    val current = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
-                                    if (current == null) { if (enabled && track.devices.size < StudioProject.MAX_DEVICES_PER_TRACK) applyDeviceList(track.devices + TrackDevice(type = "PARAM_EQ_8", name = "Parametric EQ Eight", parameters = defaultDeviceParameters("PARAM_EQ_8"))) } else applyDeviceList(track.devices.map { if (it.id == current.id) it.copy(enabled = enabled) else it })
-                                })
+                                }
+                            )
                         }
                         "drum" -> DeviceModuleCard("DRUM RACK", "STEP SEQUENCER", palette, "Drum Rack is the track source; serial effects follow it in the chain.")
-                        else -> DeviceModuleCard("AUDIO SOURCE", "CLIP / SAMPLE", palette, "Audio source editing remains in Clip View; serial effects follow this source.")
+                        else -> Unit
                     }
                     val effects = track.devices.filter { it.type in EFFECT_DEVICE_TYPES }
                     effects.forEachIndexed { index, device ->
@@ -6899,22 +6903,16 @@ internal fun TransportAction(label: String, heightDp: Int = 23, onClick: () -> U
 
 @Composable
 private fun StudioWaveInstrumentPanel(
-    device: TrackDevice, eqDevice: TrackDevice?, palette: StudioWavePalette,
-    spectrumValues: FloatArray, onDeviceChange: (TrackDevice) -> Unit,
-    onEqGainChange: (Int, Float, Float) -> Unit, onEqEnabledChange: (Boolean) -> Unit
+    device: TrackDevice,
+    palette: StudioWavePalette,
+    spectrumValues: FloatArray,
+    onDeviceChange: (TrackDevice) -> Unit
 ) {
     val defaults = defaultDeviceParameters("STUDIO_SYNTH")
     val parameters = StudioWaveVoiceDsp.Parameters.forDevice(device.type, defaults + device.parameters)
     val p = palette
     val tuningNames = listOf("12-TET EQUAL", "JUST INTONATION", "PYTHAGOREAN")
     var tuningOpen by remember(device.id) { mutableStateOf(false) }
-    val eqParameters = remember(eqDevice?.id, eqDevice?.parameters) { defaultDeviceParameters("PARAM_EQ_8") + (eqDevice?.parameters ?: emptyMap()) }
-    val eqEnabled = eqDevice?.enabled == true
-    val latestEqParameters by rememberUpdatedState(eqParameters)
-    val latestEqGainChange by rememberUpdatedState(onEqGainChange)
-    val eqResponse = remember(eqParameters, eqEnabled) { List(81) { i ->
-        ParametricEqMath.responseDbAt(ParametricEqMath.frequencyHzForNorm(i / 80f), 44_100, eqParameters, eqEnabled).toFloat().coerceIn(-18f,18f)
-    } }
     val filterResponse = remember(parameters) { List(65) { i ->
         StudioWaveVoiceDsp.filterResponseDb(20.0 * 1000.0.pow(i / 64.0),44_100,parameters).toFloat().coerceIn(-60f,6f)
     } }
@@ -7040,56 +7038,7 @@ private fun StudioWaveInstrumentPanel(
                 }
             }
         }
-        Column(Modifier.fillMaxWidth().background(p.panel,RoundedCornerShape(2.dp)).padding(5.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text("EQ EIGHT / INSERT",color=p.text,fontSize=8.sp,fontWeight=FontWeight.Black)
-                Spacer(Modifier.weight(1f))
-                Surface(color=if(eqEnabled)p.accent else p.control,border=BorderStroke(1.dp,p.border),shape=RoundedCornerShape(2.dp),
-                    modifier=Modifier.height(24.dp).clickable { onEqEnabledChange(!eqEnabled) }) {
-                    Box(Modifier.padding(horizontal=7.dp),contentAlignment=Alignment.Center) {
-                        Text(if(eqDevice==null)"+ INSERT EQ" else if(eqEnabled)"EQ ON / BYPASS" else "EQ BYPASSED / ON",
-                            color=if(eqEnabled)p.room else p.text,fontSize=7.sp,fontWeight=FontWeight.Black)
-                    }
-                }
-            }
-            Canvas(Modifier.fillMaxWidth().height(84.dp).pointerInput(eqEnabled) {
-                var drag=0
-                fun closest(x:Float):Int {
-                    var best=0;var dist=Float.MAX_VALUE
-                    for(b in 0..7) {
-                        val default=defaultDeviceParameters("PARAM_EQ_8")["band"+(b+1)+"FreqNorm"]?:0.5f
-                        val norm=latestEqParameters["band"+(b+1)+"FreqNorm"]?:default
-                        val d=kotlin.math.abs(norm*size.width-x);if(d<dist){dist=d;best=b}
-                    }
-                    return best
-                }
-                detectDragGestures(onDragStart={drag=closest(it.x)},onDrag={change,_->change.consume()
-                    val gainDb: Float = ((0.5f-change.position.y/size.height.coerceAtLeast(1))*36f).coerceIn(-18f,18f)
-                    val frequencyNorm: Float = (change.position.x/size.width.coerceAtLeast(1)).coerceIn(0f,1f)
-                    latestEqGainChange(drag,gainDb,frequencyNorm)})
-            }) {
-                for(db in listOf(-18f,-9f,0f,9f,18f)) {
-                    val y=size.height*(18f-db)/36f
-                    drawLine(p.grid,Offset(0f,y),Offset(size.width,y),if(db==0f)1f else 0.65f)
-                }
-                for(i in 1 until eqResponse.size) {
-                    val x1=size.width*(i-1)/(eqResponse.size-1f);val x2=size.width*i/(eqResponse.size-1f)
-                    val y1=size.height*(18f-eqResponse[i-1])/36f;val y2=size.height*(18f-eqResponse[i])/36f
-                    drawLine(if(eqEnabled)p.accent else p.muted,Offset(x1,y1),Offset(x2,y2),1.8f)
-                }
-                for(b in 0..7) {
-                    val df=defaultDeviceParameters("PARAM_EQ_8")["band"+(b+1)+"FreqNorm"]?:0.5f
-                    val norm=(eqParameters["band"+(b+1)+"FreqNorm"]?:df).coerceIn(0f,1f)
-                    val gain=(eqParameters["band"+(b+1)]?:0f).coerceIn(-18f,18f)
-                    val pt=Offset(norm*size.width,size.height*(18f-gain)/36f)
-                    drawCircle(p.room,5f,pt);drawCircle(if(eqEnabled)p.accent else p.muted,3f,pt)
-                }
-            }
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-                Text("20 Hz",color=p.muted,fontSize=7.sp);Text("1 kHz",color=p.muted,fontSize=7.sp)
-                Text("20 kHz",color=p.muted,fontSize=7.sp);Text("Drag nodes to edit",color=p.muted,fontSize=7.sp)
-            }
-        }
+
     }
 }
 

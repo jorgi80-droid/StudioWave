@@ -286,3 +286,11 @@ See `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` for the manual-to-source m
 - The top Master gain now uses a compact flat rail with cyan level fill, ticks and square thumb instead of the default Material Slider. Tap/drag still calls the same 0–1 gain callback.
 - Mixer channel strips are 136 dp, pan knobs 50 dp and the Master strip 112 dp to fit more landscape channels without changing gain/pan/mute/solo behavior.
 - This is a native Ableton Live-inspired adaptation, not exact pixel parity or proprietary asset reuse. CI for this head and physical Android 16 landscape validation are mandatory before calling the application ready.
+
+
+## Device-chain de-duplication follow-up — 2026-10-16
+
+- Removed the large text-only Audio Source card from audio-track Device View. The audio signal is represented by the track input marker and then the actual serial FX inserts, instead of a fake source device occupying hundreds of dp.
+- The synth faceplate no longer draws a second EQ Eight or exposes EQ controls that bypass the serial chain. EQ Eight is shown and edited only by its actual effect insert card after the selected instrument.
+- MIDI clip note thumbnails now use high-contrast note ink against the track-colored clip fill so pitch/velocity patterns stay legible at Arrangement scale.
+- This keeps the instrument controls and measured master-PCM spectrum; only the duplicated EQ insert presentation was removed. Verify CI and landscape touch behavior before calling the UI finished.
