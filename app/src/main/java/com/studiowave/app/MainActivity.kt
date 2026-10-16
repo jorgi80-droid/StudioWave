@@ -4972,65 +4972,117 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(112.dp).fillMaxHeight()
+            Modifier.width(142.dp).fillMaxHeight()
                 .background(mixerPalette.panel, RoundedCornerShape(1.dp))
-                .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp)).padding(7.dp),
+                .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp))
+                .padding(horizontal = 7.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = mixerPalette.text)
-            val latestMasterChange by rememberUpdatedState(onMasterChange)
-            Canvas(
-                Modifier.fillMaxWidth().weight(1f)
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { start ->
-                                val height = size.height.coerceAtLeast(1).toFloat()
-                                latestMasterChange(mixerFaderGainAtFraction(1f - start.y / height, 1f))
-                            },
-                            onDrag = { change, _ ->
-                                change.consume()
-                                val height = size.height.coerceAtLeast(1).toFloat()
-                                latestMasterChange(mixerFaderGainAtFraction(1f - change.position.y / height, 1f))
-                            }
-                        )
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { offset ->
-                            val height = size.height.coerceAtLeast(1).toFloat()
-                            latestMasterChange(mixerFaderGainAtFraction(1f - offset.y / height, 1f))
-                        })
-                    }
+            Row(
+                Modifier.fillMaxWidth().height(32.dp)
+                    .background(mixerPalette.canvas, RoundedCornerShape(1.dp))
+                    .border(1.dp, mixerPalette.border, RoundedCornerShape(1.dp))
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                val railWidth = size.width * 0.24f
-                val railLeft = (size.width - railWidth) / 2f
-                drawRoundRect(mixerPalette.room, Offset(railLeft, 0f), Size(railWidth, size.height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
-                listOf(0.0, -6.0, -12.0, -24.0, -48.0).forEach { db ->
-                    val fraction = ((db + 60.0) / 60.0).toFloat()
-                    val y = size.height * (1f - fraction)
-                    val major = db == 0.0 || db == -12.0 || db == -24.0
-                    drawLine(mixerPalette.grid.copy(alpha = if (major) 0.95f else 0.65f),
-                        Offset(railLeft - if (major) 8f else 5f, y), Offset(railLeft - 1f, y),
-                        if (major) 1.3f else 0.8f)
-                }
-                val gain = mixerFaderFractionForGain(master, 1f)
-                val thumbY = size.height * (1f - gain)
-                val capLeft = size.width * 0.08f
-                val capWidth = size.width * 0.84f
-                drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 9f),
-                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
-                drawRoundRect(mixerPalette.border, Offset(capLeft, thumbY - 9f),
-                    Size(capWidth, 18f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
-                drawLine(mixerPalette.text, Offset(capLeft + 3f, thumbY),
-                    Offset(capLeft + capWidth - 3f, thumbY), 2f)
+                Box(Modifier.width(3.dp).fillMaxHeight().background(mixerPalette.orange))
+                Text("MASTER", fontSize = 8.sp, fontWeight = FontWeight.Black, color = mixerPalette.text)
+                Spacer(Modifier.weight(1f))
+                Text("OUT", fontSize = 6.sp, fontWeight = FontWeight.Bold, color = mixerPalette.muted)
             }
             val masterDbLabel = if (master <= 0.001f) "−∞ dB" else
                 String.format(java.util.Locale.US, "%.1f dB", 20f * kotlin.math.log10(master))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Text("${(master * 100).toInt()}%", color = mixerPalette.text, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                Spacer(Modifier.width(4.dp))
-                Text(masterDbLabel, color = mixerPalette.muted, fontSize = 8.sp, maxLines = 1)
+            Row(
+                Modifier.fillMaxWidth().padding(top = 7.dp, bottom = 3.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("LEVEL", color = mixerPalette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                Text(masterDbLabel, color = mixerPalette.text, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            }
+            val latestMasterChange by rememberUpdatedState(onMasterChange)
+            Row(
+                Modifier.fillMaxWidth().weight(1f).padding(horizontal = 2.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Column(
+                    Modifier.width(22.dp).fillMaxHeight().padding(vertical = 5.dp),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.End
+                ) {
+                    listOf("0", "−6", "−12", "−24", "−48", "−∞").forEach { label ->
+                        Text(label, color = if (label == "0") mixerPalette.orange else mixerPalette.muted,
+                            fontSize = 6.sp, fontWeight = if (label == "0") FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1)
+                    }
+                }
+                Canvas(
+                    Modifier.weight(1f).fillMaxHeight()
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { start ->
+                                    val height = size.height.coerceAtLeast(1).toFloat()
+                                    latestMasterChange(mixerFaderGainAtFraction(1f - start.y / height, 1f))
+                                },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    val height = size.height.coerceAtLeast(1).toFloat()
+                                    latestMasterChange(mixerFaderGainAtFraction(1f - change.position.y / height, 1f))
+                                }
+                            )
+                        }
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = { offset ->
+                                val height = size.height.coerceAtLeast(1).toFloat()
+                                latestMasterChange(mixerFaderGainAtFraction(1f - offset.y / height, 1f))
+                            })
+                        }
+                ) {
+                    val railWidth = 5f
+                    val railLeft = (size.width - railWidth) / 2f
+                    val railTop = 8f
+                    val railBottom = (size.height - 8f).coerceAtLeast(railTop + 1f)
+                    drawRoundRect(mixerPalette.room, Offset(railLeft, railTop),
+                        Size(railWidth, railBottom - railTop),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(2.5f))
+                    drawLine(mixerPalette.border, Offset(railLeft + railWidth / 2f, railTop),
+                        Offset(railLeft + railWidth / 2f, railBottom), 1f)
+                    listOf(0.0, -6.0, -12.0, -24.0, -48.0).forEach { db ->
+                        val fraction = ((db + 60.0) / 60.0).toFloat()
+                        val y = railBottom - fraction * (railBottom - railTop)
+                        val major = db == 0.0 || db == -12.0 || db == -24.0
+                        drawLine(mixerPalette.grid.copy(alpha = if (major) 0.95f else 0.65f),
+                            Offset(railLeft - if (major) 7f else 4f, y), Offset(railLeft - 1f, y),
+                            if (major) 1.2f else 0.7f)
+                    }
+                    val gain = mixerFaderFractionForGain(master, 1f)
+                    val thumbY = (railBottom - gain * (railBottom - railTop)).coerceIn(railTop + 7f, railBottom - 7f)
+                    val capLeft = size.width * 0.12f
+                    val capWidth = size.width * 0.76f
+                    drawRoundRect(mixerPalette.control, Offset(capLeft, thumbY - 7f),
+                        Size(capWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f))
+                    drawRoundRect(mixerPalette.border, Offset(capLeft, thumbY - 7f),
+                        Size(capWidth, 14f), cornerRadius = androidx.compose.ui.geometry.CornerRadius(1f),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
+                    drawLine(mixerPalette.text, Offset(capLeft + 4f, thumbY),
+                        Offset(capLeft + capWidth - 4f, thumbY), 1.5f)
+                    drawLine(mixerPalette.orange.copy(alpha = 0.9f),
+                        Offset(capLeft + capWidth * 0.34f, thumbY),
+                        Offset(capLeft + capWidth * 0.66f, thumbY), 2f)
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 3.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("\u0024{(master * 100).toInt()}%", color = mixerPalette.text,
+                    fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Spacer(Modifier.width(5.dp))
+                Text("MASTER GAIN", color = mixerPalette.muted, fontSize = 6.sp,
+                    fontWeight = FontWeight.Bold, maxLines = 1)
             }
         }
         }
@@ -6987,13 +7039,20 @@ private fun AudioClipWaveform(
                     sourceOffsetMicros = sourceOffsetMicros, sourceLengthMicros = visibleLengthMicros
                 )
             }
+            fun drawDecodedFallbackEnvelope() {
+                // These are decoded source peaks, never synthesized decorative activity.
+                // Normalize within the envelope so quiet valid files remain visible at clip scale.
+                val maxPeak = peaks.maxOrNull()?.coerceAtLeast(0.0001f) ?: 1f
+                val dx = size.width / peaks.size.coerceAtLeast(1)
+                drawEnvelope(peaks.mapIndexed { index, peak ->
+                    (index + 0.5f) * dx to
+                        ((peak.coerceAtLeast(0f) / maxPeak).coerceIn(0f, 1f) * size.height * 0.46f)
+                })
+            }
+
             if (range == null) {
-                if (durationSeconds == null) {
-                    val dx = size.width / peaks.size.coerceAtLeast(1)
-                    drawEnvelope(peaks.mapIndexed { index, peak ->
-                        (index + 0.5f) * dx to (peak.coerceIn(0f, 1f) * size.height * 0.46f)
-                    })
-                }
+                // A stale trim range must not make an otherwise decoded source appear blank.
+                drawDecodedFallbackEnvelope()
             } else {
                 val points = ArrayList<Pair<Float, Float>>(range.endPeakIndexExclusive - range.firstPeakIndex)
                 for (index in range.firstPeakIndex until range.endPeakIndexExclusive) {
@@ -7002,7 +7061,7 @@ private fun AudioClipWaveform(
                     val x = ((sampleTime - range.sourceOffsetSeconds) / range.clipDurationSeconds * size.width).toFloat()
                     if (x.isFinite() && x in 0f..size.width) points.add(x to (peak * size.height * 0.46f))
                 }
-                drawEnvelope(points)
+                if (points.isEmpty()) drawDecodedFallbackEnvelope() else drawEnvelope(points)
             }
         }
     }
