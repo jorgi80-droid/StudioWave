@@ -1,4 +1,7 @@
 package com.studiowave.app
+
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -82,6 +86,8 @@ internal fun StudioWaveSettingsScreen(
     currentProjectName: String, onNewProject: (String) -> Unit, onSaveProject: () -> Unit, onOpenProject: () -> Unit
 ) {
     val p = LocalStudioWavePalette.current
+    val context = LocalContext.current
+    val appVersion = remember { runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "Development build" }
     var newProjectName by remember { mutableStateOf("Untitled Set") }
     var confirmNewProject by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxSize().background(p.room).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -97,6 +103,7 @@ internal fun StudioWaveSettingsScreen(
             SettingsNav("Audio", "Output profile and metronome", section == "AUDIO", p) { onSectionChange("AUDIO") }
             SettingsNav("Diagnostics & Logs", "Audio debug and app log", section == "LOG", p) { onSectionChange("LOG") }
             SettingsNav("Project", "New, open and save sets", section == "PROJECT", p) { onSectionChange("PROJECT") }
+            SettingsNav("About StudioWave", "Version, project and developer profile", section == "ABOUT", p) { onSectionChange("ABOUT") }
             Spacer(Modifier.weight(1f))
             Text("STUDIOWAVE • MOBILE DAW", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
             Button(onClick = onClose, modifier = Modifier.fillMaxWidth().height(34.dp), contentPadding = PaddingValues(0.dp),
@@ -109,9 +116,9 @@ internal fun StudioWaveSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(when (section) { "AUDIO" -> "Audio"; "LOG" -> "Diagnostics & Logs"; "PROJECT" -> "Project Manager"; else -> "Interface & Theme" },
+                    Text(when (section) { "AUDIO" -> "Audio"; "LOG" -> "Diagnostics & Logs"; "PROJECT" -> "Project Manager"; "ABOUT" -> "About StudioWave"; else -> "Interface & Theme" },
                         color = p.text, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                    Text(when (section) { "AUDIO" -> "Device-aware playback profile, metronome and render preparation"; "LOG" -> "Local live telemetry and exportable application events"; "PROJECT" -> "Create a clean set, or import/export a .sdaw project"; else -> "Consistent Live-inspired color, control and text system" },
+                    Text(when (section) { "AUDIO" -> "Device-aware playback profile, metronome and render preparation"; "LOG" -> "Local live telemetry and exportable application events"; "PROJECT" -> "Create a clean set, or import/export a .sdaw project"; "ABOUT" -> "StudioWave project information and official developer links"; else -> "Consistent Live-inspired color, control and text system" },
                         color = p.muted, fontSize = 9.sp)
                 }
                 Button(onClick = onClose, modifier = Modifier.size(width = 40.dp, height = 32.dp), contentPadding = PaddingValues(0.dp),
@@ -199,6 +206,20 @@ internal fun StudioWaveSettingsScreen(
                         }
                     }
                     SettingsInfoCard("PROJECT FILE", "A .sdaw file contains the project structure, tracks, clips, MIDI notes and device parameters. External audio URIs remain references to files on your device.", p)
+                }
+                "ABOUT" -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SettingsSection("STUDIOWAVE", "A native Android digital audio workstation built for touch-first music creation.", p)
+                    SettingsInfoCard("ABOUT", "StudioWave is an independent Android DAW project. Its interface draws inspiration from Ableton Live, while its touch-first music-making workflow takes inspiration from FL Studio Mobile. It is not affiliated with either product.", p)
+                    SettingsInfoCard("VERSION", "Installed app version: $appVersion\\nBuild channel: Android development / GitHub CI", p)
+                    SettingsInfoCard("SOURCE REPOSITORY", "Browse source code, issues, changes and development progress for StudioWave.", p)
+                    Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/jorgi80-droid/StudioWave"))) } }, modifier = Modifier.fillMaxWidth().height(38.dp), colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text), shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border)) {
+                        Text("OPEN STUDIOWAVE REPOSITORY", fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                    SettingsSection("DEVELOPER PROFILE", "GitHub profile of the StudioWave repository owner.", p)
+                    SettingsInfoCard("GITHUB · JORGI80-DROID", "Developer profile and public repositories: github.com/jorgi80-droid", p)
+                    Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/jorgi80-droid"))) } }, modifier = Modifier.fillMaxWidth().height(38.dp), colors = ButtonDefaults.buttonColors(containerColor = p.accent, contentColor = p.room), shape = RoundedCornerShape(1.dp)) {
+                        Text("OPEN MY GITHUB PROFILE", fontSize = 10.sp, fontWeight = FontWeight.Black)
+                    }
                 }
                 else -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsSection("THEME", "Inspired by Live's Theme & Colors settings.", p)
