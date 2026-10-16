@@ -21,7 +21,11 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import java.io.File
+import java.io.RandomAccessFile
 import java.nio.ByteOrder
+import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.PI
 import kotlin.math.abs
@@ -216,7 +220,20 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         Math.pow(10.0, value.coerceIn(-120f, 0f).toDouble() / 20.0).toFloat()
     private val audioAssetCache = object : android.util.LruCache<String, AudioAsset>(MAX_ASSET_CACHE_KIB) {
         override fun sizeOf(key: String, value: AudioAsset): Int =
-            (value.pcmStereo.size.toLong() * 2L / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            (value.storageBytes / 1024L).coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+
+        override fun entryRemoved(
+            evicted: Boolean,
+            key: String,
+            oldValue: AudioAsset,
+            newValue: AudioAsset?
+        ) {
+            // Active plans retain their mapped view after unlink on Android/Linux. Removing
+            // the backing path bounds cache storage without copying PCM back into heap memory.
+            if (oldValue.pcmFile != null && oldValue.pcmFile != newValue?.pcmFile) {
+                runCatching { oldValue.pcmFile.delete() }
+            }
+        }
     }
     // MediaCodec instances are expensive on mobile. Never open one decoder per track at once.
     private val decodeSemaphore = Semaphore(MAX_PARALLEL_DECODERS)
@@ -228,13 +245,25 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     // Supersedes stale background schedule builds when many clips/tracks are added rapidly.
     private val arrangementUpdateRevision = java.util.concurrent.atomic.AtomicLong(0L)
 
-    private data class AudioAsset(
+    private class AudioAsset(
         val sampleRate: Int,
-        val pcmStereo: ShortArray,
+        val pcmStereo: ShortArray?,
+        val mappedPcm: MappedByteBuffer?,
+        val pcmFile: File?,
         val frames: Int,
         // True when the decoder reached source EOS before the requested PCM window ended.
         val complete: Boolean
-    )
+    ) {
+        val storageBytes: Long
+            get() = pcmStereo?.size?.toLong()?.times(2L) ?: pcmFile?.length() ?: 0L
+
+        fun sampleAt(index: Int): Short {
+            val heap = pcmStereo
+            if (heap != null) return heap[index]
+            val mapped = mappedPcm ?: return 0
+            return mapped.getShort(index * 2)
+        }
+    }
 
     private data class AudioEvent(
         val startFrame: Long,
@@ -464,7 +493,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             } else {
                 requiredSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
             }
-            val allocationBytes = cached?.let { it.pcmStereo.size.toLong() * 2L }
+            val allocationBytes = cached?.storageBytes
                 ?: requestedFrames.toLong().coerceAtLeast(1L) * 4L
             estimatedBytes += allocationBytes
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
@@ -668,6 +697,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 "Playback preparation cancelled"
             }
         }
+        val pcmDirectory = File(appContext.cacheDir, "studiowave-pcm").apply {
+            check(isDirectory || mkdirs()) { "Unable to create PCM cache directory" }
+        }
+        val pcmFile = File.createTempFile("asset-", ".pcm", pcmDirectory)
+        var keepPcmFile = false
+        var pcmRandomAccess: RandomAccessFile? = null
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
         try {
@@ -688,7 +723,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 8)
             val sampleRate = OUTPUT_SAMPLE_RATE
             val maxFrames = ceil(durationSeconds * sampleRate).toInt().coerceIn(1, sampleRate * MAX_SOURCE_SECONDS)
-            val pcmOut = ShortArray(maxFrames * 2)
+            val pcmBytes = maxFrames.toLong() * 4L
+            pcmRandomAccess = RandomAccessFile(pcmFile, "rw")
+            pcmRandomAccess!!.setLength(pcmBytes)
+            val pcmOut = pcmRandomAccess!!.channel.map(FileChannel.MapMode.READ_WRITE, 0L, pcmBytes)
+            pcmOut.order(ByteOrder.nativeOrder())
             decoder = MediaCodec.createDecoderByType(format.getString(MediaFormat.KEY_MIME) ?: error("Unknown audio MIME"))
             decoder.configure(format, null, null, 0)
             decoder.start()
@@ -755,8 +794,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                     val left = readPcmSample(pcm, index, encoding)
                                     val right = if (outputChannels > 1) readPcmSample(pcm, index + 1, encoding) else left
                                     val out = targetFrame.toInt() * 2
-                                    pcmOut[out] = (left * 32767f).toInt().coerceIn(-32767, 32767).toShort()
-                                    pcmOut[out + 1] = (right * 32767f).toInt().coerceIn(-32767, 32767).toShort()
+                                    pcmOut.putShort(out * 2, (left * 32767f).toInt().coerceIn(-32767, 32767).toShort())
+                                    pcmOut.putShort((out + 1) * 2, (right * 32767f).toInt().coerceIn(-32767, 32767).toShort())
                                     framesWritten = max(framesWritten, targetFrame.toInt() + 1)
                                 }
                             }
@@ -771,11 +810,16 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 if (stagnant > 500) error("Audio decoder stopped making progress")
             }
             check(framesWritten > 0) { "No PCM audio samples could be decoded from $uri" }
-            return AudioAsset(OUTPUT_SAMPLE_RATE, pcmOut, framesWritten, outputDone)
+            pcmRandomAccess!!.channel.force(false)
+            pcmRandomAccess!!.channel.truncate(framesWritten.toLong() * 4L)
+            keepPcmFile = true
+            return AudioAsset(OUTPUT_SAMPLE_RATE, null, pcmOut, pcmFile, framesWritten, outputDone)
         } finally {
             runCatching { decoder?.stop() }
             runCatching { decoder?.release() }
             runCatching { extractor.release() }
+            runCatching { pcmRandomAccess?.close() }
+            if (!keepPcmFile) runCatching { pcmFile.delete() }
         }
     }
 
@@ -953,8 +997,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         )?.toInt() ?: continue
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
-                        val sourceLeft = event.asset.pcmStereo[sourceIndex] / 32768f * channelMix.volume * leftPan
-                        val sourceRight = event.asset.pcmStereo[sourceIndex + 1] / 32768f * channelMix.volume * rightPan
+                        val sourceLeft = event.asset.sampleAt(sourceIndex) / 32768f * channelMix.volume * leftPan
+                        val sourceRight = event.asset.sampleAt(sourceIndex + 1) / 32768f * channelMix.volume * rightPan
                         val leftSample = sourceLeft * liveMasterGain
                         val rightSample = sourceRight * liveMasterGain
                         mix[outIndex] += leftSample
@@ -1004,8 +1048,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             val envelope = min(sustainGain, releaseGain)
                             val sampleIndex = sourceFrame.toInt().coerceIn(0, instrument.asset.frames - 1) * 2
                             val velocityGain = channelMix.volume * (note.velocity / 127f) * envelope
-                            val sourceLeft = instrument.asset.pcmStereo[sampleIndex] / 32768f * velocityGain * leftPan
-                            val sourceRight = instrument.asset.pcmStereo[sampleIndex + 1] / 32768f * velocityGain * rightPan
+                            val sourceLeft = instrument.asset.sampleAt(sampleIndex) / 32768f * velocityGain * leftPan
+                            val sourceRight = instrument.asset.sampleAt(sampleIndex + 1) / 32768f * velocityGain * rightPan
                             mix[outIndex] += sourceLeft * liveMasterGain
                             mix[outIndex + 1] += sourceRight * liveMasterGain
                             channelBuffer[outIndex] += sourceLeft
@@ -1329,10 +1373,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 300
         const val MAX_ARRANGEMENT_BARS = 1800
-        const val MAX_TOTAL_PCM_BYTES = 64L * 1024L * 1024L
-        // 64 MiB accommodates one five-minute stereo PCM source (~50.5 MiB), avoiding
-        // cache eviction and expensive source decoding every time a long clip is resized.
-        const val MAX_ASSET_CACHE_KIB = 64 * 1024
+        // PCM is file-backed and memory-mapped: keep a bounded on-disk cache instead of
+        // requiring every track's decoded audio to fit in the Java heap.
+        const val MAX_TOTAL_PCM_BYTES = 2L * 1024L * 1024L * 1024L
+        const val MAX_ASSET_CACHE_KIB = 2 * 1024 * 1024
         const val MAX_PARALLEL_DECODERS = 2
         const val MAX_CACHED_SOURCE_DURATIONS = 256
     }
