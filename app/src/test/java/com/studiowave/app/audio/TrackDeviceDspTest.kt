@@ -78,8 +78,10 @@ class TrackDeviceDspTest {
         assertTrue("gain reduction should follow actual compressed signal", engine.gainReductionDbSnapshot() > 3f)
         assertTrue(engine.gainReductionDbSnapshot() <= 60f)
 
-        engine.process(FloatArray(input.size), FloatArray(input.size), input.size, 1f,
-            listOf(compressor.copy(enabled = false)))
+        val bypassed = compressor.copy(enabled = false)
+        // The production render plan prepares insert topology off the audio worker before publishing it.
+        engine.prepare(listOf(bypassed))
+        engine.process(FloatArray(input.size), FloatArray(input.size), input.size, 1f, listOf(bypassed))
         assertTrue("bypassing the compressor clears its GR display", engine.gainReductionDbSnapshot() == 0f)
     }
 
