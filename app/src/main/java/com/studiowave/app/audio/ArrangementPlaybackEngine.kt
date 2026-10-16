@@ -223,6 +223,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val sourceDurationCache = java.util.concurrent.ConcurrentHashMap<String, Double>()
     @Volatile private var worker: Thread? = null
     @Volatile private var output: NativeAudioEngine? = null
+    // Render reads an immutable plan snapshot per block; edits publish replacements atomically.
+    @Volatile private var activePlanRef: java.util.concurrent.atomic.AtomicReference<Plan>? = null
 
     private data class AudioAsset(
         val sampleRate: Int,
@@ -359,13 +361,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 nativeOutput.close()
                 error("Playback start was cancelled")
             }
+            val planRef = java.util.concurrent.atomic.AtomicReference(plan)
+            activePlanRef = planRef
             output = nativeOutput
             running.set(true)
             try {
                 worker = Thread({
                     Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
                     renderPlan(
-                        nativeOutput, plan, token, startFrame, onProgress, onCompleted, onError
+                        nativeOutput, planRef, token, startFrame, onProgress, onCompleted, onError
                     )
                 }, "StudioWave-Arrangement").also { it.start() }
             } catch (failure: Throwable) {
@@ -796,7 +800,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     private fun renderPlan(
         track: NativeAudioEngine,
-        plan: Plan,
+        planRef: java.util.concurrent.atomic.AtomicReference<Plan>,
         token: Long,
         startFrame: Long,
         onProgress: (Long) -> Unit,
@@ -807,10 +811,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val pcm = ShortArray(BLOCK_FRAMES * 2)
         val perTrackMix = HashMap<String, FloatArray>()
         val deviceDsp = HashMap<String, TrackDeviceDsp>()
+        var plan = planRef.get()
         val sampleRate = plan.sampleRate
-        val scheduledAudio = plan.audio
-        val scheduledNotes = plan.notes
-        val scheduledDrums = plan.drums
+        var scheduledAudio = plan.audio
+        var scheduledNotes = plan.notes
+        var scheduledDrums = plan.drums
         val playingAudio = ArrayList<AudioEvent>()
         val playingNotes = ArrayList<NoteEvent>()
         val playingDrums = ArrayList<DrumEvent>()
@@ -848,7 +853,35 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             }
         }
         try {
-            while (running.get() && generation.get() == token && position < plan.totalFrames) {
+            while (running.get() && generation.get() == token) {
+                // Adopt an edited arrangement only at a block boundary. Re-index clips and
+                // notes active at the current frame so transport and the output stream continue.
+                val latestPlan = planRef.get()
+                if (latestPlan !== plan) {
+                    plan = latestPlan
+                    scheduledAudio = plan.audio
+                    scheduledNotes = plan.notes
+                    scheduledDrums = plan.drums
+                    playingAudio.clear()
+                    playingNotes.clear()
+                    playingDrums.clear()
+                    audioCursor = 0
+                    noteCursor = 0
+                    drumCursor = 0
+                    while (audioCursor < scheduledAudio.size && scheduledAudio[audioCursor].startFrame < position) {
+                        val event = scheduledAudio[audioCursor++]
+                        if (event.endFrame > position) playingAudio.add(event)
+                    }
+                    while (noteCursor < scheduledNotes.size && scheduledNotes[noteCursor].startFrame < position) {
+                        val event = scheduledNotes[audioCursor - 1]
+                        if (event.endFrame > position) playingNotes.add(event)
+                    }
+                    while (drumCursor < scheduledDrums.size && scheduledDrums[drumCursor].startFrame < position) {
+                        val event = scheduledDrums[drumCursor++]
+                        if (event.startFrame + DRUM_DURATION_FRAMES > position) playingDrums.add(event)
+                    }
+                }
+                if (position >= plan.totalFrames) break
                 val frames = min(BLOCK_FRAMES.toLong(), plan.totalFrames - position).toInt()
                 val renderBlockStartedNanos = System.nanoTime()
                 val sampleCount = frames * 2
@@ -1108,6 +1141,33 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
 
+    /**
+     * Rebuild the schedule off the audio thread and atomically publish it. The existing
+     * AAudio stream remains open while source audio is prepared; newly decoded clips join
+     * at a render-block boundary without stopping playback.
+     */
+    suspend fun updateArrangement(project: StudioProject) {
+        check(!closed.get()) { "Playback engine is closed" }
+        val planRef = activePlanRef ?: return
+        if (!running.get()) return
+        val token = generation.get()
+        updateMix(project)
+        val startedAt = System.nanoTime()
+        val updatedPlan = withContext(Dispatchers.IO) {
+            buildPlan(project, token, parallelPreparation = true)
+        }
+        check(!closed.get() && generation.get() == token) { "Arrangement update was superseded" }
+        if (running.get() && activePlanRef === planRef) {
+            planRef.set(updatedPlan)
+            val elapsedMs = (System.nanoTime() - startedAt).coerceAtLeast(0L) / 1_000_000L
+            android.util.Log.i(
+                "StudioWaveAudio",
+                "Arrangement hot-update ready in ${elapsedMs}ms; tracks=${project.tracks.size}, " +
+                    "clips=${project.tracks.sumOf { it.clips.size }}"
+            )
+        }
+    }
+
     fun updateMix(project: StudioProject) {
         val trackValues = project.tracks.map { track ->
             TrackMix(
@@ -1153,6 +1213,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
 
     fun stop() {
         generation.incrementAndGet()
+        activePlanRef = null
         scratchOffsetsMs.clear()
         stopOutputOnly()
         trackMeterBits.keys.forEach { id -> publishTrackMeter(id, 0f, 0f, 0f, 0f) }
