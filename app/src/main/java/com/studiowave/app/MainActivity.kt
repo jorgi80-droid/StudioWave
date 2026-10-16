@@ -2516,9 +2516,12 @@ private fun TrackHeader(
     track: StudioTrack, index: Int, verticalZoom: Float, scrollTracks: Float,
     rowTopDp: Float = index * 67f, rowHeightDp: Float = 67f,
     onDoubleTap: () -> Unit, onColorTap: () -> Unit, onMuteToggle: () -> Unit, onSoloToggle: () -> Unit,
-    onResizeTrack: (Float) -> Unit = {}, onScratch: (Float) -> Unit = {}, onReorderTrack: (Float) -> Unit = {}
+    onResizeTrack: (Float) -> Unit = {}, onScratch: (Float) -> Unit = {}, onReorderTrack: (Float) -> Unit = {},
+    compact: Boolean = false, onToggleCompact: () -> Unit = {},
+    onDuplicateTrack: () -> Unit = {}, onDeleteTrack: () -> Unit = {}
 ) {
     val p = LocalStudioWavePalette.current
+    var showTrackActions by remember(track.id) { mutableStateOf(false) }
     val accent = Color(track.colorArgb.toInt())
     val labelInk = if (accent.luminance() > 0.52f) Color(0xFF171717) else Color.White
     var resizeDelta by remember(track.id) { mutableFloatStateOf(0f) }
@@ -2605,6 +2608,27 @@ private fun TrackHeader(
             }
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Box {
+                Box(
+                    Modifier.size(width = 20.dp, height = 14.dp).background(p.control).border(1.dp, p.border)
+                        .clickable { showTrackActions = true },
+                    contentAlignment = Alignment.Center
+                ) { Text("⋮", color = p.accent, fontSize = 12.sp, fontWeight = FontWeight.Black) }
+                DropdownMenu(expanded = showTrackActions, onDismissRequest = { showTrackActions = false }) {
+                    DropdownMenuItem(text = { Text(if (compact) "Maximize track" else "Minimize track") }, onClick = {
+                        showTrackActions = false
+                        onToggleCompact()
+                    })
+                    DropdownMenuItem(text = { Text("Duplicate track + clips") }, onClick = {
+                        showTrackActions = false
+                        onDuplicateTrack()
+                    })
+                    DropdownMenuItem(text = { Text("Delete track", color = MaterialTheme.colorScheme.error) }, onClick = {
+                        showTrackActions = false
+                        onDeleteTrack()
+                    })
+                }
+            }
             Box(
                 Modifier.size(width = 20.dp, height = 16.dp).background(p.control).border(1.dp, p.border)
                     .pointerInput(track.id, rowTopDp, rowHeightDp) {
