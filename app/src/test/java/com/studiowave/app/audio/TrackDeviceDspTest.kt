@@ -39,6 +39,30 @@ class TrackDeviceDspTest {
         assertTrue(second.any{abs(it)>0.01f});assertTrue(second.all{it.isFinite()})
     }
 
+    @Test fun preparedFilterRefreshesParametersWithoutChangingItsChain() {
+        val engine = TrackDeviceDsp(44100)
+        val firstDevice = TrackDevice(
+            type = "FILTER",
+            name = "Live Filter",
+            parameters = defaultDeviceParameters("FILTER") + ("cutoffHz" to 12000f)
+        )
+        engine.prepare(listOf(firstDevice))
+
+        val inputA = FloatArray(8192) { index -> sin(index * 0.19).toFloat() }
+        val masterA = FloatArray(inputA.size)
+        engine.process(inputA, masterA, inputA.size, 1f, listOf(firstDevice))
+
+        val updatedDevice = firstDevice.copy(
+            parameters = firstDevice.parameters + ("cutoffHz" to 120f)
+        )
+        val inputB = FloatArray(8192) { index -> sin(index * 0.19).toFloat() }
+        val masterB = FloatArray(inputB.size)
+        engine.process(inputB, masterB, inputB.size, 1f, listOf(updatedDevice))
+
+        assertTrue(masterA.all { it.isFinite() } && masterB.all { it.isFinite() })
+        assertTrue(masterA.indices.any { abs(masterA[it] - masterB[it]) > 0.00001f })
+    }
+
     @Test fun disabledEffectIsBypassed() {
         val engine=TrackDeviceDsp(44100);val input=impulse(64);val original=input.copyOf();val master=FloatArray(input.size)
         engine.process(input,master,input.size,1f,listOf(TrackDevice(type="SATURATOR",name="Off",enabled=false,parameters=defaultDeviceParameters("SATURATOR"))))
