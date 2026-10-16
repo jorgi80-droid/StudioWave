@@ -318,7 +318,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val drums: List<DrumEvent>,
         val trackBuffers: Map<String, FloatArray>,
         val deviceDsp: Map<String, TrackDeviceDsp>,
-        val deviceChainSignatures: Map<String, List<Pair<String, String>>>
+        val deviceChainSignatures: Map<String, List<Pair<String, String>>>,
+        val audioWorkspace: ArrayList<AudioEvent>,
+        val noteWorkspace: ArrayList<NoteEvent>,
+        val drumWorkspace: ArrayList<DrumEvent>
     )
 
     private data class TrackMix(
@@ -685,6 +688,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 deviceDsp[track.id] = dsp
             }
         }
+        val sortedAudio = audioEvents.sortedBy { it.startFrame }
+        val sortedNotes = notes.sortedBy { it.startFrame }
+        val sortedDrums = drums.sortedBy { it.startFrame }
         return Plan(
             sampleRate,
             bpm,
@@ -692,12 +698,15 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             project.numerator.coerceIn(1, 32),
             project.denominator.coerceIn(1, 32),
             totalFrames,
-            audioEvents.sortedBy { it.startFrame },
-            notes.sortedBy { it.startFrame },
-            drums.sortedBy { it.startFrame },
+            sortedAudio,
+            sortedNotes,
+            sortedDrums,
             trackBuffers,
             deviceDsp,
-            deviceChainSignatures
+            deviceChainSignatures,
+            ArrayList(sortedAudio.size),
+            ArrayList(sortedNotes.size),
+            ArrayList(sortedDrums.size)
         )
     }
 
@@ -933,9 +942,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         var scheduledAudio = plan.audio
         var scheduledNotes = plan.notes
         var scheduledDrums = plan.drums
-        val playingAudio = ArrayList<AudioEvent>()
-        val playingNotes = ArrayList<NoteEvent>()
-        val playingDrums = ArrayList<DrumEvent>()
+        var playingAudio = plan.audioWorkspace
+        var playingNotes = plan.noteWorkspace
+        var playingDrums = plan.drumWorkspace
         var audioCursor = 0
         var noteCursor = 0
         var drumCursor = 0
@@ -978,6 +987,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     plan = latestPlan
                     perTrackMix = plan.trackBuffers
                     deviceDsp = plan.deviceDsp
+                    playingAudio = plan.audioWorkspace
+                    playingNotes = plan.noteWorkspace
+                    playingDrums = plan.drumWorkspace
                     scheduledAudio = plan.audio
                     scheduledNotes = plan.notes
                     scheduledDrums = plan.drums
