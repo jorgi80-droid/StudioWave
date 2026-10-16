@@ -1371,10 +1371,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             channelBuffer[outIndex] += sourceLeft
                             channelBuffer[outIndex + 1] += sourceRight
                         } else {
-                            val attack = min(1f, elapsed.toFloat() / (sampleRate * 0.008f))
-                            val release = min(1f, (noteLength - elapsed).toFloat() / (sampleRate * 0.035f))
-                            val envelope = min(attack, release)
-                            val channelWave = sin(2.0 * PI * frequency * elapsed / sampleRate).toFloat() * channelGain * envelope
+                            val channelWave = StudioWaveVoiceDsp.sample(
+                                midiPitch = note.pitch,
+                                elapsedFrames = elapsed,
+                                noteLengthFrames = noteLength,
+                                sampleRate = sampleRate,
+                                amplitude = channelGain
+                            )
                             val wave = channelWave * liveMasterGain
                             val sourceLeft = channelWave * leftPan
                             val sourceRight = channelWave * rightPan
