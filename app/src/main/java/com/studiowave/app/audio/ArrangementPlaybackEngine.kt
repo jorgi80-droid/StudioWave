@@ -508,7 +508,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 ?: requestedFrames.toLong().coerceAtLeast(1L) * 4L
             estimatedBytes += allocationBytes
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
-                "Decoded PCM disk cache exceeds its 2 GiB budget; free storage or reduce the total source duration"
+                "Decoded PCM disk cache exceeds its 8 GiB budget; free storage or reduce the total source duration"
             }
             sourceRequests += SourceRequest(uriString, sourceSeconds, requestedFrames, cacheKey)
         }
@@ -566,7 +566,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 .coerceIn(1L, sampleRate.toLong() * 30L).toInt()
             estimatedBytes += frameCount.toLong() * 4L
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
-                "Instrument PCM disk cache exceeds its 2 GiB budget; free storage or reduce sample duration"
+                "Instrument PCM disk cache exceeds its 8 GiB budget; free storage or reduce sample duration"
             }
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
             val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
