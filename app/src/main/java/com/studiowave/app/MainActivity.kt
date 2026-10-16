@@ -779,6 +779,14 @@ private fun StudioWaveApp() {
                             audioError = "Audio is longer than the current 5-minute source limit. Trim it before importing."
                         }
                         else -> {
+                            // Prepare the source before its clip becomes visible in Arrangement.
+                            // This moves codec work out of the Play action; if transport is already
+                            // running, its audio callback continues while this decode runs on IO.
+                            arrangementPlayback.prepareAudioSource(
+                                uri.toString(),
+                                (durationMs.coerceAtLeast(50L) / 1000.0)
+                                    .coerceIn(0.05, ArrangementPlaybackEngine.MAX_SOURCE_SECONDS.toDouble())
+                            )
                             val timebase = TimelineTimebase(
                                 currentProject.bpm, currentProject.numerator,
                                 currentProject.denominator, currentProject.ppq
