@@ -66,6 +66,23 @@ enum class SnapDivision(val label: String) {
 }
 
 /**
+ * Create a viewport for the measured Arrangement pane. Track headers are a sibling
+ * column and must not be subtracted from pane-local ruler, grid, clip or pointer x.
+ */
+fun arrangementPaneViewport(
+    timebase: TimelineTimebase,
+    pixelsPerBar: Float,
+    scrollTimeTicks: Double,
+    viewportWidthPx: Float
+): TimelineViewport = TimelineViewport(
+    timebase = timebase,
+    pixelsPerBar = pixelsPerBar,
+    scrollTimeTicks = scrollTimeTicks,
+    viewportWidthPx = viewportWidthPx,
+    trackHeaderWidthPx = 0f
+)
+
+/**
  * Horizontal mapping for the timeline viewport.
  *
  * screenX uses the arrangement's coordinate space, where track names occupy the
