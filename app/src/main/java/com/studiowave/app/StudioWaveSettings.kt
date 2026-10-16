@@ -124,16 +124,17 @@ internal fun StudioWaveSettingsScreen(
                     SettingsChoiceRow(
                         "Playback stability",
                         "Low latency uses a shorter producer queue; Stable buffers more audio against scheduler jitter.",
-                        listOf("LOW_LATENCY" to "LOW LATENCY", "BALANCED" to "BALANCED", "STABLE" to "STABLE"),
+                        listOf("AUTO" to "AUTO · DEVICE", "LOW_LATENCY" to "LOW LATENCY", "BALANCED" to "BALANCED", "STABLE" to "STABLE"),
                         audioProfile, onAudioProfileChange, p
                     )
                     SettingsInfoCard("ACTIVE OUTPUT", audioStatus, p)
                     SettingsInfoCard(
                         "PROFILE DETAILS",
                         when (audioProfile) {
+                            "AUTO" -> "Device-aware mode: selects queue depth and decoder concurrency from available CPU cores, memory class, and Android low-RAM status. The detected device capabilities are shown above."
                             "LOW_LATENCY" -> "Queue target: 512 frames (~11.6 ms at 44.1 kHz), lower buffering with less tolerance for heavy projects."
-                            "STABLE" -> "Queue target: 2048 frames (~46.4 ms at 44.1 kHz), more headroom for busy devices."
-                            else -> "Queue target: 1024 frames (~23.2 ms at 44.1 kHz), recommended starting point for most devices."
+                            "STABLE" -> "Queue target: 2048 frames (~46.4 ms at 44.1 kHz), more headroom against scheduler jitter."
+                            else -> "Queue target: 1024 frames (~23.2 ms at 44.1 kHz), balanced buffering for most devices."
                         }, p
                     )
                     SettingsSection("METRONOME", "Click is mixed into the master output during playback.", p)
