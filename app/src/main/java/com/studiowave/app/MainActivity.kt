@@ -1262,6 +1262,7 @@ private fun StudioWaveApp() {
                                         "DRUM SEQUENCER" -> "DRUM RACK  /  STEP SEQUENCER"
                                         "MIXER" -> "MIXER"
                                         "BROWSER" -> "BROWSER  /  SAMPLES"
+                                        "TUTORIAL" -> "STUDIOWAVE  /  MUSIC GUIDE"
                                         else -> selectedWorkspace
                                     },
                                     color = LocalStudioWavePalette.current.orange, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1
@@ -1313,6 +1314,7 @@ private fun StudioWaveApp() {
                             { changeProject(it) }, project, onBack = { selectedWorkspace = "ARRANGEMENT" },
                             selectedClipId = editorClipId
                         )
+                        "TUTORIAL" -> StudioWaveTutorialWorkspace(onBack = { selectedWorkspace = "ARRANGEMENT" })
                         "AUDIO EDITOR" -> AudioEditorWorkspace(
                             track = project.tracks.firstOrNull { it.id == editorTrackId }?.takeIf { it.kind == "audio" }
                                 ?: project.tracks.firstOrNull { it.kind == "audio" },
@@ -1466,6 +1468,7 @@ private fun WorkspaceRail(
     ) {
         RailButton("ARR", selected == "ARRANGEMENT", Icons.Default.GraphicEq) { onSelect("ARRANGEMENT") }
         RailButton("MIX", selected == "MIXER", Icons.Default.Tune) { onSelect("MIXER") }
+        RailButton("HELP", selected == "TUTORIAL", Icons.Default.LibraryMusic) { onSelect("TUTORIAL") }
         // Browser is intentionally available from the unified bottom action dock instead of a permanent rail slot.
     }
 }
