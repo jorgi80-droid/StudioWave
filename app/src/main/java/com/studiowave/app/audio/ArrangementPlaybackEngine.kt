@@ -636,12 +636,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
 
         val assets = HashMap<String, AudioAsset>()
-        val preparedSources = if (parallelPreparation && sourceRequests.size > 1) {
-            coroutineScope {
+        val preparedSources = when {
+            // Partial-plan publication only inspects the cache; actual decoding is handled by
+            // the prioritized source queue. Avoid creating one coroutine per clip/track on every edit.
+            allowUnpreparedAudio -> sourceRequests.map { request -> prepareSource(request) }
+            parallelPreparation && sourceRequests.size > 1 -> coroutineScope {
                 sourceRequests.map { request -> async(Dispatchers.IO) { prepareSource(request) } }.awaitAll()
             }
-        } else {
-            sourceRequests.map { request -> prepareSource(request) }
+            else -> sourceRequests.map { request -> prepareSource(request) }
         }
         preparedSources.forEach { (uri, asset) -> if (asset != null) assets[uri] = asset }
         val pendingAudioSources = (if (allowUnpreparedAudio) {
