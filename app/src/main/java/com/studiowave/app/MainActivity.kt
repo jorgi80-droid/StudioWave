@@ -3333,7 +3333,8 @@ private fun TimelineGrid(
                                     bpm = project.bpm,
                                     ppq = project.ppq,
                                     sourceOffsetMicros = clip.sourceOffsetMicros,
-                                    visibleLengthMicros = clip.sourceLengthMicros
+                                    visibleLengthMicros = clip.sourceLengthMicros,
+                                    playbackBusy = playing || playbackLoading
                                 )
                             }
                                 }
@@ -6341,14 +6342,20 @@ private fun AudioClipWaveform(
     bpm: Int = 120,
     ppq: Int = 960,
     sourceOffsetMicros: Long? = null,
-    visibleLengthMicros: Long? = null
+    visibleLengthMicros: Long? = null,
+    playbackBusy: Boolean = false
 ) {
     val context = LocalContext.current
     var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
     var sourceDurationSeconds by remember(sourceUri) { mutableStateOf<Double?>(null) }
     var waveformLoading by remember(sourceUri) { mutableStateOf(false) }
-    LaunchedEffect(sourceUri) {
-        peaks = emptyList()
+    LaunchedEffect(sourceUri, playbackBusy) {
+        // Audio output has priority over visual analysis. Cancel an in-flight full-file
+        // waveform decode as soon as the transport is preparing/playing; retry after stop.
+        if (playbackBusy) {
+            waveformLoading = false
+            return@LaunchedEffect
+        }
         sourceDurationSeconds = null
         waveformLoading = !sourceUri.isNullOrBlank()
         if (sourceUri.isNullOrBlank()) {
