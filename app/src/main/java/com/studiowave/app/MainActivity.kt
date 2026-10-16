@@ -3535,7 +3535,7 @@ private fun TimelineGrid(
                             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 // Flat title strip and hairline border echo Live's clip headers without obscuring the note/wave content.
                                 Row(
-                                    Modifier.fillMaxWidth().height(19.dp)
+                                    Modifier.fillMaxWidth().height(16.dp)
                                         .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.90f))
                                         .padding(horizontal = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically
@@ -3562,7 +3562,7 @@ private fun TimelineGrid(
                             if (track.kind == "drum") {
                                 // Step-sequencer thumbnail: 16 equal steps, stronger beat accents, active hits clearly visible.
                                 Row(
-                                    Modifier.fillMaxSize().padding(top = 14.dp, bottom = 2.dp),
+                                    Modifier.weight(1f).fillMaxWidth().padding(top = 2.dp, bottom = 2.dp),
                                     horizontalArrangement = Arrangement.spacedBy(1.dp),
                                     verticalAlignment = Alignment.Bottom
                                 ) {
@@ -3582,7 +3582,7 @@ private fun TimelineGrid(
                                     }
                                 }
                             } else if (track.kind == "midi") {
-                                Canvas(Modifier.fillMaxSize().padding(top = 13.dp, bottom = 2.dp)) {
+                                Canvas(Modifier.weight(1f).fillMaxWidth().padding(top = 1.dp, bottom = 2.dp)) {
                                     // Miniature piano roll: pitch is vertically ordered and each
                                     // note is placed from the same clip-relative musical tick ratio.
                                     val duration = clip.lengthTicks.coerceAtLeast(1L).toDouble()
@@ -3641,7 +3641,8 @@ private fun TimelineGrid(
                                     ppq = project.ppq,
                                     sourceOffsetMicros = clip.sourceOffsetMicros,
                                     visibleLengthMicros = clip.sourceLengthMicros,
-                                    playbackBusy = isPlaying
+                                    playbackBusy = isPlaying,
+                                    modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 1.dp, bottom = 2.dp)
                                 )
                             }
                                 }
@@ -4683,7 +4684,7 @@ private fun MixerWorkspace(
         Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(1.dp)).border(1.dp, mixerPalette.border.copy(alpha = 0.85f), RoundedCornerShape(1.dp)).padding(4.dp)
     ) {
         // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
-        val channelWidth = 184.dp
+        val channelWidth = 156.dp
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -4872,7 +4873,7 @@ private fun MixerWorkspace(
                             if (it.id == track.id) it.copy(pan = value) else it
                         }))
                     },
-                    modifier = Modifier.size(76.dp)
+                    modifier = Modifier.size(58.dp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -4884,7 +4885,7 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(164.dp).fillMaxHeight()
+            Modifier.width(132.dp).fillMaxHeight()
                 .background(mixerPalette.panel, RoundedCornerShape(1.dp))
                 .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp)).padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -5258,76 +5259,47 @@ private fun DeviceDock(
                     Text("${track.devices.size} INSERTS", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                     DirectWaveStateButton("+ ADD FX", false, palette) { showAddFx = true }
                 }
-                Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Top) {
-                    DeviceChainSlotMarker(number = 1, palette = palette, label = "SRC")
+                val instrumentDevice = if (track.kind == "midi") track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
+                    ?: if (track.kind == "midi") remember(track.id) { TrackDevice(type = "STUDIO_SYNTH", name = "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH")) } else null
+                val eqDevice = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
+                Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Top) {
+                    DeviceChainSlotMarker(number = 1, palette = palette, label = when (track.kind) { "midi" -> if (instrumentDevice?.type == "DIRECTWAVE") "SAMPLE" else "INST"; "drum" -> "DRUM"; else -> "AUDIO" })
                     when (track.kind) {
-                        "midi" -> DirectWaveDevicePanel(
-                            trackId = track.id, trackName = track.name, trackKind = track.kind,
-                            palette = palette, fullHeight = fullScreen
-                        )
-                        "drum" -> DeviceModuleCard("DRUM RACK", "STEP SEQUENCER", palette,
-                            "This track keeps its drum-step workflow. Enabled effect inserts below process its output.")
-                        else -> DeviceModuleCard("AUDIO SOURCE", "CLIP / SAMPLE", palette,
-                            "Audio source editing remains in Clip View. Enabled effects below process this track during playback.")
+                        "midi" -> if (instrumentDevice?.type == "DIRECTWAVE") {
+                            DirectWaveDevicePanel(trackId = track.id, trackName = track.name, trackKind = track.kind, palette = palette, fullHeight = fullScreen, onUseSynth = {
+                                val stored = track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
+                                if (stored != null) { val synth = stored.copy(type = "STUDIO_SYNTH", name = "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH") + stored.parameters); applyDeviceList(track.devices.map { if (it.id == stored.id) synth else it }) }
+                            })
+                        } else if (instrumentDevice != null) {
+                            StudioWaveInstrumentPanel(device = instrumentDevice, eqDevice = eqDevice, palette = palette, spectrumValues = spectrumValues,
+                                onDeviceChange = { changed ->
+                                    val target = changed.copy(name = if (changed.type == "DIRECTWAVE") "DirectWave" else "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH") + changed.parameters)
+                                    val stored = track.devices.firstOrNull { it.id == changed.id }
+                                    if (stored != null) applyDeviceList(track.devices.map { if (it.id == stored.id) target else it }) else {
+                                        val prior = track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
+                                        if (prior == null) { if (track.devices.size < StudioProject.MAX_DEVICES_PER_TRACK) applyDeviceList(track.devices + target) } else applyDeviceList(track.devices.map { if (it.id == prior.id) target.copy(id = prior.id) else it })
+                                    }
+                                },
+                                onEqGainChange = { band, gain, norm ->
+                                    val current = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
+                                    val base = current ?: TrackDevice(type = "PARAM_EQ_8", name = "Parametric EQ Eight", parameters = defaultDeviceParameters("PARAM_EQ_8"))
+                                    val key = "band" + (band + 1); val updated = base.copy(parameters = defaultDeviceParameters("PARAM_EQ_8") + base.parameters + mapOf(key to gain, key + "FreqNorm" to norm))
+                                    if (current == null) { if (track.devices.size < StudioProject.MAX_DEVICES_PER_TRACK) applyDeviceList(track.devices + updated) } else applyDeviceList(track.devices.map { if (it.id == current.id) updated else it })
+                                },
+                                onEqEnabledChange = { enabled ->
+                                    val current = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
+                                    if (current == null) { if (enabled && track.devices.size < StudioProject.MAX_DEVICES_PER_TRACK) applyDeviceList(track.devices + TrackDevice(type = "PARAM_EQ_8", name = "Parametric EQ Eight", parameters = defaultDeviceParameters("PARAM_EQ_8"))) } else applyDeviceList(track.devices.map { if (it.id == current.id) it.copy(enabled = enabled) else it })
+                                })
+                        }
+                        "drum" -> DeviceModuleCard("DRUM RACK", "STEP SEQUENCER", palette, "Drum Rack is the track source; serial effects follow it in the chain.")
+                        else -> DeviceModuleCard("AUDIO SOURCE", "CLIP / SAMPLE", palette, "Audio source editing remains in Clip View; serial effects follow this source.")
                     }
-                    track.devices.filter { it.type in EFFECT_DEVICE_TYPES }.forEachIndexed { effectIndex, device ->
-                        // Make the serial device chain legible at a glance: each insert gets a
-                        // numbered Live-style slot marker without changing device order or routing.
-                        DeviceChainSlotMarker(
-                            number = effectIndex + 2,
-                            palette = palette
-                        )
-                        TrackEffectDeviceCard(
-                            device = device,
-                            palette = palette,
-                            onUpdate = { changed -> applyDeviceList(track.devices.map { if (it.id == changed.id) changed else it }) },
-                            onRemove = { applyDeviceList(track.devices.filterNot { it.id == device.id }) }
-                        )
+                    val effects = track.devices.filter { it.type in EFFECT_DEVICE_TYPES }
+                    effects.forEachIndexed { index, device ->
+                        DeviceChainSlotMarker(number = index + 2, palette = palette)
+                        TrackEffectDeviceCard(device = device, palette = palette, onUpdate = { changed -> applyDeviceList(track.devices.map { if (it.id == changed.id) changed else it }) }, onRemove = { applyDeviceList(track.devices.filterNot { it.id == device.id }) })
                     }
-                    if (track.devices.none { it.type in EFFECT_DEVICE_TYPES }) {
-                        DeviceModuleCard("NO INSERT FX", "EMPTY EFFECT CHAIN", palette,
-                            "Tap + ADD FX to insert an audio processor. Values are saved with this project.")
-                    }
-                    if (track.kind == "midi") {
-                        val instrumentDevice = track.devices.firstOrNull {
-                            it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK"
-                        } ?: remember(track.id) { TrackDevice(type="STUDIO_SYNTH",name="StudioWave Dual Synth",
-                            parameters=defaultDeviceParameters("STUDIO_SYNTH")) }
-                        val eqDevice = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
-                        StudioWaveInstrumentPanel(
-                            device=instrumentDevice,eqDevice=eqDevice,palette=palette,spectrumValues=spectrumValues,
-                            onDeviceChange={changed ->
-                                val target=changed.copy(
-                                    name=if(changed.type=="DIRECTWAVE")"DirectWave" else "StudioWave Dual Synth",
-                                    parameters=defaultDeviceParameters("STUDIO_SYNTH")+changed.parameters)
-                                val stored=track.devices.firstOrNull { it.id==changed.id }
-                                if(stored!=null) applyDeviceList(track.devices.map { if(it.id==stored.id)target else it })
-                                else {
-                                    val prior=track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type!="DRUM_RACK" }
-                                    if(prior==null) { if(track.devices.size<StudioProject.MAX_DEVICES_PER_TRACK)applyDeviceList(track.devices+target) }
-                                    else applyDeviceList(track.devices.map { if(it.id==prior.id)target.copy(id=prior.id) else it })
-                                }
-                            },
-                            onEqGainChange={band,gain,norm ->
-                                val current=track.devices.firstOrNull { it.type=="PARAM_EQ_8" }
-                                val base=current?:TrackDevice(type="PARAM_EQ_8",name="Parametric EQ Eight",
-                                    parameters=defaultDeviceParameters("PARAM_EQ_8"))
-                                val key="band"+(band+1)
-                                val updated=base.copy(parameters=defaultDeviceParameters("PARAM_EQ_8")+base.parameters+
-                                    mapOf(key to gain,key+"FreqNorm" to norm))
-                                if(current==null) { if(track.devices.size<StudioProject.MAX_DEVICES_PER_TRACK)applyDeviceList(track.devices+updated) }
-                                else applyDeviceList(track.devices.map { if(it.id==current.id)updated else it })
-                            },
-                            onEqEnabledChange={enabled ->
-                                val current=track.devices.firstOrNull { it.type=="PARAM_EQ_8" }
-                                if(current==null) {
-                                    if(enabled&&track.devices.size<StudioProject.MAX_DEVICES_PER_TRACK)applyDeviceList(track.devices+TrackDevice(type="PARAM_EQ_8",
-                                        name="Parametric EQ Eight",parameters=defaultDeviceParameters("PARAM_EQ_8")))
-                                } else applyDeviceList(track.devices.map { if(it.id==current.id)it.copy(enabled=enabled) else it })
-                            }
-                        )
-                    }
+                    if (effects.isEmpty()) DeviceModuleCard("NO INSERT FX", "EMPTY EFFECT CHAIN", palette, "Tap + ADD FX to insert an audio processor. Values are saved with this project.")
                 }
             }
         }
@@ -5419,7 +5391,8 @@ private fun DirectWaveDevicePanel(
     trackName: String,
     trackKind: String,
     palette: StudioWavePalette,
-    fullHeight: Boolean = false
+    fullHeight: Boolean = false,
+    onUseSynth: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val preferences = remember(context) {
@@ -5569,9 +5542,9 @@ private fun DirectWaveDevicePanel(
     val knobSize = if (compact) 54.dp else 72.dp
     val waveformHeight = if (compact) 52.dp else 96.dp
     val panelWidth = if (fullHeight) {
-        (screenWidth - 88.dp).coerceIn(480.dp, 1120.dp)
+        (screenWidth * 0.54f).coerceIn(320.dp, 620.dp)
     } else {
-        (screenWidth - 144.dp).coerceIn(400.dp, 780.dp)
+        (screenWidth * 0.54f).coerceIn(280.dp, 460.dp)
     }
     val panelHeight = if (compact) 287.dp else (configuration.screenHeightDp.dp - 76.dp).coerceIn(320.dp, 560.dp)
     val statusText = when {
@@ -5612,6 +5585,7 @@ private fun DirectWaveDevicePanel(
             DirectWaveStateButton("LOAD WAV", false, palette) {
                 launcher.launch(arrayOf("audio/wav", "audio/x-wav", "audio/mpeg", "audio/*"))
             }
+            DirectWaveStateButton("SYNTH", false, palette, onUseSynth)
         }
 
         if (showSamples) {
@@ -6690,7 +6664,8 @@ private fun AudioClipWaveform(
     ppq: Int = 960,
     sourceOffsetMicros: Long? = null,
     visibleLengthMicros: Long? = null,
-    playbackBusy: Boolean = false
+    playbackBusy: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
@@ -6737,7 +6712,7 @@ private fun AudioClipWaveform(
             waveformLoading = false
         }
     }
-    Canvas(Modifier.fillMaxSize()) {
+    Canvas(modifier.fillMaxSize()) {
         val accentColor = accent
         val mid = size.height / 2f
         if (peaks.isEmpty()) {

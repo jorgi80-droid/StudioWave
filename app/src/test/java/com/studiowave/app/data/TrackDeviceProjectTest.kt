@@ -75,6 +75,7 @@ class TrackDeviceProjectTest {
         val audioJson = (0 until tracks.length()).map { tracks.getJSONObject(it) }
             .first { it.optString("kind") == "audio" }
         audioJson.getJSONArray("clips").getJSONObject(0).remove("warpEnabled")
+        audioJson.getJSONArray("clips").getJSONObject(0).remove("clipGainDb")
         val legacyRestored = StudioProject.fromJson(legacyJson)
             .tracks.first { it.id == audio.id }.clips.single()
         assertFalse(legacyRestored.warpEnabled)

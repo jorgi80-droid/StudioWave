@@ -133,3 +133,12 @@ The eight official Ableton Live 12 manual areas supplied by the project owner we
 ## Follow-up: audio clip gain
 
 Audio Clip View now exposes a persisted clip-level gain control in dB, applied as a bounded linear gain to decoded source PCM before track volume/pan and master processing. Gain is independent of source trim and warp; legacy projects default to 0 dB. Unit tests cover dB conversion bounds and project save/reopen.
+
+
+## Screenshot-driven layout fixes — 2026-10-16
+
+- Arrangement clip title strips were shortened and MIDI-note/drum-step/audio-waveform previews now receive the remaining clip-body height. Shared timeline coordinate, zoom, snapping, and resize logic was left unchanged.
+- Mixer channel strips, pan knobs, and Master strip are more compact for landscape touch screens; horizontal scrolling remains available.
+- DirectWave width is responsive. Device View now shows one selected MIDI source at a time, followed by serial FX inserts, with a SYNTH action to switch back to StudioWave Synth.
+- Fixed the failing legacy persistence fixture by removing both newer audio-clip fields before checking old-project defaults.
+- This is an Ableton Live-inspired native adaptation, not exact pixel parity or proprietary asset reuse. Physical Android 16 validation remains required.
