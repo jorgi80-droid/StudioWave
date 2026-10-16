@@ -93,6 +93,12 @@ internal object ArrangementTiming {
 
     fun trackIsAudible(trackMuted: Boolean, trackSolo: Boolean, anySoloActive: Boolean): Boolean =
         !trackMuted && (!anySoloActive || trackSolo)
+    /** Convert a finite dB value to bounded linear amplitude for clip-level gain. */
+    fun gainDbToLinear(gainDb: Float): Float {
+        val safeDb = gainDb.takeIf { it.isFinite() }?.coerceIn(-60f, 12f) ?: 0f
+        return Math.pow(10.0, safeDb.toDouble() / 20.0).toFloat().takeIf { it.isFinite() } ?: 1f
+    }
+
     /**
      * Map a clip-relative frame into the selected source window for tempo-sync varispeed.
      * Uses Double arithmetic to avoid Long multiplication overflow on malformed long clips.

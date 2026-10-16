@@ -30,7 +30,9 @@ data class WaveClip(
     /** Source-relative trim window length in absolute microseconds; independent of project BPM. */
     val sourceLengthMicros: Long? = null,
     /** Tempo-sync varispeed warp; preserves the trim window but changes pitch with playback speed. */
-    val warpEnabled: Boolean = false
+    val warpEnabled: Boolean = false,
+    /** Per-clip gain in dB, independent of the source trim. */
+    val clipGainDb: Float = 0f
 )
 
 data class TrackDevice(
@@ -145,6 +147,7 @@ data class StudioProject(
                                 clip.sourceOffsetMicros?.coerceAtLeast(0L)?.let { put("sourceOffsetMicros", it) }
                                 clip.sourceLengthMicros?.coerceAtLeast(1L)?.let { put("sourceLengthMicros", it) }
                                 if (clip.warpEnabled) put("warpEnabled", true)
+                                if (clip.clipGainDb.isFinite() && clip.clipGainDb != 0f) put("clipGainDb", clip.clipGainDb.coerceIn(-60f, 12f).toDouble())
                                 clip.colorArgb?.let { put("colorArgb", it) }
                                 put("drumSteps", JSONArray().apply { clip.drumSteps.forEach { put(it) } })
                                 put("midiNotes", JSONArray().apply {
@@ -232,7 +235,8 @@ data class StudioProject(
                                     else if (kind == "audio" && clipSourceUri != null) legacyTicksToMicros(c.optLong("sourceOffsetTicks", 0L)) else null,
                                 sourceLengthMicros = if (c.has("sourceLengthMicros")) c.optLong("sourceLengthMicros", 1L).coerceAtLeast(1L)
                                     else if (kind == "audio" && clipSourceUri != null) legacyTicksToMicros(c.optLong("lengthTicks", 3840L).coerceAtLeast(1L)).coerceAtLeast(1L) else null,
-                                warpEnabled = c.optBoolean("warpEnabled", false)
+                                warpEnabled = c.optBoolean("warpEnabled", false),
+                                clipGainDb = c.optDouble("clipGainDb", 0.0).toFloat().takeIf { it.isFinite() }?.coerceIn(-60f, 12f) ?: 0f
                             ))
                         }
                     }

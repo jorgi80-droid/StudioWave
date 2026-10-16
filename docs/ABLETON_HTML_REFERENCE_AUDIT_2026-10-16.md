@@ -128,3 +128,8 @@ The eight official Ableton Live 12 manual areas supplied by the project owner we
 - This first warp mode is VARISPEED: pitch changes along with speed. It is deliberately not described as Ableton's pitch-preserving Beats/Tones/Texture/Complex time-stretch, and it does not yet provide movable warp markers.
 - The default for legacy project files is Warp Off. warpEnabled is optional in the existing JSON schema, so older projects continue to load.
 - Added pure timing tests for source-window mapping at start/middle/end, zero and extreme frame bounds, plus project JSON round-trip and legacy default behavior.
+
+
+## Follow-up: audio clip gain
+
+Audio Clip View now exposes a persisted clip-level gain control in dB, applied as a bounded linear gain to decoded source PCM before track volume/pan and master processing. Gain is independent of source trim and warp; legacy projects default to 0 dB. Unit tests cover dB conversion bounds and project save/reopen.

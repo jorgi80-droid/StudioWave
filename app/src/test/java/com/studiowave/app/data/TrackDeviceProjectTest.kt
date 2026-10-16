@@ -57,7 +57,8 @@ class TrackDeviceProjectTest {
             sourceUri = "content://studiowave/test.wav",
             sourceOffsetMicros = 125_000L,
             sourceLengthMicros = 2_000_000L,
-            warpEnabled = true
+            warpEnabled = true,
+            clipGainDb = -6.0f
         )
         val edited = original.copy(tracks = original.tracks.map {
             if (it.id == audio.id) it.copy(clips = listOf(clip)) else it
@@ -65,6 +66,7 @@ class TrackDeviceProjectTest {
         val restored = StudioProject.fromJson(JSONObject(edited.toJson().toString()))
             .tracks.first { it.id == audio.id }.clips.single()
         assertTrue(restored.warpEnabled)
+        assertEquals(-6.0f, restored.clipGainDb, 0.001f)
         assertEquals(125_000L, restored.sourceOffsetMicros)
         assertEquals(2_000_000L, restored.sourceLengthMicros)
 
@@ -76,6 +78,7 @@ class TrackDeviceProjectTest {
         val legacyRestored = StudioProject.fromJson(legacyJson)
             .tracks.first { it.id == audio.id }.clips.single()
         assertFalse(legacyRestored.warpEnabled)
+        assertEquals(0f, legacyRestored.clipGainDb, 0f)
     }
 
     @Test fun legacyProjectWithoutDeviceArrayStillOpens() {

@@ -78,6 +78,14 @@ class ArrangementTimingTest {
         assertEquals(Long.MAX_VALUE, ArrangementTiming.ticksToMicros(Long.MAX_VALUE, 40, 24))
     }
 
+    @Test fun clipGainDbConvertsToBoundedLinearAmplitude() {
+        assertEquals(1f, ArrangementTiming.gainDbToLinear(0f), 0.0001f)
+        assertEquals(0.5f, ArrangementTiming.gainDbToLinear(-6.0206f), 0.0002f)
+        assertEquals(3.98107f, ArrangementTiming.gainDbToLinear(12f), 0.0002f)
+        assertEquals(1f, ArrangementTiming.gainDbToLinear(Float.NaN), 0.0001f)
+        assertTrue(ArrangementTiming.gainDbToLinear(-999f) > 0f)
+    }
+
     @Test fun warpedSourceMappingStretchesSelectedWindowAcrossClipDuration() {
         assertEquals(0L, ArrangementTiming.warpedSourceFrame(0L, 100L, 50L))
         assertEquals(12L, ArrangementTiming.warpedSourceFrame(25L, 100L, 50L))

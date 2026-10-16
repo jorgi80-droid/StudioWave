@@ -271,3 +271,9 @@ See `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` for the manual-to-source m
 - Added timing tests for source mapping boundaries/extreme values and project JSON persistence/legacy default behavior.
 - This is the first tempo-sync mode, not pitch-preserving time-stretch; warp markers and advanced Ableton warp algorithms remain outstanding.
 - The compile correction commit de75304d88f450dcd4b9efc4c8c773ef37e37d72 passed GitHub Actions unit tests and debug APK build.
+
+
+## Audio clip gain follow-up — 2026-10-16
+- Added per-clip clipGainDb (−60 to +12 dB), persisted in project JSON with a backward-compatible 0 dB default.
+- Audio Clip View includes a gain slider/readout; the audio engine computes the linear scalar once per clip/block, then applies it to actual decoded PCM before track volume/pan and master processing.
+- Added dB conversion and project persistence regression coverage. This is separate from track fader gain and source trim.

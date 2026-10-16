@@ -1349,6 +1349,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     // Read the atomic scrub offset once per audio event/block, not per sample.
                     val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
+                    val clipGain = ArrangementTiming.gainDbToLinear(event.clip.clipGainDb)
                     for (absolute in from until to) {
                         val relative = absolute - event.startFrame
                         val relativeAssetFrame = if (event.clip.warpEnabled) {
@@ -1372,8 +1373,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         )?.toInt() ?: continue
                         val outIndex = ((absolute - position) * 2).toInt()
                         val sourceIndex = sourceFrame * 2
-                        val sourceLeft = event.asset.sampleAt(sourceIndex) / 32768f * channelMix.volume * leftPan
-                        val sourceRight = event.asset.sampleAt(sourceIndex + 1) / 32768f * channelMix.volume * rightPan
+                        val sourceLeft = event.asset.sampleAt(sourceIndex) / 32768f * clipGain * channelMix.volume * leftPan
+                        val sourceRight = event.asset.sampleAt(sourceIndex + 1) / 32768f * clipGain * channelMix.volume * rightPan
                         val leftSample = sourceLeft * liveMasterGain
                         val rightSample = sourceRight * liveMasterGain
                         mix[outIndex] += leftSample
