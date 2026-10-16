@@ -426,9 +426,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 "Instrument samples exceed the safe PCM memory budget; shorten samples or use fewer instrument tracks"
             }
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
-            val asset = audioAssetCache.get(cacheKey) ?: decodeAudioAsset(uri, duration, token).also { decoded ->
+            val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
+            val asset = cachedInstrument ?: decodeAudioAsset(uri, duration, token).also { decoded ->
                 ensureCurrent()
-                audioAssetCache.put(cacheKey, decoded)
+                synchronized(audioAssetCache) { audioAssetCache.put(cacheKey, decoded) }
             }
             instrumentsByTrack[track.id] = SamplerInstrument(
                 asset = asset,
