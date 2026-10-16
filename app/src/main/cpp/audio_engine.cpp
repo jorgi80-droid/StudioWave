@@ -19,6 +19,7 @@ struct AudioState {
     std::atomic<uint64_t> readFrame{0};
     std::atomic<uint64_t> playedFrames{0};
     std::atomic<uint64_t> underruns{0};
+    std::atomic<bool> hasReceivedPcm{false};
     std::atomic<bool> running{false};
     std::atomic<float> toneFrequency{440.0f};
     std::atomic<float> toneGain{0.0f};
@@ -83,7 +84,8 @@ aaudio_data_callback_result_t dataCallback(
 
     state->readFrame.store(read + fromQueue, std::memory_order_release);
     state->playedFrames.fetch_add(fromQueue, std::memory_order_relaxed);
-    if (fromQueue < static_cast<uint64_t>(numFrames) && gain <= 0.0f) {
+    if (fromQueue < static_cast<uint64_t>(numFrames) &&
+        state->hasReceivedPcm.load(std::memory_order_acquire)) {
         state->underruns.fetch_add(1, std::memory_order_relaxed);
     }
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
@@ -106,6 +108,7 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeOpenOutput(JNIEnv*, jobjec
     g_state.readFrame.store(0, std::memory_order_relaxed);
     g_state.playedFrames.store(0, std::memory_order_relaxed);
     g_state.underruns.store(0, std::memory_order_relaxed);
+    g_state.hasReceivedPcm.store(false, std::memory_order_relaxed);
     g_state.sampleRate.store(sampleRate, std::memory_order_relaxed);
     AAudioStreamBuilder* builder = nullptr;
     aaudio_result_t result = AAudio_createStreamBuilder(&builder);
@@ -179,6 +182,7 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeWritePcm(
     }
     env->ReleaseShortArrayElements(source, pcm, JNI_ABORT);
     g_state.writeFrame.store(write + frames, std::memory_order_release);
+    g_state.hasReceivedPcm.store(true, std::memory_order_release);
     return sampleCount;
 }
 
