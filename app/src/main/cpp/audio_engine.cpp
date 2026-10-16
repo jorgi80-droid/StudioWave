@@ -124,10 +124,20 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeOpenOutput(JNIEnv*, jobjec
     AAudioStreamBuilder_setChannelCount(builder, kChannels);
     AAudioStreamBuilder_setSampleRate(builder, sampleRate);
     AAudioStreamBuilder_setPerformanceMode(builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
-    AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_SHARED);
+    // A DAW benefits from the direct MMAP path when Android grants exclusive access.
+    // Some devices or competing audio apps reject it, so shared mode is a real fallback.
+    AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_EXCLUSIVE);
     AAudioStreamBuilder_setDataCallback(builder, dataCallback, &g_state);
     AAudioStreamBuilder_setErrorCallback(builder, errorCallback, &g_state);
     result = AAudioStreamBuilder_openStream(builder, &g_stream);
+    if (result != AAUDIO_OK || g_stream == nullptr) {
+        if (g_stream != nullptr) {
+            AAudioStream_close(g_stream);
+            g_stream = nullptr;
+        }
+        AAudioStreamBuilder_setSharingMode(builder, AAUDIO_SHARING_MODE_SHARED);
+        result = AAudioStreamBuilder_openStream(builder, &g_stream);
+    }
     AAudioStreamBuilder_delete(builder);
     if (result != AAUDIO_OK || g_stream == nullptr) {
         g_stream = nullptr;
@@ -136,6 +146,13 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeOpenOutput(JNIEnv*, jobjec
 
     const int32_t actualRate = AAudioStream_getSampleRate(g_stream);
     if (actualRate > 0) g_state.sampleRate.store(actualRate, std::memory_order_relaxed);
+    // AAudio defaults can be oversized on some routes. Request two device bursts for
+    // responsive transport while preserving a safe fallback if the device rejects it.
+    const int32_t burstFrames = AAudioStream_getFramesPerBurst(g_stream);
+    if (burstFrames > 0) {
+        const int32_t desiredBufferFrames = burstFrames * 2;
+        (void)AAudioStream_setBufferSizeInFrames(g_stream, desiredBufferFrames);
+    }
     result = AAudioStream_requestStart(g_stream);
     if (result != AAUDIO_OK) {
         AAudioStream_close(g_stream);
