@@ -455,6 +455,8 @@ private fun StudioWaveApp() {
     var project by remember { mutableStateOf(StudioProject()) }
     var projectReady by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(false) }
+    var recordingAudio by remember { mutableStateOf(false) }
+    var liveAudioRecorder by remember { mutableStateOf<com.studiowave.app.audio.LiveAudioRecorder?>(null) }
     var playbackLoading by remember { mutableStateOf(false) }
     var playbackJob by remember { mutableStateOf<Job?>(null) }
     var playheadTick by remember { mutableLongStateOf(0L) }
@@ -772,6 +774,91 @@ private fun StudioWaveApp() {
             playheadTick = target
         }
     }
+    fun startLiveRecording() {
+        if (recordingAudio) return
+        stopPlayback()
+        val recorder = com.studiowave.app.audio.LiveAudioRecorder(File(context.filesDir, "recordings"))
+        try {
+            recorder.start()
+            liveAudioRecorder = recorder
+            recordingAudio = true
+            audioError = null
+            android.widget.Toast.makeText(context, "Perekaman audio berjalan — tekan REC lagi untuk berhenti", android.widget.Toast.LENGTH_LONG).show()
+            StudioWaveDiagnostics.log("INFO", "RECORD", "Microphone recording started")
+        } catch (failure: Exception) {
+            runCatching { recorder.close() }
+            liveAudioRecorder = null
+            recordingAudio = false
+            audioError = failure.message ?: "Tidak dapat memulai perekaman mikrofon"
+            StudioWaveDiagnostics.log("ERROR", "RECORD", "Microphone recording failed to start: ${failure.message}")
+        }
+    }
+
+    fun finishLiveRecording() {
+        val recorder = liveAudioRecorder ?: return
+        liveAudioRecorder = null
+        recordingAudio = false
+        playbackScope.launch {
+            try {
+                val result = withContext(Dispatchers.IO) { recorder.stop() }
+                if (project.tracks.size >= StudioProject.MAX_TRACKS) {
+                    result.file.delete()
+                    error("Batas track tercapai; rekaman tidak dapat ditambahkan")
+                }
+                val timebase = TimelineTimebase(project.bpm, project.numerator, project.denominator, project.ppq)
+                val timelineLimit = maxArrangementTick(timebase)
+                val startTick = clampArrangementTick(playheadTick, timebase)
+                    .coerceAtMost((timelineLimit - 1L).coerceAtLeast(0L))
+                val rawLength = kotlin.math.ceil(
+                    result.durationMillis.toDouble() * project.bpm * project.ppq / 60_000.0
+                ).toLong().coerceAtLeast(1L)
+                val lengthTicks = rawLength.coerceAtMost((timelineLimit - startTick).coerceAtLeast(1L))
+                val durationMicros = (lengthTicks.toDouble() * 60_000_000.0 /
+                    (project.bpm * project.ppq)).toLong().coerceAtLeast(1L)
+                val number = project.tracks.count { it.kind == "audio" } + 1
+                val clip = com.studiowave.app.data.WaveClip(
+                    name = "Recording $number",
+                    startTick = startTick,
+                    lengthTicks = lengthTicks,
+                    sourceUri = android.net.Uri.fromFile(result.file).toString(),
+                    sourceOffsetMicros = 0L,
+                    sourceLengthMicros = durationMicros
+                )
+                val track = StudioTrack(
+                    name = "AUDIO $number",
+                    colorArgb = 0xFF3B82F6L,
+                    kind = "audio",
+                    clips = listOf(clip)
+                )
+                changeProject(project.copy(tracks = project.tracks + track))
+                audioError = null
+                android.widget.Toast.makeText(context, "Rekaman ditambahkan ke Arrangement", android.widget.Toast.LENGTH_LONG).show()
+                StudioWaveDiagnostics.log("INFO", "RECORD", "Microphone recording finalized: ${result.durationMillis} ms, ${result.file.length()} bytes")
+            } catch (failure: Exception) {
+                audioError = failure.message ?: "Perekaman audio gagal disimpan"
+                StudioWaveDiagnostics.log("ERROR", "RECORD", "Microphone recording finalization failed: ${failure.message}")
+            }
+        }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startLiveRecording()
+        else audioError = "Izin mikrofon ditolak. Izinkan mikrofon untuk merekam audio."
+    }
+    fun toggleLiveRecording() {
+        if (recordingAudio) {
+            finishLiveRecording()
+        } else if (context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            startLiveRecording()
+        } else {
+            micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     val latestProject by rememberUpdatedState(project)
     val audioPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) {
@@ -1249,6 +1336,7 @@ private fun StudioWaveApp() {
                 TransportBar(
                     compact = selectedWorkspace == "ARRANGEMENT" || selectedWorkspace == "PIANO ROLL",
                     playing = playing || playbackLoading,
+                    recording = recordingAudio,
                     bpm = bpm,
                     master = master,
                     peakDbfs = masterPeakDbfs,
@@ -1271,6 +1359,7 @@ private fun StudioWaveApp() {
                         if (playing || playbackLoading) stopPlayback() else startPlaybackAt(playheadTick)
                     },
                     onStop = { stopPlayback() },
+                    onRecord = { toggleLiveRecording() },
                     onExportWav = { exportWavLauncher.launch(project.name.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80) + ".wav") },
                     onUndo = { undoProject() },
                     onRedo = { redoProject() },
@@ -1415,12 +1504,12 @@ private fun StudioWaveApp() {
 @Composable
 private fun TransportBar(
     compact: Boolean = false,
-    playing: Boolean, bpm: Int, master: Float,
+    playing: Boolean, recording: Boolean = false, bpm: Int, master: Float,
     peakDbfs: Float, rmsDbfs: Float, momentaryLufs: Float, peakHistory: List<Float>,
     positionLabel: String, timeSignatureLabel: String, onSettings: () -> Unit, onNewProject: () -> Unit,
     onBpm: (Int) -> Unit, onMaster: (Float) -> Unit, onPlay: () -> Unit, onStop: () -> Unit,
     onUndo: () -> Unit, onRedo: () -> Unit,
-    onSaveProject: () -> Unit, onOpenProject: () -> Unit, onExportWav: () -> Unit
+    onSaveProject: () -> Unit, onOpenProject: () -> Unit, onRecord: () -> Unit, onExportWav: () -> Unit
 ) {
     val p = LocalStudioWavePalette.current
     val edge = RoundedCornerShape(2.dp)
@@ -1476,6 +1565,17 @@ private fun TransportBar(
         Surface(color = p.canvas, shape = edge, border = BorderStroke(1.dp, p.border)) {
             Text(positionLabel, fontSize = 7.sp, fontWeight = FontWeight.Bold, color = p.text,
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp), maxLines = 1)
+        }
+        Surface(
+            color = if (recording) p.danger else p.control,
+            shape = edge,
+            border = BorderStroke(1.dp, if (recording) p.danger else p.border),
+            modifier = Modifier.size(width = 29.dp, height = 25.dp).clickable(onClick = onRecord)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("REC", color = if (recording) Color.White else p.danger,
+                    fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+            }
         }
         Spacer(Modifier.weight(1f))
         SmallIconButton(Icons.Default.Undo, p.muted, onUndo)

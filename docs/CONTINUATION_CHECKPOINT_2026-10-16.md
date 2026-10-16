@@ -226,3 +226,11 @@
 - Added WAV-header regression tests for RIFF length, stereo PCM format, sample rate, and file-size validation.
 - The WAV capture queue is bounded; an overflow is logged and drops a block rather than blocking the realtime producer. Physical device checks must confirm that no overflow occurs on target phones.
 - Latest implementation commit: `1b8f2ffb2fd18a0e31e44b6caa5625d541ed0d9c`; run CI against the final head before treating this batch as validated.
+
+
+## Integrated microphone recording batch — 2026-10-16
+- Added native Android microphone capture using `AudioRecord`, with PCM writing on a dedicated worker thread and a finalized mono PCM16 WAV file.
+- Added a compact REC control to the transport. It requests runtime microphone permission, stops arrangement playback before recording, and on stop creates an Audio track + clip at the current playhead, bounded by the existing 1,800-bar arrangement limit.
+- Recorded takes are saved in the app's private recordings directory and referenced by their file URI in the arrangement; capture works offline.
+- Added RIFF/WAV header regression tests for mono channel count, sample rate, byte rate, bit depth and data size. Also moved playback-bounce writer startup after constructor validation to avoid starting a worker before rejecting an invalid sample rate.
+- Validation gate: this batch is not verified by Android CI yet. Require debug APK build, unit tests and APK artifact upload before calling it green. Physical device testing is required for microphone permission, actual input level, recording start/stop, and playback of the recorded clip.

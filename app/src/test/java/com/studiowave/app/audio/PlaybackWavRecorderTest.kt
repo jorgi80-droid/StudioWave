@@ -28,3 +28,27 @@ class PlaybackWavRecorderTest {
         assertTrue(runCatching { PlaybackWavRecorder.wavHeader(0xFFFFFFFFL, 44_100) }.isFailure)
     }
 }
+
+
+class LiveAudioRecorderHeaderTest {
+    @Test fun writesValidMonoPcmWaveHeaderForRecordedTakes() {
+        val header = LiveAudioRecorder.wavHeader(8_820L, 44_100)
+        val bytes = ByteBuffer.wrap(header).order(ByteOrder.LITTLE_ENDIAN)
+        assertEquals(44, header.size)
+        assertEquals("RIFF", String(header, 0, 4, Charsets.US_ASCII))
+        assertEquals(8_856, bytes.getInt(4))
+        assertEquals("WAVE", String(header, 8, 4, Charsets.US_ASCII))
+        assertEquals(1, bytes.getShort(20).toInt())
+        assertEquals(1, bytes.getShort(22).toInt())
+        assertEquals(44_100, bytes.getInt(24))
+        assertEquals(88_200, bytes.getInt(28))
+        assertEquals(2, bytes.getShort(32).toInt())
+        assertEquals(16, bytes.getShort(34).toInt())
+        assertEquals(8_820, bytes.getInt(40))
+    }
+
+    @Test fun rejectsInvalidMicFormatAndOversizedWav() {
+        assertTrue(runCatching { LiveAudioRecorder.wavHeader(0, 7_999) }.isFailure)
+        assertTrue(runCatching { LiveAudioRecorder.wavHeader(0xFFFFFFFFL, 44_100) }.isFailure)
+    }
+}

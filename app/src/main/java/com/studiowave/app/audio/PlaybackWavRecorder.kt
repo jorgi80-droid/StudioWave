@@ -25,10 +25,11 @@ internal class PlaybackWavRecorder(
     private val queue = ArrayBlockingQueue<ShortArray>(queueBlocks.coerceIn(2, 128))
     private val accepting = AtomicBoolean(true)
     private val closed = AtomicBoolean(false)
-    private val writer = Thread(::writeCapture, "StudioWave-WAV-writer").apply { isDaemon = true; start() }
+    private lateinit var writer: Thread
 
     init {
         require(sampleRate in 8_000..192_000)
+        writer = Thread(::writeCapture, "StudioWave-WAV-writer").apply { isDaemon = true; start() }
     }
 
     /** Called from the playback producer. Never waits for storage or a slow document provider. */
