@@ -210,7 +210,7 @@ internal fun StudioWaveSettingsScreen(
                 "ABOUT" -> Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SettingsSection("STUDIOWAVE", "A native Android digital audio workstation built for touch-first music creation.", p)
                     SettingsInfoCard("ABOUT", "StudioWave is an independent Android DAW project. Its interface draws inspiration from Ableton Live, while its touch-first music-making workflow takes inspiration from FL Studio Mobile. It is not affiliated with either product.", p)
-                    SettingsInfoCard("VERSION", "Installed app version: $appVersion\\nBuild channel: Android development / GitHub CI", p)
+                    SettingsInfoCard("VERSION", "Installed app version: $appVersion\nBuild channel: Android development / GitHub CI", p)
                     SettingsInfoCard("SOURCE REPOSITORY", "Browse source code, issues, changes and development progress for StudioWave.", p)
                     Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/jorgi80-droid/StudioWave"))) } }, modifier = Modifier.fillMaxWidth().height(38.dp), colors = ButtonDefaults.buttonColors(containerColor = p.control, contentColor = p.text), shape = RoundedCornerShape(1.dp), border = BorderStroke(1.dp, p.border)) {
                         Text("OPEN STUDIOWAVE REPOSITORY", fontSize = 9.sp, fontWeight = FontWeight.Bold)
