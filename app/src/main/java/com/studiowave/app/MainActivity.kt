@@ -449,13 +449,10 @@ private fun StudioWaveApp() {
     val arrangementPlayback = remember(context) { com.studiowave.app.audio.ArrangementPlaybackEngine(context) }
     val playbackScope = rememberCoroutineScope()
     val preferences = remember(context) { context.getSharedPreferences("studiowave_project", android.content.Context.MODE_PRIVATE) }
-    var project by remember {
-        mutableStateOf(
-            runCatching {
-                preferences.getString("project_json", null)?.let { StudioProject.fromJson(JSONObject(it)) }
-            }.getOrNull() ?: StudioProject()
-        )
-    }
+    // Restore persisted projects off the main thread. Large sessions can contain dozens
+    // of tracks and devices; parsing JSON during initial composition freezes the UI.
+    var project by remember { mutableStateOf(StudioProject()) }
+    var projectReady by remember { mutableStateOf(false) }
     var playing by remember { mutableStateOf(false) }
     var playbackLoading by remember { mutableStateOf(false) }
     var playbackJob by remember { mutableStateOf<Job?>(null) }
@@ -476,6 +473,30 @@ private fun StudioWaveApp() {
         }
     }
     var bpm by remember { mutableIntStateOf(project.bpm) }
+    LaunchedEffect(preferences) {
+        val startedAt = android.os.SystemClock.elapsedRealtime()
+        val restored = try {
+            withContext(Dispatchers.IO) {
+                preferences.getString("project_json", null)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let { StudioProject.fromJson(JSONObject(it)) }
+            }
+        } catch (failure: Exception) {
+            StudioWaveDiagnostics.log("ERROR", "PROJECT_LOAD", "Autosaved project restore failed: ${failure.javaClass.simpleName}: ${failure.message}")
+            null
+        }
+        if (restored != null) {
+            project = restored
+            bpm = restored.bpm
+        }
+        projectReady = true
+        val elapsedMs = android.os.SystemClock.elapsedRealtime() - startedAt
+        val active = restored ?: project
+        StudioWaveDiagnostics.log(
+            "INFO", "PROJECT_LOAD",
+            "Autosaved session restored in ${elapsedMs} ms · ${active.tracks.size} tracks · ${active.tracks.sumOf { it.clips.size }} clips · ${active.tracks.sumOf { it.devices.size }} devices"
+        )
+    }
     var audioError by remember { mutableStateOf<String?>(null) }
     var master by remember { mutableFloatStateOf(0.72f) }
     var masterPeakDbfs by remember { mutableFloatStateOf(-120f) }
@@ -896,7 +917,8 @@ private fun StudioWaveApp() {
             delay(50)
         }
     }
-    LaunchedEffect(project) {
+    LaunchedEffect(project, projectReady) {
+        if (!projectReady) return@LaunchedEffect
         delay(350)
         val snapshot = project
         try {
@@ -963,7 +985,18 @@ private fun StudioWaveApp() {
             LocalDensity provides scaledDensity
         ) {
         Surface(Modifier.fillMaxSize(), color = swatch.room) {
-            if (showSettings) {
+            if (!projectReady) {
+                Column(
+                    Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator(color = swatch.accent)
+                    Spacer(Modifier.height(12.dp))
+                    Text("RESTORING PROJECT", color = swatch.text, fontSize = 12.sp, fontWeight = FontWeight.Black)
+                    Text("Loading session off the UI thread…", color = swatch.muted, fontSize = 10.sp)
+                }
+            } else if (showSettings) {
                 StudioWaveSettingsScreen(
                     section = settingsSection, onSectionChange = { settingsSection = it },
                     onClose = { showSettings = false },
