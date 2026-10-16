@@ -947,7 +947,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val blockBudget = (frames.toLong() * 1_000_000_000L / sampleRate.toLong()).coerceAtLeast(1L)
                 renderBudgetNanos.set(blockBudget)
                 if (renderNanos > blockBudget) renderOverrunBlocks.incrementAndGet()
-                if (!track.queuePcm(pcm, sampleCount) { running.get() && generation.get() == token }) break
+                if (!track.queuePcm(pcm, sampleCount) { running.get() && generation.get() == token }) {
+                    if (running.get() && generation.get() == token) {
+                        error("Audio output stopped unexpectedly while rendering")
+                    }
+                    break
+                }
                 position = blockEnd
                 reportPlaybackPosition()
             }
