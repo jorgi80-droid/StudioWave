@@ -1204,6 +1204,7 @@ private fun StudioWaveApp() {
                                 pendingAudioStartTick = tick
                             },
                             trackHeights = trackHeightsDp,
+                            compactTracks = compactTracks,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) },
                             playheadTick = playheadTick,
                             isPlaying = playing,
@@ -1373,6 +1374,7 @@ private fun ArrangementWorkspace(
     scrollTracks: Float, onScrollTracks: (Float) -> Unit,
     onOpenEditor: (String, String?, String?) -> Unit,
     trackHeights: MutableMap<String, Float>,
+    compactTracks: MutableMap<String, Boolean>,
     onPlaybackRestart: (StudioProject) -> Unit = {},
     onScratchTrack: (String, Float) -> Unit = { _, _ -> },
     playheadTick: Long = 0L,
