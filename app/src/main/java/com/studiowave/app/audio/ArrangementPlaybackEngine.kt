@@ -958,8 +958,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         allowTransportGenerationChange: Boolean = false,
         onPartialAsset: ((AudioAsset) -> Unit)? = null
     ): AudioAsset {
-        // When audio is already running, source decoding must yield CPU time to the
-        // THREAD_PRIORITY_AUDIO renderer rather than competing at normal thread priority.
+        // The render worker runs at THREAD_PRIORITY_AUDIO. Keep decoding at normal priority,
+        // not BACKGROUND: streaming needs to stay ahead of the playhead while the OS scheduler
+        // still gives the realtime output thread priority when both are runnable.
         val decodeTid = Process.myTid()
         val previousPriority = runCatching { Process.getThreadPriority(decodeTid) }
             .getOrDefault(Process.THREAD_PRIORITY_DEFAULT)
@@ -977,7 +978,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         var pcmRandomAccess: RandomAccessFile? = null
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
-        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
+        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_DEFAULT) }
         try {
             extractor.setDataSource(appContext, uri, null)
             var selected = -1
