@@ -123,15 +123,19 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         preparedForRealtime = true
     }
 
+    private fun refreshActiveReferences(devices: List<TrackDevice>) {
+        // Parameters may change while module topology stays the same. Refresh references
+        // in-place with no per-block lists, strings or maps.
+        var index = 0
+        val current = activeChain
+        for (device in devices) {
+            if (active(device)) current[index++].device = device
+        }
+    }
+
     private fun ensureActiveChain(devices: List<TrackDevice>) {
         if (sameActiveStructure(devices)) {
-            // Parameters may change while the track's module topology stays the same.
-            // Refresh object references in-place: no per-block lists, strings or maps.
-            var index = 0
-            val current = activeChain
-            for (device in devices) {
-                if (active(device)) current[index++].device = device
-            }
+            refreshActiveReferences(devices)
             return
         }
 
@@ -166,16 +170,13 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
     }
 
     fun process(buffer: FloatArray, master: FloatArray, sampleCount: Int, masterGain: Float, devices: List<TrackDevice>) {
-        if (!sameActiveStructure(devices)) {
-            // A topology change must be prepared and published with a new render plan.
-            // Keep the last prepared chain alive until that snapshot arrives; never allocate
-            // delay lines or rebuild the chain on the realtime audio worker.
-            if (!preparedForRealtime) {
-                ensureActiveChain(devices) // Test/standalone fallback before realtime preparation.
-                preparedForRealtime = true
-            }
-        } else {
-            ensureActiveChain(devices) // Same topology: only refresh parameter references.
+        if (sameActiveStructure(devices)) {
+            refreshActiveReferences(devices)
+        } else if (!preparedForRealtime) {
+            // Standalone/test fallback only. Production render plans call prepare() before
+            // publication, so a topology change never allocates on the realtime worker.
+            ensureActiveChain(devices)
+            preparedForRealtime = true
         }
         val active = activeChain
         if (active.isEmpty()) return
