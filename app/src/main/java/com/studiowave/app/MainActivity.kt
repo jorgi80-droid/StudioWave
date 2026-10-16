@@ -574,6 +574,8 @@ private fun StudioWaveApp() {
                 previous.numerator != next.numerator ||
                 previous.denominator != next.denominator ||
                 previous.tracks.map { it.id to it.kind } != next.tracks.map { it.id to it.kind } ||
+                previous.tracks.map { track -> track.id to track.devices.map { Triple(it.id, it.type, it.enabled) } } !=
+                    next.tracks.map { track -> track.id to track.devices.map { Triple(it.id, it.type, it.enabled) } } ||
                 previous.tracks.map { it.id to it.clips } != next.tracks.map { it.id to it.clips }
             undoHistory = (undoHistory + previous).takeLast(100)
             redoHistory = emptyList()
