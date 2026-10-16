@@ -14,11 +14,19 @@ import com.studiowave.app.data.StudioTrack
 import com.studiowave.app.data.TrackDevice
 import com.studiowave.app.data.EFFECT_DEVICE_TYPES
 import com.studiowave.app.data.WaveClip
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
@@ -238,12 +246,45 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     // MediaCodec instances are expensive on mobile. Never open one decoder per track at once.
     private val decodeSemaphore = Semaphore(MAX_PARALLEL_DECODERS)
     private val sourceDurationCache = java.util.concurrent.ConcurrentHashMap<String, Double>()
+    private val preparationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val refreshPlanRequests = Channel<Unit>(Channel.CONFLATED)
+    private val pendingAudioJobs = HashMap<String, Job>()
+    private val pendingAudioJobsLock = Any()
+    @Volatile private var latestProjectForPlayback: StudioProject? = null
     @Volatile private var worker: Thread? = null
     @Volatile private var output: NativeAudioEngine? = null
     // Render reads an immutable plan snapshot per block; edits publish replacements atomically.
     @Volatile private var activePlanRef: java.util.concurrent.atomic.AtomicReference<Plan>? = null
     // Supersedes stale background schedule builds when many clips/tracks are added rapidly.
     private val arrangementUpdateRevision = java.util.concurrent.atomic.AtomicLong(0L)
+
+    init {
+        preparationScope.launch {
+            for (ignored in refreshPlanRequests) {
+                // Coalesce bursts of completed decodes into one schedule rebuild instead of
+                // rebuilding the whole arrangement once per source when 50 tracks are imported.
+                delay(24L)
+                val project = latestProjectForPlayback ?: continue
+                val planRef = activePlanRef ?: continue
+                if (!running.get() || closed.get()) continue
+                val token = generation.get()
+                val revision = arrangementUpdateRevision.get()
+                val refreshed = runCatching {
+                    buildPlan(project, token, parallelPreparation = true, revision = revision,
+                        allowUnpreparedAudio = true)
+                }.getOrNull() ?: continue
+                if (!closed.get() && running.get() && generation.get() == token &&
+                    arrangementUpdateRevision.get() == revision && activePlanRef === planRef) {
+                    planRef.set(refreshed)
+                    schedulePendingAudioPreparation(project, token, planRef, refreshed.pendingAudioSources)
+                    android.util.Log.i(
+                        "StudioWaveAudio",
+                        "Incremental audio plan published; ready=${refreshed.audio.size}, pending=${refreshed.pendingAudioSources.size}"
+                    )
+                }
+            }
+        }
+    }
 
     private class AudioAsset(
         val sampleRate: Int,
@@ -306,6 +347,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val track: StudioTrack
     )
 
+    private data class SourceRequest(
+        val uriString: String,
+        val sourceSeconds: Double,
+        val requestedFrames: Int,
+        val cacheKey: String
+    )
+
     private data class Plan(
         val sampleRate: Int,
         val bpm: Int,
@@ -321,7 +369,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val deviceChainSignatures: Map<String, List<Pair<String, String>>>,
         val audioWorkspace: ArrayList<AudioEvent>,
         val noteWorkspace: ArrayList<NoteEvent>,
-        val drumWorkspace: ArrayList<DrumEvent>
+        val drumWorkspace: ArrayList<DrumEvent>,
+        val pendingAudioSources: List<SourceRequest> = emptyList()
     )
 
     private data class TrackMix(
@@ -368,7 +417,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         updateMix(project)
         val preparationStartedNanos = System.nanoTime()
         val plan = try {
-            withContext(Dispatchers.IO) { buildPlan(project, token, parallelPreparation) }
+            withContext(Dispatchers.IO) {
+                buildPlan(project, token, parallelPreparation, allowUnpreparedAudio = true)
+            }
         } catch (failure: Exception) {
             val elapsedMs = (System.nanoTime() - preparationStartedNanos).coerceAtLeast(0L) / 1_000_000L
             android.util.Log.e(
@@ -407,6 +458,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             }
             val planRef = java.util.concurrent.atomic.AtomicReference(plan)
             activePlanRef = planRef
+            latestProjectForPlayback = project
             output = nativeOutput
             running.set(true)
             try {
@@ -416,6 +468,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         nativeOutput, planRef, token, startFrame, onProgress, onCompleted, onError
                     )
                 }, "StudioWave-Arrangement").also { it.start() }
+                schedulePendingAudioPreparation(project, token, planRef, plan.pendingAudioSources)
             } catch (failure: Throwable) {
                 running.set(false)
                 output = null
@@ -429,7 +482,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         project: StudioProject,
         token: Long,
         parallelPreparation: Boolean,
-        revision: Long? = null
+        revision: Long? = null,
+        allowUnpreparedAudio: Boolean = false
     ): Plan {
         fun ensureCurrent() {
             check(!closed.get() && generation.get() == token &&
@@ -473,12 +527,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 requestedTicksByUri[uri] = max(requestedTicksByUri[uri] ?: 0L, sourceEndTicks)
             }
         }
-        data class SourceRequest(
-            val uriString: String,
-            val sourceSeconds: Double,
-            val requestedFrames: Int,
-            val cacheKey: String
-        )
         val sourceRequests = ArrayList<SourceRequest>(requestedTicksByUri.size)
         var estimatedBytes = 0L
         requestedTicksByUri.forEach { (uriString, ticks) ->
@@ -518,6 +566,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
                 ?.takeIf { it.frames >= request.requestedFrames || it.complete }
             if (cached != null) return request.uriString to cached
+            // Publish the transport/schedule without waiting for cold media decoders. The
+            // missing source is decoded on the IO preparation scope and joins at a block boundary.
+            if (allowUnpreparedAudio) return request.uriString to null
             val decoded = try {
                 decodeSemaphore.withPermit {
                     decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token, revision)
@@ -549,6 +600,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             sourceRequests.map { request -> prepareSource(request) }
         }
         preparedSources.forEach { (uri, asset) -> if (asset != null) assets[uri] = asset }
+        val pendingAudioSources = if (allowUnpreparedAudio) {
+            sourceRequests.filter { request -> assets[request.uriString] == null }
+        } else emptyList()
 
         val audioEvents = ArrayList<AudioEvent>()
         val notes = ArrayList<NoteEvent>()
@@ -706,8 +760,61 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             deviceChainSignatures,
             ArrayList(sortedAudio.size),
             ArrayList(sortedNotes.size),
-            ArrayList(sortedDrums.size)
+            ArrayList(sortedDrums.size),
+            pendingAudioSources
         )
+    }
+
+    private fun schedulePendingAudioPreparation(
+        project: StudioProject,
+        token: Long,
+        planRef: java.util.concurrent.atomic.AtomicReference<Plan>,
+        requests: List<SourceRequest>
+    ) {
+        if (requests.isEmpty() || closed.get()) return
+        requests.forEach { request ->
+            synchronized(pendingAudioJobsLock) {
+                if (pendingAudioJobs[request.cacheKey]?.isActive == true) return@forEach
+                val job = preparationScope.launch(start = CoroutineStart.LAZY) {
+                    try {
+                        val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
+                            ?.takeIf { it.frames >= request.requestedFrames || it.complete }
+                        if (cached == null) {
+                            val decoded = decodeSemaphore.withPermit {
+                                decodeAudioAsset(
+                                    Uri.parse(request.uriString), request.sourceSeconds, token,
+                                    allowTransportGenerationChange = false
+                                )
+                            }
+                            if (!closed.get() && generation.get() == token) {
+                                synchronized(audioAssetCache) { audioAssetCache.put(request.cacheKey, decoded) }
+                                refreshPlanRequests.trySend(Unit)
+                            } else {
+                                runCatching { decoded.pcmFile?.delete() }
+                            }
+                        } else {
+                            refreshPlanRequests.trySend(Unit)
+                        }
+                    } catch (failure: Exception) {
+                        if (!closed.get() && generation.get() == token) {
+                            android.util.Log.e(
+                                "StudioWavePlayback",
+                                "Background audio preparation failed for ${request.uriString}",
+                                failure
+                            )
+                        }
+                    } finally {
+                        synchronized(pendingAudioJobsLock) {
+                            if (pendingAudioJobs[request.cacheKey] === kotlinx.coroutines.currentCoroutineContext()[Job]) {
+                                pendingAudioJobs.remove(request.cacheKey)
+                            }
+                        }
+                    }
+                }
+                pendingAudioJobs[request.cacheKey] = job
+                job.start()
+            }
+        }
     }
 
     /** Memoizes slow content-provider metadata probes for the lifetime of this engine. */
@@ -1323,9 +1430,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val revision = arrangementUpdateRevision.incrementAndGet()
         updateMix(project)
         val startedAt = System.nanoTime()
+        latestProjectForPlayback = project
         val updatedPlan = try {
             withContext(Dispatchers.IO) {
-                buildPlan(project, token, parallelPreparation = true, revision = revision)
+                buildPlan(project, token, parallelPreparation = true, revision = revision,
+                    allowUnpreparedAudio = true)
             }
         } catch (failure: Exception) {
             // Rapid successive edits supersede old plans. Silently discard stale preparation;
@@ -1337,11 +1446,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             arrangementUpdateRevision.get() != revision) return
         if (running.get() && activePlanRef === planRef) {
             planRef.set(updatedPlan)
+            schedulePendingAudioPreparation(project, token, planRef, updatedPlan.pendingAudioSources)
             val elapsedMs = (System.nanoTime() - startedAt).coerceAtLeast(0L) / 1_000_000L
             android.util.Log.i(
                 "StudioWaveAudio",
-                "Arrangement hot-update ready in ${elapsedMs}ms; tracks=${project.tracks.size}, " +
-                    "clips=${project.tracks.sumOf { it.clips.size }}"
+                "Arrangement hot-update published in ${elapsedMs}ms; tracks=${project.tracks.size}, " +
+                    "clips=${project.tracks.sumOf { it.clips.size }}, pendingSources=${updatedPlan.pendingAudioSources.size}"
             )
         }
     }
@@ -1429,6 +1539,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             try {
                 stop()
             } finally {
+                preparationScope.cancel()
+                refreshPlanRequests.close()
+                synchronized(pendingAudioJobsLock) {
+                    pendingAudioJobs.values.forEach { it.cancel() }
+                    pendingAudioJobs.clear()
+                }
+                latestProjectForPlayback = null
                 audioAssetCache.evictAll()
                 sourceDurationCache.clear()
             }
