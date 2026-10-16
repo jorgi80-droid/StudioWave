@@ -740,7 +740,6 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val decodeTid = Process.myTid()
         val previousPriority = runCatching { Process.getThreadPriority(decodeTid) }
             .getOrDefault(Process.THREAD_PRIORITY_DEFAULT)
-        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
         fun ensureCurrent() {
             check(!closed.get() && (allowTransportGenerationChange || generation.get() == token) &&
                 (revision == null || arrangementUpdateRevision.get() == revision)) {
@@ -753,6 +752,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val pcmFile = File.createTempFile("asset-", ".pcm", pcmDirectory)
         var keepPcmFile = false
         var pcmRandomAccess: RandomAccessFile? = null
+        if (running.get()) runCatching { Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND) }
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
         try {
