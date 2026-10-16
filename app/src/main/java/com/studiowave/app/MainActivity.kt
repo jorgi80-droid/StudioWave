@@ -533,6 +533,7 @@ private fun StudioWaveApp() {
     var scrollTracks by remember { mutableFloatStateOf(0f) }
     var verticalZoom by remember { mutableFloatStateOf(1f) }
     val trackHeightsDp = remember { mutableStateMapOf<String, Float>() }
+    val compactTracks = remember { mutableStateMapOf<String, Boolean>() }
     var editorTrackId by remember { mutableStateOf<String?>(null) }
     var editorClipId by remember { mutableStateOf<String?>(null) }
     var pendingAudioTrackId by remember { mutableStateOf<String?>(null) }
@@ -1385,10 +1386,10 @@ private fun ArrangementWorkspace(
     val density = androidx.compose.ui.platform.LocalDensity.current
     val densityScale = density.density
     val trackIds = project.tracks.map { it.id }
-    val trackRowLayout = remember(trackIds, trackHeights.toMap()) {
+    val trackRowLayout = remember(trackIds, trackHeights.toMap(), compactTracks.toMap()) {
         var top = 0f
         trackIds.map { id ->
-            val height = (trackHeights[id] ?: 67f).coerceIn(44f, 160f)
+            val height = if (compactTracks[id] == true) 30f else (trackHeights[id] ?: 67f).coerceIn(44f, 160f)
             TrackRowLayout(topDp = top, heightDp = height).also { top += height }
         }
     }
@@ -1609,6 +1610,36 @@ private fun ArrangementWorkspace(
                                 onSoloToggle = { onProjectChange(project.copy(tracks = project.tracks.map { if (it.id == track.id) it.copy(solo = !it.solo) else it })) },
                                 onResizeTrack = { delta ->
                                     trackHeights[track.id] = ((trackHeights[track.id] ?: 67f) + delta / (densityScale * verticalZoom).coerceAtLeast(0.1f)).coerceIn(44f, 160f)
+                                },
+                                compact = compactTracks[track.id] == true,
+                                onToggleCompact = {
+                                    compactTracks[track.id] = compactTracks[track.id] != true
+                                },
+                                onDuplicateTrack = {
+                                    val source = project.tracks.firstOrNull { it.id == track.id }
+                                    if (source != null) {
+                                        val copy = source.copy(
+                                            id = java.util.UUID.randomUUID().toString(),
+                                            name = (source.name + " Copy").take(48),
+                                            clips = source.clips.map { clip -> clip.copy(id = java.util.UUID.randomUUID().toString()) },
+                                            muted = false,
+                                            solo = false
+                                        )
+                                        onProjectChange(project.copy(tracks = project.tracks.toMutableList().apply {
+                                            add(project.tracks.indexOfFirst { it.id == track.id } + 1, copy)
+                                        }))
+                                        StudioWaveDiagnostics.log("INFO", "ARRANGEMENT", "Duplicated track '${source.name}' with clips")
+                                    }
+                                },
+                                onDeleteTrack = {
+                                    if (project.tracks.size > 1) {
+                                        onProjectChange(project.copy(tracks = project.tracks.filterNot { it.id == track.id }))
+                                        trackHeights.remove(track.id)
+                                        compactTracks.remove(track.id)
+                                        StudioWaveDiagnostics.log("INFO", "ARRANGEMENT", "Deleted track '${track.name}'")
+                                    } else {
+                                        statusMessage = "At least one track must remain in the project."
+                                    }
                                 },
                                 onScratch = { delta -> if (track.kind == "audio") onScratchTrack(track.id, delta / densityScale * 8f) },
                                                 onReorderTrack = { deltaPx ->
