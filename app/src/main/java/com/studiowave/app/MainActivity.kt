@@ -6136,7 +6136,6 @@ private object WaveformPeakCache {
             }
         } finally {
             mutex.unlock()
-            if (!mutex.isLocked) inFlight.remove(key, mutex)
         }
     }
 
