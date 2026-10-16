@@ -43,6 +43,7 @@ internal object StudioWaveDiagnostics {
         val javaHeapUsedBytes: Long,
         val javaHeapMaxBytes: Long,
         val nativeHeapUsedBytes: Long,
+        val processPssBytes: Long,
         val availableProcessors: Int,
         val uiFps: Float?,
         val uiFrameIntervalMs: Float?,
@@ -115,6 +116,16 @@ internal object StudioWaveDiagnostics {
         if (shouldLog) log(level, tag, message)
     }
 
+    private fun persistedEntries(): List<String> {
+        val target = logFile ?: return snapshot()
+        runCatching { diskWriter.submit { }.get(750, TimeUnit.MILLISECONDS) }
+        return runCatching {
+            synchronized(target) {
+                if (target.exists()) target.readLines().takeLast(MAX_ENTRIES) else snapshot()
+            }
+        }.getOrElse { snapshot() }
+    }
+
     fun snapshot(limit: Int = 3000): List<String> =
         entries.toList().takeLast(limit.coerceIn(1, MAX_ENTRIES))
 
@@ -132,7 +143,7 @@ internal object StudioWaveDiagnostics {
             appendLine()
         }
         appendLine("=== APP EVENT LOG (oldest to newest) ===")
-        snapshot().forEach(::appendLine)
+        persistedEntries().forEach(::appendLine)
     }
 
     fun installCrashHandler() {
@@ -163,6 +174,9 @@ internal object StudioWaveDiagnostics {
                 .toFloat().coerceIn(0f, Runtime.getRuntime().availableProcessors() * 100f)
         } else null
         val runtime = Runtime.getRuntime()
+        val memoryInfo = Debug.MemoryInfo()
+        runCatching { Debug.getMemoryInfo(memoryInfo) }
+        val processPssBytes = memoryInfo.totalPss.coerceAtLeast(0).toLong() * 1024L
         val heapMax = runtime.maxMemory().coerceAtLeast(1L)
         val heapUsed = (runtime.totalMemory() - runtime.freeMemory()).coerceAtLeast(0L)
         val frames = frameSamples
@@ -172,6 +186,7 @@ internal object StudioWaveDiagnostics {
             javaHeapUsedBytes = heapUsed,
             javaHeapMaxBytes = heapMax,
             nativeHeapUsedBytes = Debug.getNativeHeapAllocatedSize().coerceAtLeast(0L),
+            processPssBytes = processPssBytes,
             availableProcessors = runtime.availableProcessors().coerceAtLeast(1),
             uiFps = if (meanInterval.isFinite() && meanInterval > 0) (1000.0 / meanInterval).toFloat() else null,
             uiFrameIntervalMs = if (meanInterval.isFinite()) meanInterval.toFloat() else null,
