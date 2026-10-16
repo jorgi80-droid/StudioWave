@@ -5927,15 +5927,15 @@ private fun TrackEffectDeviceCard(
                                     dragBand = (1..8).minByOrNull { band ->
                                         val key = "band${band}FreqNorm"
                                         val norm = (current.parameters[key] ?: defaults[key] ?: 0.5f).coerceIn(0f, 1f)
-                                        kotlin.math.abs(norm - (start.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f))
+                                        kotlin.math.abs(norm - (start.x / size.width.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f))
                                     } ?: 1
                                     selectedBand = dragBand
                                 },
                                 onDrag = { change, _ ->
                                     change.consume()
                                     val current = latestDevice
-                                    val norm = (change.position.x / size.width.coerceAtLeast(1f)).coerceIn(0f, 1f)
-                                    val gainDb = ((0.5f - change.position.y / size.height.coerceAtLeast(1f)) * 36f)
+                                    val norm = (change.position.x / size.width.toFloat().coerceAtLeast(1f)).coerceIn(0f, 1f)
+                                    val gainDb = ((0.5f - change.position.y / size.height.toFloat().coerceAtLeast(1f)) * 36f)
                                         .coerceIn(-18f, 18f)
                                     latestDeviceUpdate(current.copy(parameters = current.parameters + mapOf(
                                         "band${dragBand}FreqNorm" to norm,
