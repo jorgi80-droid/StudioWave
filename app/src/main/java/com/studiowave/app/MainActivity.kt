@@ -93,6 +93,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.studiowave.app.audio.DirectWaveSampler
 import com.studiowave.app.audio.ArrangementPlaybackEngine
+import com.studiowave.app.audio.AudioPerformanceProfile
 import com.studiowave.app.audio.ArrangementTiming
 import com.studiowave.app.data.StudioProject
 import com.studiowave.app.data.defaultDeviceParameters
@@ -510,9 +511,9 @@ private fun StudioWaveApp() {
     var showSettings by remember { mutableStateOf(false) }
     var settingsSection by remember { mutableStateOf("INTERFACE") }
     var audioProfile by remember {
-        mutableStateOf(preferences.getString("audio_profile", "BALANCED")?.takeIf {
-            it in setOf("LOW_LATENCY", "BALANCED", "STABLE")
-        } ?: "BALANCED")
+        mutableStateOf(preferences.getString("audio_profile", "AUTO")?.takeIf {
+            it in setOf("AUTO", "LOW_LATENCY", "BALANCED", "STABLE")
+        } ?: "AUTO")
     }
     var metronomeEnabled by remember { mutableStateOf(preferences.getBoolean("metronome_enabled", false)) }
     var metronomeLevel by remember { mutableFloatStateOf(preferences.getFloat("metronome_level", 0.25f).coerceIn(0f, 1f)) }
@@ -714,7 +715,11 @@ private fun StudioWaveApp() {
                     parallelPreparation = parallelPreparation,
                     metronomeEnabled = metronomeEnabled,
                     metronomeLevel = metronomeLevel,
-                    queueTargetFrames = when (audioProfile) { "LOW_LATENCY" -> 512; "STABLE" -> 2048; else -> 1024 }
+                    queueTargetFrames = AudioPerformanceProfile.queueTargetFrames(context, audioProfile).also {
+                        arrangementPlayback.setDecoderParallelism(
+                            AudioPerformanceProfile.decoderParallelism(context, audioProfile, parallelPreparation)
+                        )
+                    }
                 )
                 if (session == playbackSession) {
                     playing = true
@@ -971,7 +976,7 @@ private fun StudioWaveApp() {
                 val cpuLabel = runtime.cpuPercent?.let { "%.1f%%".format(java.util.Locale.US, it) } ?: "sampling…"
                 val fpsLabel = runtime.uiFps?.let { "%.1f fps".format(java.util.Locale.US, it) } ?: "sampling…"
                 val frameLabel = runtime.uiFrameIntervalMs?.let { "%.2f ms".format(java.util.Locale.US, it) } ?: "sampling…"
-                val queueTarget = when (audioProfile) { "LOW_LATENCY" -> 512; "STABLE" -> 2048; else -> 1024 }
+                val queueTarget = AudioPerformanceProfile.queueTargetFrames(context, audioProfile)
                 val audioManager = context.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
                 val deviceSampleRate = audioManager?.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE) ?: "unknown"
                 val deviceBurstFrames = audioManager?.getProperty(android.media.AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER) ?: "unknown"
@@ -1113,12 +1118,13 @@ private fun StudioWaveApp() {
                     highContrast = highContrast, onHighContrastChange = { highContrast = it },
                     gridOpacity = gridOpacity, onGridOpacityChange = { gridOpacity = it },
                     uiScale = uiScale, onUiScaleChange = { uiScale = it.coerceIn(0.6f, 1.2f) },
-                    audioStatus = "Native Oboe/AAudio output path · stereo PCM16 at ${ArrangementPlaybackEngine.OUTPUT_SAMPLE_RATE} Hz · 256-frame render blocks. Actual device stream properties follow Android audio policy.",
+                    audioStatus = AudioPerformanceProfile.describeDevice(context, audioProfile) +
+                        " · Native AAudio stereo PCM16 · 256-frame render blocks; Android audio policy may override requested stream properties.",
                     audioProfile = audioProfile,
                     onAudioProfileChange = { value ->
                         audioProfile = value
                         preferences.edit().putString("audio_profile", value).apply()
-                        StudioWaveDiagnostics.log("INFO", "AUDIO_SETTINGS", "Output profile changed to $value")
+                        StudioWaveDiagnostics.log("INFO", "AUDIO_SETTINGS", "Output profile changed to $value; effective queue=${AudioPerformanceProfile.queueTargetFrames(context, value)} frames; decoder parallelism=${AudioPerformanceProfile.decoderParallelism(context, value, parallelPreparation)}")
                     },
                     metronomeEnabled = metronomeEnabled,
                     onMetronomeEnabledChange = { value ->
