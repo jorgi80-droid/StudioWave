@@ -87,9 +87,14 @@ aaudio_data_callback_result_t dataCallback(
 
     state->readFrame.store(read + fromQueue, std::memory_order_release);
     state->playedFrames.fetch_add(fromQueue, std::memory_order_relaxed);
-    state->outputFrames.fetch_add(static_cast<uint64_t>(numFrames), std::memory_order_relaxed);
-    if (fromQueue < static_cast<uint64_t>(numFrames) &&
-        state->hasReceivedPcm.load(std::memory_order_acquire)) {
+    // The device stream is opened before the render worker can produce its first block.
+    // Do not advance musical time during that startup silence; after the first PCM block,
+    // count every device frame (including genuine underrun silence) for stable playhead time.
+    const bool playbackHasStarted = state->hasReceivedPcm.load(std::memory_order_acquire);
+    if (playbackHasStarted) {
+        state->outputFrames.fetch_add(static_cast<uint64_t>(numFrames), std::memory_order_relaxed);
+    }
+    if (fromQueue < static_cast<uint64_t>(numFrames) && playbackHasStarted) {
         state->underruns.fetch_add(1, std::memory_order_relaxed);
     }
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
