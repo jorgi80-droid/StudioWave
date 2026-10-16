@@ -675,8 +675,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             }
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
             val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
-            if (cachedInstrument == null && allowUnpreparedAudio) {
+            if (allowUnpreparedAudio &&
+                (cachedInstrument == null || (!cachedInstrument.complete && cachedInstrument.frames < frameCount))) {
                 pendingAudioSources += SourceRequest(uriText, duration, frameCount, cacheKey)
+                // Do not clamp a sampler voice to the last currently decoded frame. Use the
+                // built-in synth until the full sample window is ready.
                 return@forEach
             }
             val asset = cachedInstrument ?: try {
