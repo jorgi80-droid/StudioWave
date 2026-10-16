@@ -495,7 +495,7 @@ private fun StudioWaveApp() {
     }
     var metronomeEnabled by remember { mutableStateOf(preferences.getBoolean("metronome_enabled", false)) }
     var metronomeLevel by remember { mutableFloatStateOf(preferences.getFloat("metronome_level", 0.25f).coerceIn(0f, 1f)) }
-    var parallelPreparation by remember { mutableStateOf(preferences.getBoolean("parallel_preparation", false)) }
+    var parallelPreparation by remember { mutableStateOf(preferences.getBoolean("parallel_preparation", true)) }
     var diagnosticLogLines by remember { mutableStateOf(StudioWaveDiagnostics.snapshot()) }
     var audioDiagnosticsLines by remember { mutableStateOf(listOf("ENGINE STATUS::Collecting runtime diagnostics…")) }
     var themeName by remember {

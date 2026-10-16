@@ -280,7 +280,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         onError: (String) -> Unit = {},
         startAtTick: Long = 0L,
         onProgress: (Long) -> Unit = {},
-        parallelPreparation: Boolean = false,
+        parallelPreparation: Boolean = true,
         metronomeEnabled: Boolean = false,
         metronomeLevel: Float = 0.25f,
         queueTargetFrames: Int = 1024
