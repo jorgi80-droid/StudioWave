@@ -335,9 +335,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         fun sampleAt(index: Int): Short {
             if (index < 0 || index.toLong() >= frames.toLong() * 2L) return 0
             val heap = pcmStereo
-            if (heap != null) return heap.getOrNull(index) ?: 0
-            val mapped = mappedPcm ?: return 0
-            return runCatching { mapped.getShort(index * 2) }.getOrDefault(0)
+            if (heap != null) return if (index in heap.indices) heap[index] else 0.toShort()
+            val mapped = mappedPcm ?: return 0.toShort()
+            return mapped.getShort(index * 2)
         }
     }
 
@@ -481,8 +481,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             .count()
         android.util.Log.i(
             "StudioWaveAudio",
-            "Playback ready in ${preparationElapsedMs}ms; tracks=${project.tracks.size}, " +
-                "audioSources=${uniqueAudioSources}, cachedAssets=${synchronized(audioAssetCache) { audioAssetCache.size() }}"
+            "Playback plan published in ${preparationElapsedMs}ms; tracks=${project.tracks.size}, " +
+                "audioSources=${uniqueAudioSources}, pendingSources=${plan.pendingAudioSources.size}, " +
+                "cachedAssets=${synchronized(audioAssetCache) { audioAssetCache.size() }}"
         )
         check(!closed.get()) { "Playback engine is closed" }
         check(generation.get() == token) { "Playback start was cancelled" }
