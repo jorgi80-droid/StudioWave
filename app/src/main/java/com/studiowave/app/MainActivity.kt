@@ -6237,10 +6237,15 @@ private fun AudioClipWaveform(
     val context = LocalContext.current
     var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
     var sourceDurationSeconds by remember(sourceUri) { mutableStateOf<Double?>(null) }
+    var waveformLoading by remember(sourceUri) { mutableStateOf(false) }
     LaunchedEffect(sourceUri) {
         peaks = emptyList()
         sourceDurationSeconds = null
-        if (sourceUri.isNullOrBlank()) return@LaunchedEffect
+        waveformLoading = !sourceUri.isNullOrBlank()
+        if (sourceUri.isNullOrBlank()) {
+            waveformLoading = false
+            return@LaunchedEffect
+        }
         try {
             val loaded = withContext(Dispatchers.IO) {
                 val decodeJob = currentCoroutineContext()[Job]
@@ -6256,11 +6261,17 @@ private fun AudioClipWaveform(
             }
             sourceDurationSeconds = loaded.first
             peaks = loaded.second
+            if (loaded.second.isEmpty()) {
+                StudioWaveDiagnostics.log("WARN", "WAVEFORM", "Decoder returned no peaks for audio source: ${Uri.parse(sourceUri).lastPathSegment ?: "audio"}")
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (failure: Exception) {
             peaks = emptyList()
             sourceDurationSeconds = null
+            StudioWaveDiagnostics.log("ERROR", "WAVEFORM", "Arrangement waveform decode failed: ${failure.javaClass.simpleName}: ${failure.message}")
+        } finally {
+            waveformLoading = false
         }
     }
     Canvas(Modifier.fillMaxSize()) {
@@ -6268,6 +6279,10 @@ private fun AudioClipWaveform(
         val mid = size.height / 2f
         if (peaks.isEmpty()) {
             drawLine(accentColor.copy(alpha = 0.3f), Offset(0f, mid), Offset(size.width, mid), 1f)
+            val markerColor = if (waveformLoading) accentColor else Color(0xFFFF7655)
+            val markerWidth = (size.width * 0.025f).coerceIn(4f, 18f)
+            drawRoundRect(markerColor.copy(alpha = 0.85f), Offset(size.width * 0.04f, mid - size.height * 0.24f),
+                Size(markerWidth, size.height * 0.48f), androidx.compose.ui.geometry.CornerRadius(1f))
         } else {
             val durationSeconds = sourceDurationSeconds
             val range = durationSeconds?.let {
