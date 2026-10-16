@@ -212,3 +212,9 @@
 - Autosave restore/write now uses the bounded `.sdaw` codec, applying the same 16 MiB limit and schema validation to private autosaves as portable project files.
 - Added regression coverage for negative, in-range, and over-limit transport ticks.
 - Validation gate: run Android CI on this exact commit. Source changes do not replace physical-device checks for seek while playing, live edits that shorten an arrangement, and cold-launch save/reopen.
+
+
+## P1 batch — live playback WAV capture groundwork (2026-10-16)
+- Added bounded asynchronous PCM-to-WAV writer utility and regression tests for the RIFF/PCM header, stereo format, sample rate, and size bounds.
+- The writer avoids file/document I/O on the playback producer by using a bounded queue and writes a finalized WAV header after capture ends.
+- This utility is not yet wired to a user-facing transport action; do not describe WAV export as available until UI/engine integration and CI verification land.
