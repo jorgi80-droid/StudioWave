@@ -5285,7 +5285,7 @@ private fun DeviceDock(
 @Composable
 private fun DeviceChainSlotMarker(number: Int, palette: StudioWavePalette, label: String = "FX") {
     Column(
-        Modifier.width(22.dp).height(42.dp),
+        Modifier.width(28.dp).height(56.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -5307,7 +5307,7 @@ private fun DeviceModuleCard(
     fillAvailableWidth: Boolean = false
 ) {
     Column(
-        (if (fillAvailableWidth) Modifier.fillMaxWidth() else Modifier.width(320.dp)).height(160.dp)
+        (if (fillAvailableWidth) Modifier.fillMaxWidth() else Modifier.width(300.dp)).height(204.dp)
             .background(palette.panel, RoundedCornerShape(1.dp))
             .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(10.dp),
@@ -5476,14 +5476,14 @@ private fun DirectWaveDevicePanel(
     val compact = !fullHeight
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp.dp
-    val knobSize = if (compact) 48.dp else 62.dp
-    val waveformHeight = if (compact) 45.dp else 76.dp
+    val knobSize = if (compact) 54.dp else 72.dp
+    val waveformHeight = if (compact) 52.dp else 96.dp
     val panelWidth = if (fullHeight) {
-        (screenWidth - 96.dp).coerceIn(480.dp, 860.dp)
+        (screenWidth - 88.dp).coerceIn(480.dp, 1120.dp)
     } else {
-        (screenWidth - 168.dp).coerceIn(400.dp, 610.dp)
+        (screenWidth - 144.dp).coerceIn(400.dp, 780.dp)
     }
-    val panelHeight = if (compact) 287.dp else (configuration.screenHeightDp.dp - 92.dp).coerceIn(300.dp, 410.dp)
+    val panelHeight = if (compact) 287.dp else (configuration.screenHeightDp.dp - 76.dp).coerceIn(320.dp, 560.dp)
     val statusText = when {
         sampleReady && isFactorySample -> "FACTORY SAMPLE · READY"
         sampleReady -> "USER SAMPLE · READY"
@@ -5501,16 +5501,16 @@ private fun DirectWaveDevicePanel(
     ) {
         // Ableton-inspired device shell: narrow title strip, activated state, grouped macro controls.
         Row(
-            Modifier.fillMaxWidth().height(30.dp)
+            Modifier.fillMaxWidth().height(36.dp)
                 .background(palette.panel, RoundedCornerShape(1.dp))
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            Box(Modifier.size(7.dp).background(if (sampleReady) palette.accent else palette.orange, RoundedCornerShape(1.dp)))
+            Box(Modifier.size(9.dp).background(if (sampleReady) palette.accent else palette.orange, RoundedCornerShape(1.dp)))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
-                Text("DIRECTWAVE", color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                Text("SAMPLER  ·  ${trackName.uppercase()}", color = palette.muted, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text("DIRECTWAVE", color = palette.text, fontSize = 11.sp, fontWeight = FontWeight.Black)
+                Text("SAMPLER  ·  ${trackName.uppercase()}", color = palette.muted, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
             Text(statusText, color = if (sampleReady) palette.accent else palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
             DirectWaveStateButton("SAMPLE ▾", showSamples, palette) { showSamples = !showSamples }
@@ -5683,7 +5683,7 @@ private fun TrackEffectDeviceCard(
         label = "deviceEnabledIndicator_" + device.id
     )
     Column(
-        Modifier.width(252.dp).height(264.dp).verticalScroll(rememberScrollState())
+        Modifier.width(292.dp).height(300.dp).verticalScroll(rememberScrollState())
             .background(palette.panel, RoundedCornerShape(1.dp))
             .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(5.dp),
