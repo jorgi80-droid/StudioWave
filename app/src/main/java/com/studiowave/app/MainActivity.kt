@@ -816,17 +816,11 @@ private fun StudioWaveApp() {
                             audioError = "Audio is longer than the current 5-minute source limit. Trim it before importing."
                         }
                         else -> {
-                            // Prepare the source before its clip becomes visible in Arrangement.
-                            // This moves codec work out of the Play action; if transport is already
-                            // running, its audio callback continues while this decode runs on IO.
-                            arrangementPlayback.prepareAudioSource(
-                                uri.toString(),
-                                (durationMs.coerceAtLeast(50L) / 1000.0)
-                                    .coerceIn(0.05, ArrangementPlaybackEngine.MAX_SOURCE_SECONDS.toDouble())
-                            )
-                            // Import may take time while transport keeps running. Merge the new
-                            // clip into the latest project snapshot instead of overwriting edits
-                            // that happened during background decoding.
+                            // Commit the clip immediately after metadata inspection. Do not wait for
+                            // MediaCodec/PCM preparation before showing it in Arrangement: the active
+                            // transport publishes a partial plan and prepares this source on its IO
+                            // workers, then joins it at a render-block boundary.
+                            // Merge with the latest snapshot so edits made during import are retained.
                             currentProject = latestProject
                             audioTrack = currentProject.tracks.firstOrNull { it.id == target.id && it.kind == "audio" }
                             if (audioTrack == null && currentProject.tracks.size >= StudioProject.MAX_TRACKS) {
