@@ -706,13 +706,32 @@ private fun StudioWaveApp() {
             playbackScope.launch {
                 try {
                     val durationMs = withContext(Dispatchers.IO) {
-                        val retriever = MediaMetadataRetriever()
-                        try {
-                            retriever.setDataSource(context, uri)
-                            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                                ?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                        // Prefer container/track metadata. MediaMetadataRetriever may spin up
+                        // expensive extractors on some content providers and delay clip creation.
+                        val extractor = MediaExtractor()
+                        val extractedDurationMs = try {
+                            extractor.setDataSource(context, uri, null)
+                            var durationUs = 0L
+                            for (trackIndex in 0 until extractor.trackCount) {
+                                val format = extractor.getTrackFormat(trackIndex)
+                                if (format.getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true &&
+                                    format.containsKey(MediaFormat.KEY_DURATION)) {
+                                    durationUs = maxOf(durationUs, format.getLong(MediaFormat.KEY_DURATION).coerceAtLeast(0L))
+                                }
+                            }
+                            durationUs / 1000L
                         } finally {
-                            runCatching { retriever.release() }
+                            runCatching { extractor.release() }
+                        }
+                        if (extractedDurationMs > 0L) extractedDurationMs else {
+                            val retriever = MediaMetadataRetriever()
+                            try {
+                                retriever.setDataSource(context, uri)
+                                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                    ?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                            } finally {
+                                runCatching { retriever.release() }
+                            }
                         }
                     }
                     val currentProject = latestProject
@@ -6363,6 +6382,9 @@ private fun AudioClipWaveform(
             return@LaunchedEffect
         }
         try {
+            // Give transport a short head start after import. If the user presses Play,
+            // the playbackBusy key changes and cancels this pending visual-only decode.
+            delay(750L)
             val loaded = withContext(Dispatchers.IO) {
                 val decodeJob = currentCoroutineContext()[Job]
                 val source = Uri.parse(sourceUri)
