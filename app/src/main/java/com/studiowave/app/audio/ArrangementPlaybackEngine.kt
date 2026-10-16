@@ -100,6 +100,23 @@ internal fun measureStereoMeterLevels(samples: FloatArray, sampleCount: Int = sa
     )
 }
 
+/**
+ * Bound PCM preparation to the source window actually referenced by clips.
+ * The engine indexes PCM from source frame zero, so the required duration is the
+ * greatest source end used by any clip, not necessarily the whole media file.
+ */
+internal fun boundedAudioDecodeDurationSeconds(
+    requiredSeconds: Double,
+    sourceDurationSeconds: Double?,
+    maxSeconds: Double
+): Double {
+    val safeMaximum = maxSeconds.takeIf { it.isFinite() && it >= 0.05 } ?: 300.0
+    val required = (if (requiredSeconds.isFinite()) requiredSeconds else safeMaximum)
+        .coerceIn(0.05, safeMaximum)
+    val sourceDuration = sourceDurationSeconds?.takeIf { it.isFinite() && it > 0.0 }
+    return min(required, sourceDuration ?: required).coerceIn(0.05, safeMaximum)
+}
+
 class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     private val appContext = context.applicationContext
     private val running = AtomicBoolean(false)
@@ -369,20 +386,29 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         var estimatedBytes = 0L
         requestedTicksByUri.forEach { (uriString, ticks) ->
             ensureCurrent()
-            // Metadata inspection and the memory-budget check happen before any parallel
-            // decode starts, so concurrent preparation cannot oversubscribe the PCM budget.
+            // Only decode through the furthest source frame referenced by a clip. Decoding
+            // the entire original file made a 2-second clip wait for several minutes of media.
             val requiredSeconds = (ticks.toDouble() * 60.0 / (bpm.toDouble() * ppq))
                 .coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
-            val sourceSeconds = readSourceDurationSeconds(Uri.parse(uriString))
-                ?.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble()) ?: requiredSeconds
-            val requestedFrames = ceil(sourceSeconds * sampleRate).toLong()
+            val requestedFrames = ceil(requiredSeconds * sampleRate).toLong()
                 .coerceIn(1L, sampleRate.toLong() * MAX_SOURCE_SECONDS).toInt()
-            estimatedBytes += requestedFrames.toLong() * 4L
+            val cacheKey = "$uriString|$sampleRate|$requestedFrames"
+            // Check the PCM cache before opening a metadata retriever. This removes repeated
+            // content-provider/metadata work on play, pause, seek, and clip edits.
+            val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
+            val sourceSeconds = if (cached != null) {
+                cached.frames.toDouble() / sampleRate.toDouble()
+            } else {
+                val sourceDuration = readSourceDurationSeconds(Uri.parse(uriString))
+                boundedAudioDecodeDurationSeconds(requiredSeconds, sourceDuration, MAX_SOURCE_SECONDS.toDouble())
+            }
+            val allocationBytes = cached?.let { it.pcmStereo.size.toLong() * 2L }
+                ?: ceil(sourceSeconds * sampleRate).toLong().coerceAtLeast(1L) * 4L
+            estimatedBytes += allocationBytes
             require(estimatedBytes <= MAX_TOTAL_PCM_BYTES) {
                 "Arrangement audio cache exceeds the safe memory budget; shorten clips or reduce the number of source files"
             }
-            sourceRequests += SourceRequest(uriString, sourceSeconds, requestedFrames,
-                "$uriString|$sampleRate|$requestedFrames")
+            sourceRequests += SourceRequest(uriString, sourceSeconds, requestedFrames, cacheKey)
         }
 
         suspend fun prepareSource(request: SourceRequest): Pair<String, AudioAsset?> {

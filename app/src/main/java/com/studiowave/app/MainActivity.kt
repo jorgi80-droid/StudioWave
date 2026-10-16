@@ -2402,9 +2402,9 @@ private fun AudioEditorWorkspace(
         try {
             waveform = withContext(Dispatchers.IO) {
                 val decodeJob = currentCoroutineContext()[Job]
-                WaveformPeakCache.get(source, 240) ?: decodeWaveformPeaks(context, Uri.parse(source), 240) {
+                WaveformPeakCache.getOrDecode(context, Uri.parse(source), 240) {
                     decodeJob?.ensureActive()
-                }.also { WaveformPeakCache.put(source, 240, it) }
+                }
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -5761,7 +5761,7 @@ private fun DirectWaveDeviceWaveform(
         if (sampleUri.isNullOrBlank()) return@LaunchedEffect
         try {
             peaks = withContext(Dispatchers.IO) {
-                decodeWaveformPeaks(context, Uri.parse(sampleUri), if (compact) 80 else 180)
+                WaveformPeakCache.getOrDecode(context, Uri.parse(sampleUri), if (compact) 80 else 180)
             }
         } catch (_: Exception) { peaks = emptyList() }
     }
@@ -6095,13 +6095,51 @@ private fun decodeWaveformPeaks(
 }
 
 private object WaveformPeakCache {
+    // One canonical source envelope is shared by Arrangement, Sample Editor and DirectWave.
+    // The old per-resolution cache let all three screens decode the same URI simultaneously.
+    private const val CANONICAL_PEAK_COUNT = 240
     private val cache = android.util.LruCache<String, List<Float>>(12)
     private val durationCache = android.util.LruCache<String, Double>(12)
-    private fun key(uri: String, peakCount: Int) = "$uri#$peakCount"
-    @Synchronized fun get(uri: String, peakCount: Int): List<Float>? = cache.get(key(uri, peakCount))
-    @Synchronized fun put(uri: String, peakCount: Int, peaks: List<Float>) {
-        cache.put(key(uri, peakCount), peaks)
+    private val inFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Mutex>()
+
+    suspend fun getOrDecode(
+        context: android.content.Context,
+        uri: Uri,
+        requestedPeakCount: Int,
+        ensureActive: () -> Unit = {}
+    ): List<Float> {
+        require(requestedPeakCount in 1..2048) { "Invalid waveform resolution" }
+        val key = uri.toString()
+        val mutex = inFlight.computeIfAbsent(key) { kotlinx.coroutines.sync.Mutex() }
+        mutex.lock()
+        try {
+            val canonical = synchronized(this) { cache.get(key) }
+                ?: decodeWaveformPeaks(context, uri, CANONICAL_PEAK_COUNT, ensureActive).also { decoded ->
+                    synchronized(this) { cache.put(key, decoded) }
+                }
+            if (requestedPeakCount == canonical.size) return canonical
+            if (requestedPeakCount >= canonical.size) {
+                return List(requestedPeakCount) { index ->
+                    canonical[((index.toLong() * canonical.size) / requestedPeakCount)
+                        .toInt().coerceIn(0, canonical.lastIndex)]
+                }
+            }
+            // Preserve transients while reducing resolution: each output bin keeps the
+            // maximum peak from the canonical bins that fall inside it.
+            return List(requestedPeakCount) { index ->
+                val first = (index.toLong() * canonical.size / requestedPeakCount).toInt()
+                val end = (((index + 1L) * canonical.size + requestedPeakCount - 1L) /
+                    requestedPeakCount).toInt().coerceIn(first + 1, canonical.size)
+                var peak = 0f
+                for (sourceIndex in first until end) peak = maxOf(peak, canonical[sourceIndex])
+                peak
+            }
+        } finally {
+            mutex.unlock()
+            if (!mutex.isLocked) inFlight.remove(key, mutex)
+        }
     }
+
     @Synchronized fun getDurationSeconds(uri: String): Double? = durationCache.get(uri)
     @Synchronized fun putDurationSeconds(uri: String, durationSeconds: Double) {
         if (durationSeconds.isFinite() && durationSeconds > 0.0) {
@@ -6255,10 +6293,9 @@ private fun AudioClipWaveform(
                     ?: readAudioSourceDurationSeconds(context, Uri.parse(sourceUri))?.also {
                         WaveformPeakCache.putDurationSeconds(sourceUri, it)
                     }
-                val cachedPeaks = WaveformPeakCache.get(sourceUri, 240)
-                    ?: decodeWaveformPeaks(context, Uri.parse(sourceUri), 240) {
-                        decodeJob?.ensureActive()
-                    }.also { WaveformPeakCache.put(sourceUri, 240, it) }
+                val cachedPeaks = WaveformPeakCache.getOrDecode(context, Uri.parse(sourceUri), 240) {
+                    decodeJob?.ensureActive()
+                }
                 duration to cachedPeaks
             }
             sourceDurationSeconds = loaded.first

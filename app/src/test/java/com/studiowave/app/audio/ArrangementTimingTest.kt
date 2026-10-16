@@ -7,6 +7,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ArrangementTimingTest {
+    @Test fun playbackDecodeWindowStopsAtLastClipSourceFrame() {
+        assertEquals(2.0, com.studiowave.app.audio.boundedAudioDecodeDurationSeconds(2.0, 300.0, 300.0), 0.0001)
+        assertEquals(4.0, com.studiowave.app.audio.boundedAudioDecodeDurationSeconds(12.0, 4.0, 300.0), 0.0001)
+        assertEquals(300.0, com.studiowave.app.audio.boundedAudioDecodeDurationSeconds(Double.NaN, null, 300.0), 0.0001)
+    }
+
     @Test fun oneQuarterNoteAt120BpmIsHalfSecond() {
         assertEquals(22_050L, ArrangementTiming.ticksToFrames(960L, 120, 960))
     }
