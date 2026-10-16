@@ -185,3 +185,13 @@
 - Validation gate: run Android CI for the latest branch head (debug APK build, unit tests, APK artifact upload) and test Sample Editor trim response, waveform reveal, Arrangement pinch/scroll/resize and Mixer meter responsiveness on a physical landscape Android device. PR #15 remains Draft until these checks pass.
 
 - Follow-up [8fc7446e](https://github.com/jorgi80-droid/StudioWave/commit/8fc7446ef3a6483f5d12eee8d79a38d1bb871156) adds unit coverage for choosing the highest supported 90–120 Hz display mode and safely falling back when only 60 Hz or out-of-range modes are available.
+
+
+## Release-candidate validation gate — 2026-10-16
+- Validation baseline inspected: branch `ui/ableton-batch-viewport`, source commit `9028dada14df40dd4dd066ec4c4b07f771b6e6c3`; PR #15 remains Draft.
+- Confirmed source includes the FL Studio Mobile-inspired in-app tutorial workspace, About StudioWave page with repository/developer GitHub links, device-aware audio profile settings, performance-profile unit tests, native AAudio output, incremental arrangement plan refresh, and background audio source preparation.
+- Audio engine audit: incremental plan updates are coalesced and atomically published while the active AAudio stream remains open; new audio sources can still require asynchronous decoding before their audio becomes audible. Immediate audible playback for 50 newly added tracks has NOT been demonstrated and must not be claimed from source inspection alone.
+- Validation must run on this exact source line: Android debug APK build, all JVM unit tests, and artifact upload. Any compile/test failures must be fixed before distributing an APK.
+- Manual device validation still required: cold launch; create/save/reopen .sdaw; import WAV and verify waveform; play/pause/stop/seek; add one track while playing; batch-add 50 audio tracks during playback; verify existing audio continues without transport reset; verify newly added tracks join when prepared; check mute/solo/fader/pan, MIDI/drum playback, device bypass, tutorial navigation, About links, and each audio profile.
+- Performance acceptance: report measured first-audio latency, project load duration, peak memory, underrun count and render-block overruns for a reproducible 50-track / 40–60-device / five-minute project. Do not treat JVM unit tests as proof of physical audio performance.
+- Integration gate: keep PR #15 Draft and do not merge until CI passes and physical-device checks are recorded.
