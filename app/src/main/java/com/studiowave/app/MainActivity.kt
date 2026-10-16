@@ -1322,7 +1322,7 @@ private fun StudioWaveApp() {
                             compactTracks = compactTracks,
                             onScratchTrack = { trackId, deltaMs -> arrangementPlayback.scratchTrack(trackId, deltaMs) },
                             playheadTick = playheadTick,
-                            isPlaying = playing,
+                            isPlaying = playing || playbackLoading,
                             onSeekTick = { tick -> seekToTick(tick) })
                     }
                         }
@@ -3411,7 +3411,7 @@ private fun TimelineGrid(
                                     ppq = project.ppq,
                                     sourceOffsetMicros = clip.sourceOffsetMicros,
                                     visibleLengthMicros = clip.sourceLengthMicros,
-                                    playbackBusy = playing || playbackLoading
+                                    playbackBusy = isPlaying
                                 )
                             }
                                 }
