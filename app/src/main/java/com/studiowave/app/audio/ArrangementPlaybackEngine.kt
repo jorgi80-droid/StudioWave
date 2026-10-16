@@ -281,10 +281,16 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 if (!running.get() || closed.get()) continue
                 val token = generation.get()
                 val revision = arrangementUpdateRevision.get()
-                val refreshed = runCatching {
+                val refreshed = try {
                     buildPlan(project, token, parallelPreparation = true, revision = revision,
                         allowUnpreparedAudio = true)
-                }.getOrNull() ?: continue
+                } catch (failure: Exception) {
+                    if (!closed.get() && running.get() && generation.get() == token &&
+                        arrangementUpdateRevision.get() == revision) {
+                        android.util.Log.e("StudioWaveAudio", "Incremental arrangement plan refresh failed", failure)
+                    }
+                    continue
+                }
                 if (!closed.get() && running.get() && generation.get() == token &&
                     arrangementUpdateRevision.get() == revision && activePlanRef === planRef) {
                     planRef.set(refreshed)
@@ -412,6 +418,13 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         check(!closed.get()) { "Playback engine is closed" }
         val token = generation.incrementAndGet()
+        synchronized(pendingAudioJobsLock) {
+            pendingAudioJobs.values.forEach { it.cancel() }
+            pendingAudioJobs.clear()
+            pendingAudioQueue.clear()
+        }
+        activePlanRef = null
+        latestProjectForPlayback = project
         failedAudioSources.clear()
         scratchOffsetsMs.clear()
         lastRenderBlockNanos.set(0L)
@@ -797,7 +810,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             // Replace queued work with the latest plan and put recently added tracks first.
             // Already-running decoders are allowed to finish and populate the shared cache.
             pendingAudioQueue.clear()
-            requests.asReversed().forEach { request ->
+            val audioRequests = requests.filterNot { it.cacheKey.startsWith("directwave:") }.asReversed()
+            val samplerRequests = requests.filter { it.cacheKey.startsWith("directwave:") }.asReversed()
+            (audioRequests + samplerRequests).forEach { request ->
                 if (failedAudioSources.contains(request.cacheKey)) return@forEach
                 if (pendingAudioJobs[request.cacheKey]?.isActive == true) return@forEach
                 val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
