@@ -218,3 +218,11 @@
 - Added bounded asynchronous PCM-to-WAV writer utility and regression tests for the RIFF/PCM header, stereo format, sample rate, and size bounds.
 - The writer avoids file/document I/O on the playback producer by using a bounded queue and writes a finalized WAV header after capture ends.
 - This utility is not yet wired to a user-facing transport action; do not describe WAV export as available until UI/engine integration and CI verification land.
+
+
+## P1 live WAV bounce implementation — 2026-10-16
+- Added a bounded asynchronous PCM capture writer that writes a valid stereo 16-bit PCM RIFF/WAV file and finalizes its header after playback stops or completes.
+- Wired a WAV action into the compact transport. It opens Android's Create Document picker, captures the actual post-master-limiter PCM during arrangement playback, and finalizes the WAV asynchronously so the Stop action does not wait for document I/O.
+- Added WAV-header regression tests for RIFF length, stereo PCM format, sample rate, and file-size validation.
+- The WAV capture queue is bounded; an overflow is logged and drops a block rather than blocking the realtime producer. Physical device checks must confirm that no overflow occurs on target phones.
+- Latest implementation commit: `1b8f2ffb2fd18a0e31e44b6caa5625d541ed0d9c`; run CI against the final head before treating this batch as validated.

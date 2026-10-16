@@ -939,6 +939,7 @@ private fun StudioWaveApp() {
                         context.contentResolver.openOutputStream(uri, "wt")
                             ?: error("Tidak dapat membuka tujuan ekspor WAV")
                     }
+                    stopPlayback()
                     arrangementPlayback.beginWavCapture(destination)
                     startPlaybackAt(playheadTick)
                     Toast.makeText(context, "Bounce WAV dimulai — tekan Stop untuk menyelesaikan file", Toast.LENGTH_LONG).show()
