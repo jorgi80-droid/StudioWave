@@ -1,6 +1,6 @@
 package com.studiowave.app.audio
 import java.util.concurrent.atomic.AtomicBoolean
-/** Native stereo PCM output through Oboe/AAudio. Realtime callback never enters Kotlin or waits on locks. */
+/** Native stereo PCM output through Android AAudio. The realtime callback never enters Kotlin or waits on locks. */
 class NativeAudioEngine:AutoCloseable {
  private val running=AtomicBoolean(false);private val closed=AtomicBoolean(false)
  @Volatile private var producerBackpressureFrames=512
