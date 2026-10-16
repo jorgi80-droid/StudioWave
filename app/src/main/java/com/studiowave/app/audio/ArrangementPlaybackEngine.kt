@@ -310,7 +310,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val totalFrames: Long,
         val audio: List<AudioEvent>,
         val notes: List<NoteEvent>,
-        val drums: List<DrumEvent>
+        val drums: List<DrumEvent>,
+        val trackBuffers: Map<String, FloatArray>,
+        val deviceDsp: Map<String, TrackDeviceDsp>,
+        val deviceChainSignatures: Map<String, List<Pair<String, String>>>
     )
 
     private data class TrackMix(
@@ -644,6 +647,29 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 }
             }
         }
+        // Allocate every per-track bus and prepare new DSP state on this background
+        // preparation thread. The render worker must not allocate buffers or delay lines.
+        val trackBuffers = tracks.associate { it.id to FloatArray(BLOCK_FRAMES * 2) }
+        val deviceChainSignatures = tracks.associate { track ->
+            track.id to track.devices
+                .filter { it.enabled && it.type in EFFECT_DEVICE_TYPES }
+                .map { it.id to it.type }
+        }
+        val previousPlan = activePlanRef?.get()
+        val deviceDsp = HashMap<String, TrackDeviceDsp>()
+        tracks.forEach { track ->
+            val signature = deviceChainSignatures[track.id].orEmpty()
+            if (signature.isNotEmpty()) {
+                val previousDsp = previousPlan?.deviceDsp?.get(track.id)
+                val previousSignature = previousPlan?.deviceChainSignatures?.get(track.id)
+                val dsp = if (previousDsp != null && previousSignature == signature) {
+                    previousDsp
+                } else {
+                    TrackDeviceDsp(sampleRate).also { it.prepare(track.devices) }
+                }
+                deviceDsp[track.id] = dsp
+            }
+        }
         return Plan(
             sampleRate,
             bpm,
@@ -653,7 +679,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             totalFrames,
             audioEvents.sortedBy { it.startFrame },
             notes.sortedBy { it.startFrame },
-            drums.sortedBy { it.startFrame }
+            drums.sortedBy { it.startFrame },
+            trackBuffers,
+            deviceDsp,
+            deviceChainSignatures
         )
     }
 
@@ -875,9 +904,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     ) {
         val mix = FloatArray(BLOCK_FRAMES * 2)
         val pcm = ShortArray(BLOCK_FRAMES * 2)
-        val perTrackMix = HashMap<String, FloatArray>()
-        val deviceDsp = HashMap<String, TrackDeviceDsp>()
         var plan = planRef.get()
+        var perTrackMix = plan.trackBuffers
+        var deviceDsp = plan.deviceDsp
         val sampleRate = plan.sampleRate
         var scheduledAudio = plan.audio
         var scheduledNotes = plan.notes
@@ -925,6 +954,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 val latestPlan = planRef.get()
                 if (latestPlan !== plan) {
                     plan = latestPlan
+                    perTrackMix = plan.trackBuffers
+                    deviceDsp = plan.deviceDsp
                     scheduledAudio = plan.audio
                     scheduledNotes = plan.notes
                     scheduledDrums = plan.drums
@@ -978,7 +1009,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
-                    val channelBuffer = perTrackMix.getOrPut(event.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val channelBuffer = perTrackMix[event.track.id] ?: continue
                     // Read the atomic scrub offset once per audio event/block, not per sample.
                     val scratchMs = scratchOffsetsMs[event.track.id]?.get() ?: 0L
                     val scratchFrames = scratchMs * event.asset.sampleRate / 1_000L
@@ -1020,7 +1051,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
-                    val channelBuffer = perTrackMix.getOrPut(note.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val channelBuffer = perTrackMix[note.track.id] ?: continue
                     val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
                     val instrumentRate = instrument?.let {
                         2.0.pow(((note.pitch - 60 + it.pitchSemitones).toDouble() + it.fineTuneCents / 100.0) / 12.0)
@@ -1082,7 +1113,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val pan = channelMix.pan
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
-                    val channelBuffer = perTrackMix.getOrPut(drum.track.id) { FloatArray(BLOCK_FRAMES * 2) }
+                    val channelBuffer = perTrackMix[drum.track.id] ?: continue
                     for (absolute in from until to) {
                         val t = (absolute - drum.startFrame).toDouble() / sampleRate
                         val frequency = 48.0 + 110.0 * exp(-t * 22.0)
@@ -1121,8 +1152,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                 perTrackMix.forEach { (trackId, channel) ->
                     val trackState = mixState.tracks[trackId] ?: return@forEach
                     if (trackState.devices.any { it.enabled && it.type in EFFECT_DEVICE_TYPES }) {
-                        deviceDsp.getOrPut(trackId) { TrackDeviceDsp(sampleRate) }
-                            .process(channel, mix, sampleCount, liveMasterGain, trackState.devices)
+                        deviceDsp[trackId]?.process(channel, mix, sampleCount, liveMasterGain, trackState.devices)
                     }
                 }
                 // Per-channel meters are calculated from each track's summed pre-master stereo bus.
