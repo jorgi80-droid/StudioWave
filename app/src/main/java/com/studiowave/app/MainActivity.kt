@@ -1252,7 +1252,28 @@ private fun StudioWaveApp() {
                                 selectedWorkspace = workspace
                             },
                             onPlaybackRestart = { updatedProject ->
-                                if (playing || playbackLoading) startPlaybackAt(playheadTick, updatedProject)
+                                if (playing && !playbackLoading) {
+                                    // FL Studio Mobile-style live arrangement editing: keep the
+                                    // current transport/output stream running while the updated
+                                    // clip schedule and any newly imported PCM are prepared.
+                                    playbackScope.launch {
+                                        runCatching {
+                                            arrangementPlayback.updateArrangement(updatedProject)
+                                        }.onFailure { failure ->
+                                            if (playing) {
+                                                audioError = failure.message ?: "Arrangement update failed"
+                                                StudioWaveDiagnostics.log(
+                                                    "ERROR", "AUDIO_HOT_UPDATE",
+                                                    audioError ?: "Arrangement update failed"
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else if (playbackLoading) {
+                                    // The initial plan has not started yet; replace that pending
+                                    // snapshot rather than letting an older project start playing.
+                                    startPlaybackAt(playheadTick, updatedProject)
+                                }
                             },
                             showDevices = false,
                             onToggleDevices = {},
