@@ -1424,10 +1424,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val DRUM_DURATION_FRAMES = (OUTPUT_SAMPLE_RATE * 0.20).toLong()
         const val MAX_SOURCE_SECONDS = 300
         const val MAX_ARRANGEMENT_BARS = 1800
-        // PCM is file-backed and memory-mapped: keep a bounded on-disk cache instead of
-        // requiring every track's decoded audio to fit in the Java heap.
-        const val MAX_TOTAL_PCM_BYTES = 2L * 1024L * 1024L * 1024L
-        const val MAX_ASSET_CACHE_KIB = 2 * 1024 * 1024
+        // PCM is file-backed and memory-mapped: bound decoded source storage separately
+        // from the Java heap so large multitrack arrangements do not fail at 64 MiB.
+        const val MAX_TOTAL_PCM_BYTES = 8L * 1024L * 1024L * 1024L
+        const val MAX_ASSET_CACHE_KIB = 8 * 1024 * 1024
         const val MAX_PARALLEL_DECODERS = 2
         const val MAX_CACHED_SOURCE_DURATIONS = 256
     }
