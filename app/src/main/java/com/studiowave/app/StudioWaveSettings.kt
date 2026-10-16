@@ -35,10 +35,12 @@ internal val LocalStudioWavePalette = compositionLocalOf {
     // Ableton Live-inspired graphite workstation defaults. Keep selection/transport accents
     // vivid while the room, device panels, controls and arrangement canvas remain distinct.
     StudioWavePalette(
-        Color(0xFF212121), Color(0xFF1F1F1F), Color(0xFF282828), Color(0xFF181818),
-        Color(0xFF2D2D2D), Color(0xFFB2B2B2), Color(0xFF707070), Color(0xFFFF7600),
-        Color(0xFFFF7600), Color(0xFF2F2F2F), Color(0xFF141414), Color(0xFF48BD83),
-        Color(0xFFF3C928), Color(0xFFEF4444), Color(0xFF48BD83), Color(0xFFF3C928), Color(0xFFEF4444)
+        // Ableton Live 12 light device/arrangement palette: neutral silver panels,
+        // near-black typography, cyan selection and Live's warm yellow control accent.
+        Color(0xFFB7B8BA), Color(0xFFA6A7A9), Color(0xFFC8C9CB), Color(0xFFBFC0C2),
+        Color(0xFFD0D1D3), Color(0xFF171819), Color(0xFF505256), Color(0xFF00D9E8),
+        Color(0xFFFFB900), Color(0xFF9B9DA1), Color(0xFF77797D), Color(0xFF00BFA5),
+        Color(0xFFFFB900), Color(0xFFEA5368), Color(0xFF00D9E8), Color(0xFFFFB900), Color(0xFFEA5368)
     )
 }
 
@@ -47,9 +49,11 @@ internal val LocalStudioWaveGridOpacity = compositionLocalOf { 0.72f }
 internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolean): StudioWavePalette {
     val base = when (theme) {
         // Compact, neutral Live-inspired surface tiers: room > panel > control > canvas.
-        "Live Light" -> StudioWavePalette(Color(0xFFBFC0C2), Color(0xFFEEEEEE), Color(0xFFDADBDD), Color(0xFFCFD0D2),
-            Color(0xFFC5C6C8), Color(0xFF202124), Color(0xFF55575A), Color(0xFFB85A00), Color(0xFFB85A00),
-            Color(0xFFB3B4B6), Color(0xFF8C8D90), Color(0xFF207C55), Color(0xFF8C6A27), Color(0xFFB11E37), Color(0xFF188D78), Color(0xFFB68B32), Color(0xFFBD334A))
+        "Live Light" -> StudioWavePalette(
+            Color(0xFFB7B8BA), Color(0xFFA6A7A9), Color(0xFFC8C9CB), Color(0xFFBFC0C2),
+            Color(0xFFD0D1D3), Color(0xFF171819), Color(0xFF505256), Color(0xFF00D9E8), Color(0xFFFFB900),
+            Color(0xFF9B9DA1), Color(0xFF77797D), Color(0xFF00BFA5), Color(0xFFFFB900), Color(0xFFEA5368),
+            Color(0xFF00D9E8), Color(0xFFFFB900), Color(0xFFEA5368))
         "Live Mid" -> StudioWavePalette(
             Color(0xFF212121), Color(0xFF1F1F1F), Color(0xFF282828), Color(0xFF181818),
             Color(0xFF2D2D2D), Color(0xFFB2B2B2), Color(0xFF707070), Color(0xFFFF7600),
