@@ -320,7 +320,30 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             publishTrackMeter(track.id, 0f, 0f, 0f, 0f)
         }
         updateMix(project)
-        val plan = withContext(Dispatchers.IO) { buildPlan(project, token, parallelPreparation) }
+        val preparationStartedNanos = System.nanoTime()
+        val plan = try {
+            withContext(Dispatchers.IO) { buildPlan(project, token, parallelPreparation) }
+        } catch (failure: Exception) {
+            val elapsedMs = (System.nanoTime() - preparationStartedNanos).coerceAtLeast(0L) / 1_000_000L
+            android.util.Log.e(
+                "StudioWaveAudio",
+                "Playback preparation failed after ${elapsedMs}ms; tracks=${project.tracks.size}",
+                failure
+            )
+            throw failure
+        }
+        val preparationElapsedMs = (System.nanoTime() - preparationStartedNanos).coerceAtLeast(0L) / 1_000_000L
+        val uniqueAudioSources = project.tracks.asSequence()
+            .filter { it.kind == "audio" }
+            .flatMap { it.clips.asSequence() }
+            .mapNotNull { it.sourceUri?.takeIf(String::isNotBlank) }
+            .distinct()
+            .count()
+        android.util.Log.i(
+            "StudioWaveAudio",
+            "Playback ready in ${preparationElapsedMs}ms; tracks=${project.tracks.size}, " +
+                "audioSources=${uniqueAudioSources}, cachedAssets=${synchronized(audioAssetCache) { audioAssetCache.size() }}"
+        )
         check(!closed.get()) { "Playback engine is closed" }
         check(generation.get() == token) { "Playback start was cancelled" }
         val startFrame = ArrangementTiming.ticksToFrames(
