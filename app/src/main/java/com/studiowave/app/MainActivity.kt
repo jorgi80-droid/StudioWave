@@ -821,6 +821,7 @@ private fun StudioWaveApp() {
     ) { uri ->
         if (uri != null) {
             playbackScope.launch {
+                val loadStartedAt = android.os.SystemClock.elapsedRealtime()
                 try {
                     val imported = withContext(Dispatchers.IO) {
                         val input = context.contentResolver.openInputStream(uri)
@@ -842,7 +843,11 @@ private fun StudioWaveApp() {
                     editorClipId = null
                     selectedWorkspace = "ARRANGEMENT"
                     audioError = null
-                    StudioWaveDiagnostics.log("INFO", "PROJECT", "Opened project '${imported.name}' with ${imported.tracks.size} tracks")
+                    val loadElapsedMs = android.os.SystemClock.elapsedRealtime() - loadStartedAt
+                    StudioWaveDiagnostics.log(
+                        "INFO", "PROJECT_LOAD",
+                        "Imported '${imported.name}' in ${loadElapsedMs} ms · ${imported.tracks.size} tracks · ${imported.tracks.sumOf { it.clips.size }} clips · ${imported.tracks.sumOf { it.devices.size }} devices"
+                    )
                     Toast.makeText(context, "Proyek .sdaw berhasil dibuka", Toast.LENGTH_SHORT).show()
                 } catch (cancelled: CancellationException) {
                     throw cancelled
