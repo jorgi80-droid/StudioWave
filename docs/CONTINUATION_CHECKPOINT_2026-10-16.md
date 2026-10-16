@@ -277,3 +277,12 @@ See `docs/ABLETON_HTML_REFERENCE_AUDIT_2026-10-16.md` for the manual-to-source m
 - Added per-clip clipGainDb (−60 to +12 dB), persisted in project JSON with a backward-compatible 0 dB default.
 - Audio Clip View includes a gain slider/readout; the audio engine computes the linear scalar once per clip/block, then applies it to actual decoded PCM before track volume/pan and master processing.
 - Added dB conversion and project persistence regression coverage. This is separate from track fader gain and source trim.
+
+
+## Clip waveform/pattern visibility and top Master gain — 2026-10-16
+
+- Arrangement clip faces no longer spend a full extra line on technical metadata. The clip name stays in the colored title strip; the remaining body shows decoded audio peaks, MIDI-note maps or drum-step patterns. Clip outer padding is reduced from 7 dp to 3 dp. Musical time coordinates, viewport math, snapping, drag/resize mapping and the 1,800-bar cap remain unchanged.
+- Audio waveform decoding is keyed to the clip source URI, not playback state. Previously, the playback guard canceled analysis on Play, explaining why audio clips stayed blank during playback. A bounded 240-peak preview remains on Dispatchers.IO, outside the real-time audio callback.
+- The top Master gain now uses a compact flat rail with cyan level fill, ticks and square thumb instead of the default Material Slider. Tap/drag still calls the same 0–1 gain callback.
+- Mixer channel strips are 136 dp, pan knobs 50 dp and the Master strip 112 dp to fit more landscape channels without changing gain/pan/mute/solo behavior.
+- This is a native Ableton Live-inspired adaptation, not exact pixel parity or proprietary asset reuse. CI for this head and physical Android 16 landscape validation are mandatory before calling the application ready.

@@ -1596,11 +1596,38 @@ private fun TransportBar(
         TransportAction("WAV", heightDp = 25, onClick = onExportWav)
         Box(Modifier.width(1.dp).height(19.dp).background(p.border))
         Text("M", color = p.muted, fontSize = 7.sp, fontWeight = FontWeight.Black)
-        Slider(value = master, onValueChange = onMaster, modifier = Modifier.width(48.dp).height(24.dp),
-            valueRange = 0f..1f, colors = SliderDefaults.colors(
-                thumbColor = p.text, activeTrackColor = p.accent,
-                inactiveTrackColor = p.control, activeTickColor = p.accent
-            ))
+        val latestMasterChange by rememberUpdatedState(onMaster)
+        Canvas(
+            Modifier.width(54.dp).height(24.dp)
+                .pointerInput(Unit) {
+                    fun updateFromX(x: Float) {
+                        latestMasterChange((x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f))
+                    }
+                    detectDragGestures(
+                        onDragStart = { updateFromX(it.x) },
+                        onDrag = { change, _ -> change.consume(); updateFromX(change.position.x) }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { position ->
+                        latestMasterChange((position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f))
+                    })
+                }
+        ) {
+            val left = 4f
+            val right = (size.width - 4f).coerceAtLeast(left + 1f)
+            val centerY = size.height * 0.5f
+            val thumbX = left + (right - left) * master.coerceIn(0f, 1f)
+            drawLine(p.border, Offset(left, centerY), Offset(right, centerY), strokeWidth = 4f)
+            drawLine(p.accent.copy(alpha = 0.62f), Offset(left, centerY), Offset(thumbX, centerY), strokeWidth = 2.2f)
+            for (tick in 0..4) {
+                val x = left + (right - left) * tick / 4f
+                drawLine(p.muted.copy(alpha = 0.72f), Offset(x, centerY - 4.5f), Offset(x, centerY + 4.5f), strokeWidth = 0.8f)
+            }
+            drawRect(p.panel, Offset(thumbX - 3f, centerY - 7f), Size(6f, 14f))
+            drawRect(p.accent, Offset(thumbX - 3f, centerY - 7f), Size(6f, 14f),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.2f))
+        }
         Column(Modifier.width(if (compact) 64.dp else 78.dp), verticalArrangement = Arrangement.Center) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("PK ${peakDbfs.toInt()}", color = p.text, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -3434,7 +3461,7 @@ private fun TimelineGrid(
                                     translationX = if (draggingClip == clip.id) dragDx else 0f
                                     translationY = if (draggingClip == clip.id) dragDy else 0f
                                 }
-                                .padding(top = 7.dp, bottom = 7.dp)
+                                .padding(top = 3.dp, bottom = 3.dp)
                                 .timelineClipWidthPx(clipWidthPx)
                                 .fillMaxHeight()
                                 .background(clipFill, RoundedCornerShape(1.dp))
@@ -3532,32 +3559,25 @@ private fun TimelineGrid(
                         ) {
                             Box(Modifier.fillMaxSize()) {
                                 Column(Modifier.fillMaxSize().padding(4.dp)) {
-                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                                // Flat title strip and hairline border echo Live's clip headers without obscuring the note/wave content.
-                                Row(
-                                    Modifier.fillMaxWidth().height(16.dp)
-                                        .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.90f))
-                                        .padding(horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        clip.name.uppercase(),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = if (accent.luminance() > 0.42f) Color(0xFF111317) else Color(0xFFF6F7F9),
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                    )
-                                }
-                                val clipDetail = arrangementClipSummary(track.kind, clip, project)
+                            Row(
+                                Modifier.fillMaxWidth().height(16.dp)
+                                    .background(accent.copy(alpha = if (selectedClip == clip.id) 1f else 0.90f))
+                                    .padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    clipDetail,
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = clipInk.copy(alpha = 0.96f),
+                                    clip.name.uppercase(),
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    color = if (accent.luminance() > 0.42f) Color(0xFF111317) else Color(0xFFF6F7F9),
                                     maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
+                                if (clip.warpEnabled) {
+                                    Text("WARP", fontSize = 6.sp, fontWeight = FontWeight.Black,
+                                        color = if (accent.luminance() > 0.42f) Color(0xFF111317) else Color(0xFFF6F7F9))
+                                }
                             }
                             if (track.kind == "drum") {
                                 // Step-sequencer thumbnail: 16 equal steps, stronger beat accents, active hits clearly visible.
@@ -3641,7 +3661,6 @@ private fun TimelineGrid(
                                     ppq = project.ppq,
                                     sourceOffsetMicros = clip.sourceOffsetMicros,
                                     visibleLengthMicros = clip.sourceLengthMicros,
-                                    playbackBusy = isPlaying,
                                     modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 1.dp, bottom = 2.dp)
                                 )
                             }
@@ -4684,7 +4703,7 @@ private fun MixerWorkspace(
         Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(1.dp)).border(1.dp, mixerPalette.border.copy(alpha = 0.85f), RoundedCornerShape(1.dp)).padding(4.dp)
     ) {
         // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
-        val channelWidth = 156.dp
+        val channelWidth = 136.dp
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -4873,7 +4892,7 @@ private fun MixerWorkspace(
                             if (it.id == track.id) it.copy(pan = value) else it
                         }))
                     },
-                    modifier = Modifier.size(58.dp)
+                    modifier = Modifier.size(50.dp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -4885,7 +4904,7 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(132.dp).fillMaxHeight()
+            Modifier.width(112.dp).fillMaxHeight()
                 .background(mixerPalette.panel, RoundedCornerShape(1.dp))
                 .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp)).padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -6666,20 +6685,15 @@ private fun AudioClipWaveform(
     ppq: Int = 960,
     sourceOffsetMicros: Long? = null,
     visibleLengthMicros: Long? = null,
-    playbackBusy: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var peaks by remember(sourceUri) { mutableStateOf<List<Float>>(emptyList()) }
     var sourceDurationSeconds by remember(sourceUri) { mutableStateOf<Double?>(null) }
     var waveformLoading by remember(sourceUri) { mutableStateOf(false) }
-    LaunchedEffect(sourceUri, playbackBusy) {
-        // Audio output has priority over visual analysis. Cancel an in-flight full-file
-        // waveform decode as soon as the transport is preparing/playing; retry after stop.
-        if (playbackBusy) {
-            waveformLoading = false
-            return@LaunchedEffect
-        }
+    LaunchedEffect(sourceUri) {
+        // Decode the bounded 240-peak preview on IO. Keying this to transport state used to
+        // cancel the waveform as soon as Play was pressed, leaving clips visually blank.
         sourceDurationSeconds = null
         waveformLoading = !sourceUri.isNullOrBlank()
         if (sourceUri.isNullOrBlank()) {
@@ -6687,9 +6701,8 @@ private fun AudioClipWaveform(
             return@LaunchedEffect
         }
         try {
-            // Give transport a short head start after import. If the user presses Play,
-            // the playbackBusy key changes and cancels this pending visual-only decode.
-            delay(750L)
+            // Allow import to settle; waveform analysis runs on IO, outside the audio callback.
+            delay(350L)
             val loaded = withContext(Dispatchers.IO) {
                 val decodeJob = currentCoroutineContext()[Job]
                 val source = Uri.parse(sourceUri)
