@@ -3878,10 +3878,10 @@ private fun PianoRollWorkspace(
         return names[Math.floorMod(pitch, 12)] + (pitch / 12 - 1)
     }
 
-    Column(Modifier.fillMaxSize().background(pianoPalette.room).border(1.dp, pianoPalette.border, RoundedCornerShape(1.dp)).padding(2.dp)) {
+    Column(Modifier.fillMaxSize().background(pianoPalette.room).border(1.dp, pianoPalette.border, RoundedCornerShape(1.dp)).padding(4.dp)) {
         // Clip identity and editing actions share one shallow strip so the note grid wins height.
         Row(
-            Modifier.fillMaxWidth().height(36.dp).horizontalScroll(rememberScrollState())
+            Modifier.fillMaxWidth().height(42.dp).horizontalScroll(rememberScrollState())
                 .background(pianoPalette.panel, RoundedCornerShape(1.dp))
                 .border(1.dp, pianoPalette.border, RoundedCornerShape(1.dp))
                 .padding(horizontal = 4.dp),
@@ -4489,7 +4489,7 @@ private fun PianoRollWorkspace(
                                     }
                                 }
                                 drawLine(
-                                    if (isC) pianoPalette.border.copy(alpha = pianoGridOpacity)
+                                    if (isC) pianoPalette.border.copy(alpha = 0.88f * pianoGridOpacity)
                                     else pianoPalette.grid.copy(alpha = pianoGridOpacity),
                                     Offset(0f, top), Offset(size.width, top),
                                     if (isC) 1.25f else 0.5f
@@ -4518,8 +4518,8 @@ private fun PianoRollWorkspace(
                                 val beat = stepAbsolute % stepsPerBeat == 0
                                 drawLine(
                                     when {
-                                        bar -> pianoPalette.orange.copy(alpha = 0.42f * pianoGridOpacity)
-                                        beat -> pianoPalette.border.copy(alpha = pianoGridOpacity)
+                                        bar -> pianoPalette.accent.copy(alpha = 0.72f * pianoGridOpacity)
+                                        beat -> pianoPalette.border.copy(alpha = 0.88f * pianoGridOpacity)
                                         else -> pianoPalette.grid.copy(alpha = pianoGridOpacity * 0.72f)
                                     },
                                     Offset(col * localColWidth, 0f), Offset(col * localColWidth, size.height),
@@ -4633,7 +4633,7 @@ private fun MixerWorkspace(
         Modifier.fillMaxSize().background(mixerPalette.room, RoundedCornerShape(1.dp)).border(1.dp, mixerPalette.border.copy(alpha = 0.85f), RoundedCornerShape(1.dp)).padding(4.dp)
     ) {
         // Stable Live-inspired channel strips; larger sessions scroll horizontally rather than shrinking controls.
-        val channelWidth = 142.dp
+        val channelWidth = 184.dp
         Row(
             Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(5.dp)
@@ -4647,7 +4647,7 @@ private fun MixerWorkspace(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
-                    Modifier.fillMaxWidth().height(29.dp)
+                    Modifier.fillMaxWidth().height(34.dp)
                         .background(mixerPalette.canvas, RoundedCornerShape(1.dp))
                         .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp))
                         .padding(horizontal = 5.dp),
@@ -4822,7 +4822,7 @@ private fun MixerWorkspace(
                             if (it.id == track.id) it.copy(pan = value) else it
                         }))
                     },
-                    modifier = Modifier.size(62.dp)
+                    modifier = Modifier.size(76.dp)
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -4834,7 +4834,7 @@ private fun MixerWorkspace(
             }
         }
         Column(
-            Modifier.width(126.dp).fillMaxHeight()
+            Modifier.width(164.dp).fillMaxHeight()
                 .background(mixerPalette.panel, RoundedCornerShape(1.dp))
                 .border(1.dp, mixerPalette.border.copy(alpha = 0.95f), RoundedCornerShape(1.dp)).padding(7.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -4927,7 +4927,7 @@ private fun BrowserWorkspace(
     Column(Modifier.fillMaxSize().background(p.room).border(1.dp, p.border.copy(alpha = 0.8f)).padding(4.dp)) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             Column(
-                Modifier.width(150.dp).fillMaxHeight()
+                Modifier.width(184.dp).fillMaxHeight()
                     .background(p.canvas, RoundedCornerShape(1.dp))
                     .border(1.dp, p.border, RoundedCornerShape(1.dp)).padding(6.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -4946,7 +4946,7 @@ private fun BrowserWorkspace(
                         color = if (active) p.accent.copy(alpha = 0.16f) else Color.Transparent,
                         shape = RoundedCornerShape(1.dp),
                         border = BorderStroke(1.dp, if (active) p.accent.copy(alpha = 0.65f) else Color.Transparent),
-                        modifier = Modifier.fillMaxWidth().height(34.dp).clickable { category = item }
+                        modifier = Modifier.fillMaxWidth().height(38.dp).clickable { category = item }
                     ) {
                         Row(Modifier.padding(horizontal = 7.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -5173,7 +5173,7 @@ private fun DeviceDock(
             Box(Modifier.size(6.dp).background(palette.orange, RoundedCornerShape(1.dp)))
             Text("DEVICE VIEW", color = palette.text, fontSize = 9.sp, fontWeight = FontWeight.Black)
             Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 project.tracks.forEach { track ->
                     val isSelected = selectedTrack?.id == track.id
                     Surface(
@@ -5183,7 +5183,7 @@ private fun DeviceDock(
                         modifier = Modifier.height(23.dp).clickable { onSelectTrack(track.id) }
                     ) {
                         Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             Box(Modifier.size(6.dp).background(Color(track.colorArgb.toInt()), RoundedCornerShape(1.dp)))
                             Text(track.name.uppercase(), color = if (isSelected) palette.accent else palette.text,
                                 fontSize = 7.sp, fontWeight = FontWeight.Bold, maxLines = 1)
@@ -5683,7 +5683,7 @@ private fun TrackEffectDeviceCard(
         label = "deviceEnabledIndicator_" + device.id
     )
     Column(
-        Modifier.width(292.dp).height(300.dp).verticalScroll(rememberScrollState())
+        Modifier.width(344.dp).height(360.dp).verticalScroll(rememberScrollState())
             .background(palette.panel, RoundedCornerShape(1.dp))
             .border(1.dp, palette.border, RoundedCornerShape(1.dp))
             .padding(5.dp),
@@ -5710,13 +5710,13 @@ private fun TrackEffectDeviceCard(
         when (device.type) {
             "EQ" -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    DirectWaveKnob("LOW", p["lowDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["lowDb"] ?: 0f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("LOW", p["lowDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["lowDb"] ?: 0f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("lowDb" to it)))
                     }
-                    DirectWaveKnob("MID", p["midDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["midDb"] ?: 0f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("MID", p["midDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["midDb"] ?: 0f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("midDb" to it)))
                     }
-                    DirectWaveKnob("HIGH", p["highDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["highDb"] ?: 0f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("HIGH", p["highDb"] ?: 0f, -12f..12f, String.format(java.util.Locale.US, "%.1f dB", p["highDb"] ?: 0f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("highDb" to it)))
                     }
                 }
@@ -5810,26 +5810,26 @@ private fun TrackEffectDeviceCard(
             }
             "REVERB" -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    DirectWaveKnob("ROOM", p["room"] ?: 0.45f, 0.05f..0.95f, String.format(java.util.Locale.US, "%.2f", p["room"] ?: 0.45f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("ROOM", p["room"] ?: 0.45f, 0.05f..0.95f, String.format(java.util.Locale.US, "%.2f", p["room"] ?: 0.45f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("room" to it)))
                     }
-                    DirectWaveKnob("DECAY", p["decay"] ?: 1.6f, 0.2f..6f, String.format(java.util.Locale.US, "%.1f s", p["decay"] ?: 1.6f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("DECAY", p["decay"] ?: 1.6f, 0.2f..6f, String.format(java.util.Locale.US, "%.1f s", p["decay"] ?: 1.6f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("decay" to it)))
                     }
-                    DirectWaveKnob("WET", p["wet"] ?: 0.22f, 0f..1f, String.format(java.util.Locale.US, "%.0f%%", (p["wet"] ?: 0.22f) * 100f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("WET", p["wet"] ?: 0.22f, 0f..1f, String.format(java.util.Locale.US, "%.0f%%", (p["wet"] ?: 0.22f) * 100f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("wet" to it)))
                     }
                 }
             }
             "DELAY" -> {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                    DirectWaveKnob("TIME", p["timeMs"] ?: 320f, 10f..900f, "${(p["timeMs"] ?: 320f).toInt()} ms", palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("TIME", p["timeMs"] ?: 320f, 10f..900f, "${(p["timeMs"] ?: 320f).toInt()} ms", palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("timeMs" to it)))
                     }
-                    DirectWaveKnob("FEEDBACK", p["feedback"] ?: 0.32f, 0f..0.88f, String.format(java.util.Locale.US, "%.0f%%", (p["feedback"] ?: 0.32f) * 100f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("FEEDBACK", p["feedback"] ?: 0.32f, 0f..0.88f, String.format(java.util.Locale.US, "%.0f%%", (p["feedback"] ?: 0.32f) * 100f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("feedback" to it)))
                     }
-                    DirectWaveKnob("WET", p["wet"] ?: 0.2f, 0f..1f, String.format(java.util.Locale.US, "%.0f%%", (p["wet"] ?: 0.2f) * 100f), palette, Modifier.weight(1f), 43.dp) {
+                    DirectWaveKnob("WET", p["wet"] ?: 0.2f, 0f..1f, String.format(java.util.Locale.US, "%.0f%%", (p["wet"] ?: 0.2f) * 100f), palette, Modifier.weight(1f), 52.dp) {
                         onUpdate(device.copy(parameters = p + ("wet" to it)))
                     }
                 }
