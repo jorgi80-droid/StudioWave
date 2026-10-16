@@ -7035,8 +7035,9 @@ private fun StudioWaveInstrumentPanel(
                     return best
                 }
                 detectDragGestures(onDragStart={drag=closest(it.x)},onDrag={change,_->change.consume()
-                    latestEqGainChange(drag,((0.5f-change.position.y/size.height.coerceAtLeast(1f))*36f).coerceIn(-18f,18f),
-                        (change.position.x/size.width.coerceAtLeast(1f)).coerceIn(0f,1f))})
+                    val gainDb: Float = ((0.5f-change.position.y/size.height.coerceAtLeast(1f))*36f).coerceIn(-18f,18f)
+                    val frequencyNorm: Float = (change.position.x/size.width.coerceAtLeast(1f)).coerceIn(0f,1f)
+                    latestEqGainChange(drag,gainDb,frequencyNorm)})
             }) {
                 for(db in listOf(-18f,-9f,0f,9f,18f)) {
                     val y=size.height*(18f-db)/36f
@@ -7091,7 +7092,7 @@ private fun StudioWaveKnob(label:String,value:Float,minValue:Float,maxValue:Floa
             drawArc(palette.accent,140f,260f*fraction,false,style=Stroke(width=stroke))
             drawCircle(palette.raised,radius=size.minDimension*0.30f)
             val angle=Math.toRadians(140.0+260.0*fraction);val center=Offset(size.width/2f,size.height/2f);val r=size.minDimension*0.24f
-            drawLine(palette.text,center,Offset(center.x+kotlin.math.cos(angle).toFloat()*r,center.y+kotlin.math.sin(angle).toFloat()*r),width=2.2.dp.toPx())
+            drawLine(palette.text,center,Offset(center.x+kotlin.math.cos(angle).toFloat()*r,center.y+kotlin.math.sin(angle).toFloat()*r),strokeWidth=2.2.dp.toPx())
         }
         Text(label,color=palette.muted,fontSize=7.sp,fontWeight=FontWeight.Black,maxLines=1)
         Text(display,color=palette.text,fontSize=8.sp,fontWeight=FontWeight.Bold,maxLines=1)
