@@ -648,7 +648,10 @@ private fun StudioWaveApp() {
                     onCompleted = {
                         playbackScope.launch(Dispatchers.Main.immediate) {
                             if (session == playbackSession) {
-                                playheadTick = snapshot.tracks.asSequence().flatMap { it.clips.asSequence() }
+                                // Live edits may extend the arrangement while playback runs.
+                                // Resolve the completion point from the latest project, not the
+                                // stale snapshot that originally started transport.
+                                playheadTick = project.tracks.asSequence().flatMap { it.clips.asSequence() }
                                     .maxOfOrNull { clip ->
                                         val start = clip.startTick.coerceAtLeast(0L)
                                         val length = clip.lengthTicks.coerceAtLeast(1L)
