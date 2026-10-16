@@ -309,18 +309,35 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val pcmStereo: ShortArray?,
         val mappedPcm: MappedByteBuffer?,
         val pcmFile: File?,
-        val frames: Int,
-        // True when the decoder reached source EOS before the requested PCM window ended.
-        val complete: Boolean
+        initialFrames: Int,
+        complete: Boolean
     ) {
+        private val readyFrameCount = java.util.concurrent.atomic.AtomicInteger(initialFrames.coerceAtLeast(0))
+        @Volatile var complete: Boolean = complete
+            private set
+        val frames: Int get() = readyFrameCount.get()
         val storageBytes: Long
             get() = pcmStereo?.size?.toLong()?.times(2L) ?: pcmFile?.length() ?: 0L
 
+        fun publishFrames(value: Int) {
+            val next = value.coerceAtLeast(0)
+            while (true) {
+                val previous = readyFrameCount.get()
+                if (next <= previous || readyFrameCount.compareAndSet(previous, next)) return
+            }
+        }
+
+        fun finish(value: Int, reachedEndOfSource: Boolean) {
+            publishFrames(value)
+            complete = reachedEndOfSource
+        }
+
         fun sampleAt(index: Int): Short {
+            if (index < 0 || index.toLong() >= frames.toLong() * 2L) return 0
             val heap = pcmStereo
-            if (heap != null) return heap[index]
+            if (heap != null) return heap.getOrNull(index) ?: 0
             val mapped = mappedPcm ?: return 0
-            return mapped.getShort(index * 2)
+            return runCatching { mapped.getShort(index * 2) }.getOrDefault(0)
         }
     }
 
@@ -566,14 +583,14 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             val cacheKey = "$uriString|$sampleRate"
             // Check the PCM cache before opening a metadata retriever. This removes repeated
             // content-provider/metadata work on play, pause, seek, and clip edits.
-            val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }?.takeIf { it.frames >= requestedFrames || it.complete }
+            val cached = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }?.takeIf { it.frames > 0 }
             // The clip's persisted source range already tells us the maximum PCM window
             // needed for playback. Do not synchronously probe every media file with
             // MediaMetadataRetriever before decoding: providers/codecs can make that probe
             // surprisingly slow, and the decoder itself safely stops at this frame limit.
             // If the file is shorter than the requested range, decodeAudioAsset returns the
             // frames that actually exist and clips outside that range are ignored.
-            val sourceSeconds = if (cached != null) {
+            val sourceSeconds = if (cached != null && cached.complete) {
                 cached.frames.toDouble() / sampleRate.toDouble()
             } else {
                 requiredSeconds.coerceIn(0.05, MAX_SOURCE_SECONDS.toDouble())
@@ -590,7 +607,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         suspend fun prepareSource(request: SourceRequest): Pair<String, AudioAsset?> {
             ensureCurrent()
             val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
-                ?.takeIf { it.frames >= request.requestedFrames || it.complete }
+                ?.takeIf { it.frames > 0 }
             if (cached != null) return request.uriString to cached
             // Publish the transport/schedule without waiting for cold media decoders. The
             // missing source is decoded on the IO preparation scope and joins at a block boundary.
@@ -627,7 +644,10 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
         preparedSources.forEach { (uri, asset) -> if (asset != null) assets[uri] = asset }
         val pendingAudioSources = (if (allowUnpreparedAudio) {
-            sourceRequests.filter { request -> assets[request.uriString] == null }
+            sourceRequests.filter { request ->
+                val asset = assets[request.uriString]
+                asset == null || (!asset.complete && asset.frames < request.requestedFrames)
+            }
         } else emptyList()).toMutableList()
 
         val audioEvents = ArrayList<AudioEvent>()
@@ -708,7 +728,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         ).coerceAtLeast(0L)
                         // Invalid persisted trims must not silently clamp to and repeat the
                         // final source sample. Ignore clips whose start is outside the source.
-                        if (sourceOffsetFrame >= asset.frames.toLong()) return@clipLoop
+                        if (asset.complete && sourceOffsetFrame >= asset.frames.toLong()) return@clipLoop
                         val sourceWindowFrames = ArrangementTiming.microsToFrames(
                             sourceLengthMicros, asset.sampleRate
                         ).coerceAtLeast(1L)
@@ -837,11 +857,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     try {
                         val cached = synchronized(audioAssetCache) { audioAssetCache.get(request.cacheKey) }
                             ?.takeIf { it.frames >= request.requestedFrames || it.complete }
-                        if (cached == null) {
+                        if (cached == null || (!cached.complete && cached.frames < request.requestedFrames)) {
                             val decoded = decodeSemaphore.withPermit {
                                 decodeAudioAsset(
                                     Uri.parse(request.uriString), request.sourceSeconds, token,
-                                    allowTransportGenerationChange = false
+                                    allowTransportGenerationChange = false,
+                                    onPartialAsset = { partial ->
+                                        if (!closed.get() && generation.get() == token) {
+                                            synchronized(audioAssetCache) { audioAssetCache.put(request.cacheKey, partial) }
+                                            refreshPlanRequests.trySend(Unit)
+                                        }
+                                    }
                                 )
                             }
                             if (!closed.get() && generation.get() == token) {
@@ -909,7 +935,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         durationSeconds: Double,
         token: Long,
         revision: Long? = null,
-        allowTransportGenerationChange: Boolean = false
+        allowTransportGenerationChange: Boolean = false,
+        onPartialAsset: ((AudioAsset) -> Unit)? = null
     ): AudioAsset {
         // When audio is already running, source decoding must yield CPU time to the
         // THREAD_PRIORITY_AUDIO renderer rather than competing at normal thread priority.
@@ -966,6 +993,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             var encoding = AudioFormat.ENCODING_PCM_16BIT
             var framesWritten = 0
             var stagnant = 0
+            var partialAsset: AudioAsset? = null
+            val firstPublishFrames = min(maxFrames, (sampleRate / 4).coerceAtLeast(1))
 
             while (!outputDone && framesWritten < maxFrames) {
                 ensureCurrent()
@@ -1024,6 +1053,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                                     pcmOut.putShort((out + 1) * 2, (right * 32767f).toInt().coerceIn(-32767, 32767).toShort())
                                     framesWritten = max(framesWritten, targetFrame.toInt() + 1)
                                 }
+                                partialAsset?.publishFrames(framesWritten)
+                                if (partialAsset == null && onPartialAsset != null &&
+                                    framesWritten >= firstPublishFrames) {
+                                    // Flush only the first small pre-roll window. The shared mapping
+                                    // remains readable while MediaCodec continues decoding the rest.
+                                    pcmOut.force()
+                                    partialAsset = AudioAsset(
+                                        OUTPUT_SAMPLE_RATE, null, pcmOut, pcmFile, framesWritten, false
+                                    )
+                                    onPartialAsset.invoke(partialAsset!!)
+                                }
                             }
                             if (info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) outputDone = true
                         } finally {
@@ -1040,7 +1080,11 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             pcmRandomAccess!!.channel.force(false)
             pcmRandomAccess!!.channel.truncate(framesWritten.toLong() * 4L)
             keepPcmFile = true
-            return AudioAsset(OUTPUT_SAMPLE_RATE, null, pcmOut, pcmFile, framesWritten, outputDone)
+            val result = partialAsset ?: AudioAsset(
+                OUTPUT_SAMPLE_RATE, null, pcmOut, pcmFile, framesWritten, outputDone
+            )
+            result.finish(framesWritten, outputDone)
+            return result
         } finally {
             runCatching { decoder?.stop() }
             runCatching { decoder?.release() }
