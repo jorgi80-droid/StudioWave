@@ -78,14 +78,14 @@ internal object AudioPerformanceProfile {
         }
     }
 
-    fun describeDevice(context: Context, requested: String): String {
+    fun describeDevice(context: Context, requested: String, parallelPreparation: Boolean = true): String {
         val device = capabilities(context)
         val effective = effectiveProfile(context, requested)
         val ram = if (device.lowRamDevice) "low-RAM device" else "standard memory class"
         val rate = device.outputSampleRateHz?.let { "${it} Hz" } ?: "unknown"
         val burst = device.outputBurstFrames?.toString() ?: "unknown"
         val queue = queueTargetFrames(effective, device.outputBurstFrames)
-        val decoders = decoderParallelism(context, requested, parallelPreparation = true)
+        val decoders = decoderParallelism(context, requested, parallelPreparation)
         return "Profile $requested → $effective · CPU ${device.cpuCores} cores · memory class ${device.memoryClassMb} MiB ($ram) · Android output ${rate} · burst ${burst} frames · producer queue ${queue} frames · decoder workers ${decoders}"
     }
 }
