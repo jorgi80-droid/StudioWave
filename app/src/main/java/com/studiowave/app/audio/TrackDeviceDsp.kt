@@ -31,7 +31,7 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
         // memory for every EQ/compressor/saturator was wasting ~740 KiB per module.
         val delayL = FloatArray(if (hasDelay) (sampleRate * 2.1f).toInt().coerceAtLeast(4096) else 1)
         val delayR = FloatArray(delayL.size)
-        val eq = if (hasEq) Array(8) { Biquad() } else emptyArray()
+        val eq: Array<Biquad> = if (hasEq) Array(8) { Biquad() } else emptyArray()
         val eqLowAlpha = 1 - exp(-2 * PI * 180 / sampleRate)
         val eqHighAlpha = 1 - exp(-2 * PI * 5200 / sampleRate)
         var eqSignature = Long.MIN_VALUE
