@@ -160,3 +160,5 @@ Audio Clip View now exposes a persisted clip-level gain control in dB, applied a
 - Parametric EQ Eight in Device View now plots the combined response from the same eight peaking-biquad parameter model used by the audio processor. The white response curve is separate from the eight stored band nodes; dragging the graph selects a band and updates that band's center frequency and gain in project parameters.
 - Compressor View now includes an input-dB/output-dB transfer plot with the 1:1 reference line and threshold marker, plus a gain-reduction meter driven by the actual compressor detector's input/output dB difference published from the render worker. It does not animate fabricated values when no reduction is happening.
 - The measured GR value is published alongside existing per-track peak/RMS snapshots at the existing meter polling cadence. Targeted DSP unit coverage verifies GR appears for a compressed signal and resets when bypassed.
+
+- Follow-up: the Compressor threshold reference line has a touch target on its marker. Dragging near that marker updates the saved threshold parameter that also drives the plotted transfer curve and DSP.

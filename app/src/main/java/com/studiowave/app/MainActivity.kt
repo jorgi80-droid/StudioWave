@@ -6056,6 +6056,34 @@ private fun TrackEffectDeviceCard(
                         Modifier.weight(1f).fillMaxHeight()
                             .background(palette.canvas, RoundedCornerShape(1.dp))
                             .border(1.dp, palette.border, RoundedCornerShape(1.dp))
+                            .pointerInput(device.id, device.enabled) {
+                                var draggingThreshold = false
+                                detectDragGestures(
+                                    onDragStart = { start ->
+                                        val latestThreshold = (latestDevice.parameters["thresholdDb"] ?: -18f)
+                                            .coerceIn(-60f, 0f)
+                                        val leftEdge = 3.dp.toPx()
+                                        val plotWidth = (size.width.toFloat() - leftEdge * 2f).coerceAtLeast(1f)
+                                        val thresholdX = leftEdge + ((latestThreshold + 60f) / 60f) * plotWidth
+                                        draggingThreshold = kotlin.math.abs(start.x - thresholdX) <=
+                                            maxOf(18.dp.toPx(), size.width.toFloat() * 0.10f)
+                                    },
+                                    onDrag = { change, _ ->
+                                        change.consume()
+                                        if (draggingThreshold) {
+                                            val leftEdge = 3.dp.toPx()
+                                            val plotWidth = (size.width.toFloat() - leftEdge * 2f).coerceAtLeast(1f)
+                                            val inputDb = -60f + ((change.position.x - leftEdge) / plotWidth)
+                                                .coerceIn(0f, 1f) * 60f
+                                            val current = latestDevice
+                                            latestDeviceUpdate(current.copy(parameters =
+                                                current.parameters + ("thresholdDb" to inputDb.coerceIn(-60f, 0f))))
+                                        }
+                                    },
+                                    onDragEnd = { draggingThreshold = false },
+                                    onDragCancel = { draggingThreshold = false }
+                                )
+                            }
                     ) {
                         val left = 3.dp.toPx()
                         val top = 3.dp.toPx()
