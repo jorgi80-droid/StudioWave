@@ -142,7 +142,7 @@ internal fun StudioWaveSettingsScreen(
                     SettingsSliderRow("Metronome level", "0% = silent; 100% = maximum click level.", metronomeLevel,
                         "${(metronomeLevel * 100).toInt()}%", onMetronomeLevelChange, p)
                     SettingsSection("PREPARATION & PROCESSING", "Multicore option parallelizes sample preparation only; realtime mixing remains a dedicated worker.", p)
-                    SettingsToggleRow("Parallel sample preparation", "Use multiple IO workers to decode independent audio sources before playback.", parallelPreparation, onParallelPreparationChange, p)
+                    SettingsToggleRow("Parallel sample preparation", "Use bounded IO workers for independent sources. Newly added audio can prepare while transport keeps running; the realtime mixer stays on its dedicated worker.", parallelPreparation, onParallelPreparationChange, p)
                     SettingsInfoCard("REALTIME MIXER", "The current realtime mixer is single-worker. This switch does not falsely claim parallel DSP; it only parallelizes source preparation.", p)
                 }
                 "LOG" -> Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
