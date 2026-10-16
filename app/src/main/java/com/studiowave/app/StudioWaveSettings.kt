@@ -37,9 +37,9 @@ internal val LocalStudioWavePalette = compositionLocalOf {
     StudioWavePalette(
         // Ableton Live 12 light device/arrangement palette: neutral silver panels,
         // near-black typography, cyan selection and Live's warm yellow control accent.
-        Color(0xFFB7B8BA), Color(0xFFA6A7A9), Color(0xFFC8C9CB), Color(0xFFBFC0C2),
-        Color(0xFFD0D1D3), Color(0xFF171819), Color(0xFF505256), Color(0xFF00D9E8),
-        Color(0xFFFFB900), Color(0xFF9B9DA1), Color(0xFF77797D), Color(0xFF00BFA5),
+        Color(0xFFB2B3B6), Color(0xFFA0A2A5), Color(0xFFD0D1D3), Color(0xFFB9BBBE),
+        Color(0xFFC7C9CC), Color(0xFF171819), Color(0xFF3E4248), Color(0xFF00D9E8),
+        Color(0xFFFFB900), Color(0xFF898C92), Color(0xFF73777E), Color(0xFF00BFA5),
         Color(0xFFFFB900), Color(0xFFEA5368), Color(0xFF00D9E8), Color(0xFFFFB900), Color(0xFFEA5368)
     )
 }
@@ -50,9 +50,9 @@ internal fun studioWavePalette(theme: String, tone: String, highContrast: Boolea
     val base = when (theme) {
         // Compact, neutral Live-inspired surface tiers: room > panel > control > canvas.
         "Live Light" -> StudioWavePalette(
-            Color(0xFFB7B8BA), Color(0xFFA6A7A9), Color(0xFFC8C9CB), Color(0xFFBFC0C2),
-            Color(0xFFD0D1D3), Color(0xFF171819), Color(0xFF505256), Color(0xFF00D9E8), Color(0xFFFFB900),
-            Color(0xFF9B9DA1), Color(0xFF77797D), Color(0xFF00BFA5), Color(0xFFFFB900), Color(0xFFEA5368),
+            Color(0xFFB2B3B6), Color(0xFFA0A2A5), Color(0xFFD0D1D3), Color(0xFFB9BBBE),
+            Color(0xFFC7C9CC), Color(0xFF171819), Color(0xFF3E4248), Color(0xFF00D9E8), Color(0xFFFFB900),
+            Color(0xFF898C92), Color(0xFF73777E), Color(0xFF00BFA5), Color(0xFFFFB900), Color(0xFFEA5368),
             Color(0xFF00D9E8), Color(0xFFFFB900), Color(0xFFEA5368))
         "Live Mid" -> StudioWavePalette(
             Color(0xFF212121), Color(0xFF1F1F1F), Color(0xFF282828), Color(0xFF181818),
