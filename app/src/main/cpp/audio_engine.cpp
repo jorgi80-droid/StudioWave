@@ -163,6 +163,7 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeSetTone(
 extern "C" JNIEXPORT jint JNICALL
 Java_com_studiowave_app_audio_NativeAudioEngine_nativeWritePcm(
     JNIEnv* env, jobject, jshortArray source, jint sampleCount) {
+    if (!g_state.running.load(std::memory_order_acquire)) return AAUDIO_ERROR_DISCONNECTED;
     if (source == nullptr || sampleCount <= 0 || (sampleCount % kChannels) != 0) return 0;
     const jsize length = env->GetArrayLength(source);
     if (sampleCount > length) return 0;
@@ -188,6 +189,7 @@ Java_com_studiowave_app_audio_NativeAudioEngine_nativeWritePcm(
 
 extern "C" JNIEXPORT jint JNICALL
 Java_com_studiowave_app_audio_NativeAudioEngine_nativeQueuedFrames(JNIEnv*, jobject) {
+    if (!g_state.running.load(std::memory_order_acquire)) return -1;
     const uint64_t write = g_state.writeFrame.load(std::memory_order_acquire);
     const uint64_t read = g_state.readFrame.load(std::memory_order_acquire);
     return static_cast<jint>(std::min<uint64_t>(write - read, static_cast<uint64_t>(INT32_MAX)));
