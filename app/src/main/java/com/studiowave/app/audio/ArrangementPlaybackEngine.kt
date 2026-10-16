@@ -293,7 +293,12 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val velocity: Int,
         val pan: Float,
         val track: StudioTrack,
-        val instrument: SamplerInstrument? = null
+        val instrument: SamplerInstrument? = null,
+        val frequency: Double,
+        val instrumentRate: Double,
+        val attackFrames: Long,
+        val decayFrames: Long,
+        val releaseFrames: Long
     )
 
     private data class DrumEvent(
@@ -627,10 +632,20 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                         val noteDuration = ticksToFrames(note.durationTicks.coerceAtLeast(1L))
                         val noteEnd = min(clipEnd, if (noteStart > Long.MAX_VALUE - noteDuration) Long.MAX_VALUE else noteStart + noteDuration)
                         if (noteEnd > noteStart) {
+                            val pitch = note.pitch.coerceIn(0, 127)
+                            val instrument = instrumentsByTrack[track.id]
                             notes.add(NoteEvent(
-                                noteStart, noteEnd, note.pitch.coerceIn(0, 127),
+                                noteStart, noteEnd, pitch,
                                 note.velocity.coerceIn(1, 127), note.pan.coerceIn(-1f, 1f), track,
-                                instrumentsByTrack[track.id]
+                                instrument,
+                                440.0 * 2.0.pow((pitch - 69) / 12.0),
+                                instrument?.let {
+                                    2.0.pow(((pitch - 60 + it.pitchSemitones).toDouble() +
+                                        it.fineTuneCents / 100.0) / 12.0)
+                                } ?: 1.0,
+                                instrument?.let { it.attackMs.toLong() * sampleRate / 1000L } ?: 0L,
+                                instrument?.let { it.decayMs.toLong() * sampleRate / 1000L } ?: 0L,
+                                instrument?.let { it.releaseMs.toLong() * sampleRate / 1000L } ?: 0L
                             ))
                         }
                     }
@@ -1046,19 +1061,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     val from = max(position, note.startFrame)
                     val to = min(blockEnd, note.endFrame)
                     val instrument = note.instrument
-                    val frequency = 440.0 * 2.0.pow((note.pitch - 69) / 12.0)
+                    val frequency = note.frequency
                     val channelGain = channelMix.volume * (note.velocity / 127f) * 0.19f
                     val pan = (channelMix.pan + note.pan).coerceIn(-1f, 1f)
                     val leftPan = if (pan > 0f) 1f - pan else 1f
                     val rightPan = if (pan < 0f) 1f + pan else 1f
                     val channelBuffer = perTrackMix[note.track.id] ?: continue
                     val noteLength = (note.endFrame - note.startFrame).coerceAtLeast(1L)
-                    val instrumentRate = instrument?.let {
-                        2.0.pow(((note.pitch - 60 + it.pitchSemitones).toDouble() + it.fineTuneCents / 100.0) / 12.0)
-                    } ?: 1.0
-                    val attackFrames = instrument?.let { it.attackMs.toLong() * sampleRate / 1000L } ?: 0L
-                    val decayFrames = instrument?.let { it.decayMs.toLong() * sampleRate / 1000L } ?: 0L
-                    val releaseFrames = instrument?.let { it.releaseMs.toLong() * sampleRate / 1000L } ?: 0L
+                    val instrumentRate = note.instrumentRate
+                    val attackFrames = note.attackFrames
+                    val decayFrames = note.decayFrames
+                    val releaseFrames = note.releaseFrames
                     for (absolute in from until to) {
                         val elapsed = absolute - note.startFrame
                         val outIndex = ((absolute - position) * 2).toInt()
