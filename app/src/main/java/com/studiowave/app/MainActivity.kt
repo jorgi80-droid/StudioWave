@@ -5259,8 +5259,10 @@ private fun DeviceDock(
                     Text("${track.devices.size} INSERTS", color = palette.muted, fontSize = 7.sp, fontWeight = FontWeight.Bold)
                     DirectWaveStateButton("+ ADD FX", false, palette) { showAddFx = true }
                 }
-                val instrumentDevice = if (track.kind == "midi") track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
-                    ?: if (track.kind == "midi") remember(track.id) { TrackDevice(type = "STUDIO_SYNTH", name = "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH")) } else null
+                val instrumentDevice = if (track.kind == "midi") {
+                    track.devices.firstOrNull { it.type in INSTRUMENT_DEVICE_TYPES && it.type != "DRUM_RACK" }
+                        ?: remember(track.id) { TrackDevice(type = "STUDIO_SYNTH", name = "StudioWave Dual Synth", parameters = defaultDeviceParameters("STUDIO_SYNTH")) }
+                } else null
                 val eqDevice = track.devices.firstOrNull { it.type == "PARAM_EQ_8" }
                 Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.Top) {
                     DeviceChainSlotMarker(number = 1, palette = palette, label = when (track.kind) { "midi" -> if (instrumentDevice?.type == "DIRECTWAVE") "SAMPLE" else "INST"; "drum" -> "DRUM"; else -> "AUDIO" })
