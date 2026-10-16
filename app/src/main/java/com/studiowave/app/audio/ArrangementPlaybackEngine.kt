@@ -225,6 +225,8 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
     @Volatile private var output: NativeAudioEngine? = null
     // Render reads an immutable plan snapshot per block; edits publish replacements atomically.
     @Volatile private var activePlanRef: java.util.concurrent.atomic.AtomicReference<Plan>? = null
+    // Supersedes stale background schedule builds when many clips/tracks are added rapidly.
+    private val arrangementUpdateRevision = java.util.concurrent.atomic.AtomicLong(0L)
 
     private data class AudioAsset(
         val sampleRate: Int,
@@ -381,9 +383,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
 
-    private suspend fun buildPlan(project: StudioProject, token: Long, parallelPreparation: Boolean): Plan {
+    private suspend fun buildPlan(
+        project: StudioProject,
+        token: Long,
+        parallelPreparation: Boolean,
+        revision: Long? = null
+    ): Plan {
         fun ensureCurrent() {
-            check(!closed.get() && generation.get() == token) { "Playback preparation cancelled" }
+            check(!closed.get() && generation.get() == token &&
+                (revision == null || arrangementUpdateRevision.get() == revision)) {
+                "Playback preparation cancelled"
+            }
         }
         val bpm = project.bpm.coerceIn(40, 240)
         val ppq = project.ppq.coerceIn(24, 3840)
@@ -468,7 +478,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             if (cached != null) return request.uriString to cached
             val decoded = try {
                 decodeSemaphore.withPermit {
-                    decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token)
+                    decodeAudioAsset(Uri.parse(request.uriString), request.sourceSeconds, token, revision)
                 }
             } catch (failure: Exception) {
                 // One stale URI or unsupported/corrupt file must not abort playback of every
@@ -519,7 +529,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             val cacheKey = "directwave:$uriText|$sampleRate|$frameCount"
             val cachedInstrument = synchronized(audioAssetCache) { audioAssetCache.get(cacheKey) }
             val asset = cachedInstrument ?: try {
-                decodeSemaphore.withPermit { decodeAudioAsset(uri, duration, token) }.also { decoded ->
+                decodeSemaphore.withPermit { decodeAudioAsset(uri, duration, token, revision) }.also { decoded ->
                     ensureCurrent()
                     synchronized(audioAssetCache) { audioAssetCache.put(cacheKey, decoded) }
                 }
@@ -643,9 +653,17 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         }
     }
 
-    private fun decodeAudioAsset(uri: Uri, durationSeconds: Double, token: Long): AudioAsset {
+    private fun decodeAudioAsset(
+        uri: Uri,
+        durationSeconds: Double,
+        token: Long,
+        revision: Long? = null
+    ): AudioAsset {
         fun ensureCurrent() {
-            check(!closed.get() && generation.get() == token) { "Playback preparation cancelled" }
+            check(!closed.get() && generation.get() == token &&
+                (revision == null || arrangementUpdateRevision.get() == revision)) {
+                "Playback preparation cancelled"
+            }
         }
         val extractor = MediaExtractor()
         var decoder: MediaCodec? = null
@@ -1151,12 +1169,21 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         val planRef = activePlanRef ?: return
         if (!running.get()) return
         val token = generation.get()
+        val revision = arrangementUpdateRevision.incrementAndGet()
         updateMix(project)
         val startedAt = System.nanoTime()
-        val updatedPlan = withContext(Dispatchers.IO) {
-            buildPlan(project, token, parallelPreparation = true)
+        val updatedPlan = try {
+            withContext(Dispatchers.IO) {
+                buildPlan(project, token, parallelPreparation = true, revision = revision)
+            }
+        } catch (failure: Exception) {
+            // Rapid successive edits supersede old plans. Silently discard stale preparation;
+            // only surface errors belonging to the newest requested project snapshot.
+            if (arrangementUpdateRevision.get() != revision || generation.get() != token) return
+            throw failure
         }
-        check(!closed.get() && generation.get() == token) { "Arrangement update was superseded" }
+        if (closed.get() || generation.get() != token ||
+            arrangementUpdateRevision.get() != revision) return
         if (running.get() && activePlanRef === planRef) {
             planRef.set(updatedPlan)
             val elapsedMs = (System.nanoTime() - startedAt).coerceAtLeast(0L) / 1_000_000L
@@ -1268,7 +1295,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         // 64 MiB accommodates one five-minute stereo PCM source (~50.5 MiB), avoiding
         // cache eviction and expensive source decoding every time a long clip is resized.
         const val MAX_ASSET_CACHE_KIB = 64 * 1024
-        val MAX_PARALLEL_DECODERS = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+        const val MAX_PARALLEL_DECODERS = 2
         const val MAX_CACHED_SOURCE_DURATIONS = 256
     }
 }
