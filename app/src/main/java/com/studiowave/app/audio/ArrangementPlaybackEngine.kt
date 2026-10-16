@@ -909,8 +909,9 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                             )
                         }
                     } finally {
+                        val completedJob = kotlinx.coroutines.currentCoroutineContext()[Job]
                         synchronized(pendingAudioJobsLock) {
-                            if (pendingAudioJobs[request.cacheKey] === kotlinx.coroutines.currentCoroutineContext()[Job]) {
+                            if (pendingAudioJobs[request.cacheKey] === completedJob) {
                                 pendingAudioJobs.remove(request.cacheKey)
                             }
                         }

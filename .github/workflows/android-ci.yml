@@ -23,13 +23,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK and native toolchain
-        uses: android-actions/setup-android@v3
-        with:
-          api-level: 36
-          build-tools: 36.0.0
-          ndk-version: 27.0.12077973
-          cmake-version: 3.22.1
+      - name: Install Android SDK and native toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+          fi
+          test -x "$SDKMANAGER"
+          set +o pipefail
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          set -o pipefail
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" "platform-tools" "ndk;27.0.12077973" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
@@ -48,10 +54,10 @@ jobs:
           curl --fail --location --retry 3 "$base/03-soulful-vintage/kicks/vintage-kick-01.wav" -o "$target/vintage-kick-01.wav"
           test "$(find "$target" -maxdepth 1 -name '*.wav' | wc -l)" -eq 6
           for sample in "$target"/*.wav; do test "$(od -An -tx1 -N4 "$sample" | tr -d ' \\n')" = "52494646"; done
-      - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
       - name: Run unit tests
         run: gradle testDebugUnitTest --stacktrace
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

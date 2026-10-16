@@ -277,8 +277,8 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
                 }
             }
             buffer[i]=left.toFloat().coerceIn(-4f,4f);buffer[i+1]=right.toFloat().coerceIn(-4f,4f)
-            master[i]+=(buffer[i]-dryL.toFloat())*gain
-            master[i+1]+=(buffer[i+1]-dryR.toFloat())*gain
+            master[i]+=(buffer[i]-dryL.toFloat())*masterGain
+            master[i+1]+=(buffer[i+1]-dryR.toFloat())*masterGain
         }
     }
     companion object {
