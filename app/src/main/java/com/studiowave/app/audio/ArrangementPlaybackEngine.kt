@@ -1192,7 +1192,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
         synchronized(audioAssetCache) { audioAssetCache.put(key, decoded) }
         android.util.Log.i(
             "StudioWaveAudio",
-            "Source prepared: frames=\${decoded.frames}, complete=\${decoded.complete}, cacheKiB=\${audioAssetCache.size()}"
+            "Source prepared: frames=${decoded.frames}, complete=${decoded.complete}, cacheKiB=${audioAssetCache.size()}"
         )
     }
 
