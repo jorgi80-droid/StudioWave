@@ -1502,6 +1502,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
                     runCatching {
                         onProgress(ArrangementTiming.framesToTicks(plan.totalFrames, plan.bpm, plan.ppq, sampleRate))
                     }
+                    endWavCapture()
                     runCatching { onCompleted() }
                 }
             }
@@ -1510,6 +1511,7 @@ class ArrangementPlaybackEngine(context: Context) : AutoCloseable {
             Thread.currentThread().interrupt()
         } catch (failure: Exception) {
             running.set(false)
+            endWavCapture()
             runCatching { onError(failure.message ?: "Arrangement audio output failed") }
         } finally {
             synchronized(this) {

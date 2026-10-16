@@ -70,14 +70,9 @@ internal class PlaybackWavRecorder(
     }
 
     override fun close() {
-        if (accepting.compareAndSet(true, false)) {
-            // The worker drains queued blocks before writing the finalized WAV header.
-            writer.join(15_000L)
-            if (writer.isAlive) {
-                writer.interrupt()
-                writer.join(1_000L)
-            }
-        }
+        // Signal the writer and return immediately: stopping playback must never block the UI.
+        // The worker drains queued blocks, finalizes the WAV header, then closes the destination.
+        accepting.compareAndSet(true, false)
     }
 
     fun isClosed(): Boolean = closed.get()
