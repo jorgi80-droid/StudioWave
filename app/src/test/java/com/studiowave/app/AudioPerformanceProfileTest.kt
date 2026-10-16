@@ -40,4 +40,11 @@ class AudioPerformanceProfileTest {
         )
         assertEquals("BALANCED", AudioPerformanceProfile.recommendedProfile(device))
     }
+
+    @Test
+    fun queueHonorsLargeHardwareBurstWithoutExceedingSafeCeiling() {
+        assertEquals(1024, AudioPerformanceProfile.queueTargetFrames("LOW_LATENCY", 512))
+        assertEquals(4096, AudioPerformanceProfile.queueTargetFrames("LOW_LATENCY", 8192))
+        assertEquals(512, AudioPerformanceProfile.queueTargetFrames("LOW_LATENCY", 192))
+    }
 }
