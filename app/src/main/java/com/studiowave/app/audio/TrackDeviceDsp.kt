@@ -37,6 +37,7 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
     private data class ActiveDevice(var device: TrackDevice, val state: State)
     private val states = HashMap<String, State>()
     @Volatile private var activeChain: List<ActiveDevice> = emptyList()
+    @Volatile private var preparedForRealtime = false
 
     private fun active(device: TrackDevice): Boolean = device.enabled && device.type in EFFECTS
 
@@ -55,6 +56,7 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
     /** Prepare new effect state away from the realtime render loop. */
     fun prepare(devices: List<TrackDevice>) {
         ensureActiveChain(devices)
+        preparedForRealtime = true
     }
 
     private fun ensureActiveChain(devices: List<TrackDevice>) {
@@ -100,7 +102,15 @@ internal class TrackDeviceDsp(private val sampleRate: Int) {
     }
 
     fun process(buffer: FloatArray, master: FloatArray, sampleCount: Int, masterGain: Float, devices: List<TrackDevice>) {
-        ensureActiveChain(devices)
+        if (!sameActiveStructure(devices)) {
+            // A topology change must be prepared and published with a new render plan.
+            // Never allocate delay lines or rebuild the chain on the realtime audio worker.
+            if (preparedForRealtime) return
+            ensureActiveChain(devices) // Test/standalone fallback before realtime preparation.
+            preparedForRealtime = true
+        } else {
+            ensureActiveChain(devices) // Same topology: only refresh parameter references.
+        }
         val active = activeChain
         if (active.isEmpty()) return
 
