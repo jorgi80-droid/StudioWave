@@ -7035,8 +7035,8 @@ private fun StudioWaveInstrumentPanel(
                     return best
                 }
                 detectDragGestures(onDragStart={drag=closest(it.x)},onDrag={change,_->change.consume()
-                    val gainDb: Float = ((0.5f-change.position.y/size.height.coerceAtLeast(1f))*36f).coerceIn(-18f,18f)
-                    val frequencyNorm: Float = (change.position.x/size.width.coerceAtLeast(1f)).coerceIn(0f,1f)
+                    val gainDb: Float = ((0.5f-change.position.y/size.height.coerceAtLeast(1))*36f).coerceIn(-18f,18f)
+                    val frequencyNorm: Float = (change.position.x/size.width.coerceAtLeast(1)).coerceIn(0f,1f)
                     latestEqGainChange(drag,gainDb,frequencyNorm)})
             }) {
                 for(db in listOf(-18f,-9f,0f,9f,18f)) {
