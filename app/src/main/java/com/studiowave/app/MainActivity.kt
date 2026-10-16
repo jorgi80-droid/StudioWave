@@ -529,10 +529,10 @@ private fun StudioWaveApp() {
     var themeName by remember {
         mutableStateOf(
             if (preferences.getBoolean("ui_theme_selected_manually", false)) {
-                preferences.getString("ui_theme", "Live Mid") ?: "Live Mid"
+                preferences.getString("ui_theme", "Live Light") ?: "Live Light"
             } else {
-                // Use Live Mid graphite surfaces by default; other themes remain available in Settings.
-                "Live Mid"
+                // Match the supplied Ableton Live references by default; graphite themes remain in Settings.
+                "Live Light"
             }
         )
     }
