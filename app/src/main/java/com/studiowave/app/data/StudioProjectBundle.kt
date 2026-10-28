@@ -136,8 +136,8 @@ object StudioProjectBundle {
     private fun validateProjectMediaReferences(project: StudioProject, mediaIds: Set<String>) {
         project.tracks.forEach { track ->
             track.clips.forEach { clip ->
-                val source = clip.sourceUri ?: return@forEach
-                if (source.startsWith("studiowave-bundle://")) {
+                val source = clip.sourceUri
+                if (source != null && source.startsWith("studiowave-bundle://")) {
                     val id = source.removePrefix("studiowave-bundle://")
                     require(id.isNotBlank() && mediaIds.contains(id)) {
                         "Project references missing bundled media"
