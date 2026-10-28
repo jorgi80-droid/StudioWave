@@ -77,6 +77,7 @@ object StudioProjectBundle {
             while (true) {
                 val entry = zip.nextEntry ?: break
                 require(!entry.isDirectory) { "Bundle must not contain directory entries" }
+                require(entries.size < MAX_MEDIA_FILES + 2) { "Bundle contains too many archive entries" }
                 val name = entry.name
                 require(name == MANIFEST_NAME || name == PROJECT_NAME ||
                     (name.startsWith(MEDIA_PREFIX) && name.matches(Regex("media/[0-9]+\\.bin")))) {

@@ -2,6 +2,7 @@ package com.studiowave.app
 
 import android.os.Bundle
 import java.io.File
+import java.io.ByteArrayOutputStream
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -107,6 +108,7 @@ import com.studiowave.app.data.EFFECT_DEVICE_TYPES
 import com.studiowave.app.data.INSTRUMENT_DEVICE_TYPES
 import com.studiowave.app.data.TrackDevice
 import com.studiowave.app.data.StudioProjectFile
+import com.studiowave.app.data.StudioProjectBundle
 import com.studiowave.app.data.StudioTrack
 import com.studiowave.app.data.WaveClip
 import android.widget.Toast
@@ -460,6 +462,36 @@ private fun suggestedSdawFileName(projectName: String): String {
     return if (safeName.endsWith(".sdaw", ignoreCase = true)) safeName else "$safeName.sdaw"
 }
 
+private fun suggestedBundleFileName(projectName: String): String {
+    val safeName = projectName.trim()
+        .replace(Regex("[^A-Za-z0-9 _.-]"), "")
+        .trim()
+        .trimEnd('.')
+        .take(64)
+        .ifBlank { "StudioWave Project" }
+        .removeSuffix(".sdaw")
+        .removeSuffix(".zip")
+    return "$safeName.studiowave.zip"
+}
+
+private fun readProjectMediaBounded(uri: Uri, maxBytes: Int, context: android.content.Context): ByteArray {
+    val input = context.contentResolver.openInputStream(uri) ?: error("Tidak dapat membaca media: $uri")
+    input.use { stream ->
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8 * 1024)
+        var total = 0
+        while (true) {
+            val count = stream.read(buffer)
+            if (count < 0) break
+            if (count == 0) continue
+            total += count
+            require(total <= maxBytes) { "Media melebihi batas ${(maxBytes / (1024 * 1024))} MiB: ${uri.lastPathSegment}" }
+            output.write(buffer, 0, count)
+        }
+        return output.toByteArray()
+    }
+}
+
 @Composable
 private fun StudioWaveApp() {
     val context = LocalContext.current
@@ -587,6 +619,9 @@ private fun StudioWaveApp() {
     var undoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var redoHistory by remember { mutableStateOf<List<StudioProject>>(emptyList()) }
     var pendingExportProject by remember { mutableStateOf<StudioProject?>(null) }
+    var pendingBundleProject by remember { mutableStateOf<StudioProject?>(null) }
+    var showSaveFormatDialog by remember { mutableStateOf(false) }
+    var showOpenFormatDialog by remember { mutableStateOf(false) }
     var restartPendingPlayback: ((StudioProject) -> Unit)? = null
     fun arrangementScheduleChanged(previous: StudioProject, next: StudioProject): Boolean {
         if (previous.bpm != next.bpm || previous.ppq != next.ppq ||
@@ -1033,6 +1068,75 @@ private fun StudioWaveApp() {
             }
         }
     }
+    val exportBundleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        val snapshot = pendingBundleProject ?: latestProject
+        pendingBundleProject = null
+        if (uri != null) {
+            playbackScope.launch {
+                try {
+                    val portable = withContext(Dispatchers.IO) {
+                        val sourceUris = snapshot.tracks.flatMap { it.clips }
+                            .mapNotNull { it.sourceUri?.takeIf(String::isNotBlank) }
+                            .distinct()
+                        require(sourceUris.size <= StudioProjectBundle.MAX_MEDIA_FILES) {
+                            "Proyek memakai terlalu banyak file media untuk satu bundel"
+                        }
+                        val assets = ArrayList<StudioProjectBundle.MediaAsset>(sourceUris.size)
+                        val tokenByUri = LinkedHashMap<String, String>()
+                        var totalMediaBytes = 0L
+                        sourceUris.forEachIndexed { index, source ->
+                            val token = "media-$index"
+                            val sourceUri = Uri.parse(source)
+                            val bytes = readProjectMediaBounded(
+                                sourceUri, StudioProjectBundle.MAX_SINGLE_MEDIA_BYTES, context
+                            )
+                            totalMediaBytes += bytes.size
+                            require(totalMediaBytes <= StudioProjectBundle.MAX_TOTAL_MEDIA_BYTES) {
+                                "Total media proyek melebihi batas 48 MiB untuk bundel portabel"
+                            }
+                            val mime = context.contentResolver.getType(sourceUri) ?: "application/octet-stream"
+                            val name = sourceUri.lastPathSegment?.substringAfterLast('/')?.take(96)
+                                ?.ifBlank { "audio-$index" } ?: "audio-$index"
+                            assets += StudioProjectBundle.MediaAsset(
+                                id = token, fileName = name, mimeType = mime.take(128), bytes = bytes
+                            )
+                            tokenByUri[source] = token
+                        }
+                        val portableProject = snapshot.copy(tracks = snapshot.tracks.map { track ->
+                            track.copy(clips = track.clips.map { clip ->
+                                val source = clip.sourceUri
+                                val token = source?.let(tokenByUri::get)
+                                if (token == null) clip else clip.copy(sourceUri = "studiowave-bundle://$token")
+                            })
+                        })
+                        portableProject to assets
+                    }
+                    withContext(Dispatchers.IO) {
+                        val output = context.contentResolver.openOutputStream(uri, "wt")
+                            ?: error("Tidak dapat membuka tujuan penyimpanan bundel")
+                        output.use { StudioProjectBundle.write(portable.first, portable.second, it) }
+                    }
+                    StudioWaveDiagnostics.log(
+                        "INFO", "PROJECT_BUNDLE",
+                        "Exported '${snapshot.name}' with ${portable.second.size} media files"
+                    )
+                    Toast.makeText(
+                        context,
+                        "Bundel proyek tersimpan · ${portable.second.size} media",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    audioError = failure.message ?: "Ekspor bundel proyek gagal"
+                    StudioWaveDiagnostics.log("ERROR", "PROJECT_BUNDLE", "Bundle export failed: ${failure.message}")
+                    Toast.makeText(context, audioError, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
     val exportWavLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("audio/wav")
     ) { uri ->
@@ -1101,6 +1205,84 @@ private fun StudioWaveApp() {
                 } catch (failure: Exception) {
                     audioError = failure.message ?: "Impor proyek gagal"
                     StudioWaveDiagnostics.log("ERROR", "PROJECT", "Project import failed: ${failure.message}")
+                }
+            }
+        }
+    }
+    val importBundleLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            playbackScope.launch {
+                val loadStartedAt = android.os.SystemClock.elapsedRealtime()
+                try {
+                    val restored = withContext(Dispatchers.IO) {
+                        val input = context.contentResolver.openInputStream(uri)
+                            ?: error("Tidak dapat membuka bundel proyek")
+                        val bundle = input.use { StudioProjectBundle.read(it) }
+                        val safeProjectId = bundle.project.id
+                            .replace(Regex("[^A-Za-z0-9_-]"), "_")
+                            .take(64)
+                            .ifBlank { java.util.UUID.randomUUID().toString() }
+                        val mediaRoot = File(context.filesDir, "project-media/$safeProjectId")
+                        require(mediaRoot.canonicalPath.startsWith(context.filesDir.canonicalPath + File.separator)) {
+                            "Lokasi media proyek tidak aman"
+                        }
+                        if (!mediaRoot.exists() && !mediaRoot.mkdirs()) {
+                            error("Tidak dapat membuat folder media proyek")
+                        }
+                        val uriByToken = HashMap<String, String>()
+                        bundle.media.forEachIndexed { index, asset ->
+                            val safeName = asset.fileName
+                                .replace(Regex("[^A-Za-z0-9._-]"), "_")
+                                .trim('.')
+                                .take(80)
+                                .ifBlank { "audio" }
+                            val destination = File(mediaRoot, "${index}_$safeName")
+                            require(destination.canonicalFile.parentFile == mediaRoot.canonicalFile) {
+                                "Nama file media tidak aman"
+                            }
+                            destination.outputStream().use { it.write(asset.bytes) }
+                            uriByToken["studiowave-bundle://${asset.id}"] = Uri.fromFile(destination).toString()
+                        }
+                        val restoredProject = bundle.project.copy(tracks = bundle.project.tracks.map { track ->
+                            track.copy(clips = track.clips.map { clip ->
+                                val source = clip.sourceUri
+                                val replacement = source?.let(uriByToken::get)
+                                if (replacement == null) clip else clip.copy(sourceUri = replacement)
+                            })
+                        })
+                        restoredProject
+                    }
+                    playbackSession += 1L
+                    playbackJob?.cancel()
+                    playbackJob = null
+                    arrangementPlayback.stop()
+                    playing = false
+                    playbackLoading = false
+                    changeProject(restored)
+                    bpm = restored.bpm
+                    playheadTick = 0L
+                    scrollTicks = 0.0
+                    scrollTracks = 0f
+                    zoom = 1f
+                    verticalZoom = 1f
+                    editorTrackId = null
+                    editorClipId = null
+                    selectedWorkspace = "ARRANGEMENT"
+                    audioError = null
+                    val elapsed = android.os.SystemClock.elapsedRealtime() - loadStartedAt
+                    StudioWaveDiagnostics.log(
+                        "INFO", "PROJECT_BUNDLE",
+                        "Imported '${restored.name}' in ${elapsed} ms · ${restored.tracks.size} tracks · ${restored.tracks.sumOf { it.clips.size }} clips"
+                    )
+                    Toast.makeText(context, "Bundel proyek berhasil dibuka", Toast.LENGTH_LONG).show()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    audioError = failure.message ?: "Impor bundel proyek gagal"
+                    StudioWaveDiagnostics.log("ERROR", "PROJECT_BUNDLE", "Bundle import failed: ${failure.message}")
+                    Toast.makeText(context, audioError, Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -1240,6 +1422,52 @@ private fun StudioWaveApp() {
             LocalDensity provides scaledDensity
         ) {
         Surface(Modifier.fillMaxSize(), color = swatch.room) {
+            if (showSaveFormatDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSaveFormatDialog = false },
+                    title = { Text("SAVE PROJECT", fontWeight = FontWeight.Black) },
+                    text = { Text("Pilih format. .sdaw mempertahankan kompatibilitas; bundel ZIP menyertakan file media agar proyek bisa dipindahkan.") },
+                    confirmButton = {
+                        Column(horizontalAlignment = Alignment.End) {
+                            TextButton(onClick = {
+                                showSaveFormatDialog = false
+                                pendingExportProject = project
+                                exportProjectLauncher.launch(suggestedSdawFileName(project.name))
+                            }) { Text("Simpan .sdaw") }
+                            TextButton(onClick = {
+                                showSaveFormatDialog = false
+                                pendingBundleProject = project
+                                exportBundleLauncher.launch(suggestedBundleFileName(project.name))
+                            }) { Text("Bundel ZIP + media") }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSaveFormatDialog = false }) { Text("Batal") }
+                    }
+                )
+            }
+            if (showOpenFormatDialog) {
+                AlertDialog(
+                    onDismissRequest = { showOpenFormatDialog = false },
+                    title = { Text("OPEN PROJECT", fontWeight = FontWeight.Black) },
+                    text = { Text("Pilih file proyek lama atau bundel portabel.") },
+                    confirmButton = {
+                        Column(horizontalAlignment = Alignment.End) {
+                            TextButton(onClick = {
+                                showOpenFormatDialog = false
+                                importProjectLauncher.launch(arrayOf("*/*"))
+                            }) { Text("Buka .sdaw") }
+                            TextButton(onClick = {
+                                showOpenFormatDialog = false
+                                importBundleLauncher.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                            }) { Text("Buka bundel ZIP") }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showOpenFormatDialog = false }) { Text("Batal") }
+                    }
+                )
+            }
             if (!projectReady) {
                 Column(
                     Modifier.fillMaxSize().padding(24.dp),
@@ -1333,15 +1561,12 @@ private fun StudioWaveApp() {
                         Toast.makeText(context, "Proyek baru: ${fresh.name}", Toast.LENGTH_SHORT).show()
                     },
                     onSaveProject = {
-                        pendingExportProject = project
                         showSettings = false
-                        StudioWaveDiagnostics.log("INFO", "PROJECT", "Save As requested for '${project.name}'")
-                        exportProjectLauncher.launch(suggestedSdawFileName(project.name))
+                        showSaveFormatDialog = true
                     },
                     onOpenProject = {
                         showSettings = false
-                        StudioWaveDiagnostics.log("INFO", "PROJECT", "Open project picker requested")
-                        importProjectLauncher.launch(arrayOf("*/*"))
+                        showOpenFormatDialog = true
                     }
                 )
             } else {
