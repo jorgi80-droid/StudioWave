@@ -83,6 +83,29 @@ class StudioProjectBundleTest {
         }
     }
 
+    @Test fun rejectsProjectReferencesToUndeclaredBundledMedia() {
+        val project = StudioProject(
+            name = "Broken media reference",
+            tracks = listOf(
+                StudioTrack(
+                    name = "Audio",
+                    kind = "audio",
+                    clips = listOf(
+                        WaveClip(
+                            name = "missing.wav",
+                            startTick = 0L,
+                            lengthTicks = 960L,
+                            sourceUri = "studiowave-bundle://not-in-manifest"
+                        )
+                    )
+                )
+            )
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            StudioProjectBundle.write(project, emptyList(), ByteArrayOutputStream())
+        }
+    }
+
     @Test fun rejectsUnsupportedFormatVersion() {
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { zip ->
