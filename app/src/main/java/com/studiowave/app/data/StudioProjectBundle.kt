@@ -44,6 +44,7 @@ object StudioProjectBundle {
 
     fun write(project: StudioProject, media: List<MediaAsset>, output: OutputStream) {
         validateMedia(media)
+        validateProjectMediaReferences(project, media.mapTo(HashSet()) { it.id })
         val projectBytes = StudioProjectFile.encode(project)
         val manifest = JSONObject()
             .put("formatVersion", FORMAT_VERSION)
@@ -123,7 +124,27 @@ object StudioProjectBundle {
         }
         val expectedNames = setOf(MANIFEST_NAME, PROJECT_NAME) + (0 until mediaJson.length()).map { "$MEDIA_PREFIX$it.bin" }
         require(entries.keys == expectedNames) { "Bundle contains undeclared or missing entries" }
-        return RestoredBundle(StudioProjectFile.decode(projectBytes), restoredMedia)
+        val project = StudioProjectFile.decode(projectBytes)
+        validateProjectMediaReferences(project, restoredMedia.mapTo(HashSet()) { it.id })
+        return RestoredBundle(project, restoredMedia)
+    }
+
+    /**
+     * Portable token URIs must resolve to a declared media ID. This catches broken
+     * project references before the Android importer writes any media to disk.
+     */
+    private fun validateProjectMediaReferences(project: StudioProject, mediaIds: Set<String>) {
+        project.tracks.forEach { track ->
+            track.clips.forEach { clip ->
+                val source = clip.sourceUri ?: return@forEach
+                if (source.startsWith("studiowave-bundle://")) {
+                    val id = source.removePrefix("studiowave-bundle://")
+                    require(id.isNotBlank() && mediaIds.contains(id)) {
+                        "Project references missing bundled media"
+                    }
+                }
+            }
+        }
     }
 
     private fun validateMedia(media: List<MediaAsset>) {
