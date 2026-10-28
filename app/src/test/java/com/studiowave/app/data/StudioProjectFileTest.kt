@@ -97,6 +97,58 @@ class StudioProjectFileTest {
         assertTrue("50-track/60-device project load took ${elapsedMs} ms", elapsedMs < 15_000L)
     }
 
+    @Test fun projectBundleRoundTripsProjectAndMediaBytes() {
+        val original = StudioProject(
+            name = "Portable project",
+            tracks = listOf(
+                StudioTrack(
+                    name = "Audio",
+                    colorArgb = 0xFF3B82F6L,
+                    kind = "audio",
+                    clips = listOf(
+                        WaveClip(
+                            name = "kick.wav",
+                            startTick = 0L,
+                            lengthTicks = 960L,
+                            sourceUri = "studiowave-bundle://media-0"
+                        )
+                    )
+                )
+            )
+        )
+        val mediaBytes = byteArrayOf(82, 73, 70, 70, 1, 2, 3, 4)
+        val output = ByteArrayOutputStream()
+        StudioProjectBundle.write(
+            original,
+            listOf(StudioProjectBundle.MediaAsset("media-0", "kick.wav", "audio/wav", mediaBytes)),
+            output
+        )
+
+        val restored = StudioProjectBundle.read(ByteArrayInputStream(output.toByteArray()))
+        // Project decoding intentionally normalizes legacy trim metadata, so assert
+        // portable musical/source state rather than data-class equality on derived fields.
+        assertEquals(original.name, restored.project.name)
+        assertEquals(1, restored.project.tracks.size)
+        assertEquals("audio", restored.project.tracks.single().kind)
+        assertEquals("studiowave-bundle://media-0", restored.project.tracks.single().clips.single().sourceUri)
+        assertEquals(960L, restored.project.tracks.single().clips.single().lengthTicks)
+        assertEquals(1, restored.media.size)
+        assertEquals("media-0", restored.media.single().id)
+        assertTrue(restored.media.single().bytes.contentEquals(mediaBytes))
+    }
+
+    @Test fun projectBundleRejectsUnexpectedArchivePaths() {
+        val output = ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(output).use { zip ->
+            zip.putNextEntry(java.util.zip.ZipEntry("../escape"))
+            zip.write(byteArrayOf(1))
+            zip.closeEntry()
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            StudioProjectBundle.read(ByteArrayInputStream(output.toByteArray()))
+        }
+    }
+
     @Test fun rejectsOversizedProjectBeforeParsing() {
         val tooLarge = ByteArray(StudioProjectFile.MAX_PROJECT_FILE_BYTES + 1)
         assertThrows(IllegalArgumentException::class.java) {
