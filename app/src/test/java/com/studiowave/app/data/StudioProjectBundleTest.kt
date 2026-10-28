@@ -106,6 +106,40 @@ class StudioProjectBundleTest {
         }
     }
 
+    @Test fun rejectsBundleWhoseProjectReferencesMissingMedia() {
+        val brokenProject = StudioProject(
+            name = "Broken bundle",
+            tracks = listOf(
+                StudioTrack(
+                    name = "Audio",
+                    kind = "audio",
+                    clips = listOf(
+                        WaveClip(
+                            name = "missing.wav",
+                            startTick = 0L,
+                            lengthTicks = 960L,
+                            sourceUri = "studiowave-bundle://missing"
+                        )
+                    )
+                )
+            )
+        )
+        val manifest = """{"formatVersion":1,"project":"project.sdaw","media":[]}"""
+            .toByteArray(StandardCharsets.UTF_8)
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            zip.putNextEntry(ZipEntry("manifest.json"))
+            zip.write(manifest)
+            zip.closeEntry()
+            zip.putNextEntry(ZipEntry("project.sdaw"))
+            zip.write(StudioProjectFile.encode(brokenProject))
+            zip.closeEntry()
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            StudioProjectBundle.read(ByteArrayInputStream(output.toByteArray()))
+        }
+    }
+
     @Test fun rejectsUnsupportedFormatVersion() {
         val output = ByteArrayOutputStream()
         ZipOutputStream(output).use { zip ->
