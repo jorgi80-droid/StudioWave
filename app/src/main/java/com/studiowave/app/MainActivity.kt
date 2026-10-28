@@ -1220,11 +1220,9 @@ private fun StudioWaveApp() {
                         val input = context.contentResolver.openInputStream(uri)
                             ?: error("Tidak dapat membuka bundel proyek")
                         val bundle = input.use { StudioProjectBundle.read(it) }
-                        val safeProjectId = bundle.project.id
-                            .replace(Regex("[^A-Za-z0-9_-]"), "_")
-                            .take(64)
-                            .ifBlank { java.util.UUID.randomUUID().toString() }
-                        val mediaRoot = File(context.filesDir, "project-media/$safeProjectId")
+                        // Isolate each import so an existing project never has its media overwritten.
+                        val importId = java.util.UUID.randomUUID().toString()
+                        val mediaRoot = File(context.filesDir, "project-media/$importId")
                         require(mediaRoot.canonicalPath.startsWith(context.filesDir.canonicalPath + File.separator)) {
                             "Lokasi media proyek tidak aman"
                         }
@@ -1249,6 +1247,9 @@ private fun StudioWaveApp() {
                             track.copy(clips = track.clips.map { clip ->
                                 val source = clip.sourceUri
                                 val replacement = source?.let(uriByToken::get)
+                                if (source?.startsWith("studiowave-bundle://") == true && replacement == null) {
+                                    error("Bundel merujuk media yang tidak tercantum dalam manifest")
+                                }
                                 if (replacement == null) clip else clip.copy(sourceUri = replacement)
                             })
                         })
